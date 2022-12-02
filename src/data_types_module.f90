@@ -35,6 +35,259 @@ MODULE data_types_module
 
   END TYPE type_sparse_matrix_CSR_dp
 
+  TYPE type_velocity_solver_SIA
+    ! Data fields needed to solve the Shallow Ice Approximation
+
+    ! Solution
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_b                      ! 3-D ice velocity [m yr^-1]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_b
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_a                  ! Strain rates     [yr^-1]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_a
+    INTEGER :: wu_3D_b, wv_3D_b, wdu_dz_3D_a, wdv_dz_3D_a
+
+    ! Intermediate data fields
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: D_3D_b                      ! Diffusivity      [m yr^-1]
+    INTEGER :: wD_3D_b
+
+  END TYPE type_velocity_solver_SIA
+
+  TYPE type_velocity_solver_SSA
+    ! Data fields needed to solve the Shallow Shelf Approximation
+
+    ! Solution
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_b                         ! 2-D horizontal ice velocity [m yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_b
+    INTEGER :: wu_b, wv_b
+
+    ! Intermediate data fields
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_a                     ! 2-D horizontal strain rates [yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: eta_a                       ! Effective viscosity
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_a                         ! Product term N = eta * H
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: dN_dx_b                     ! Gradients of N
+    REAL(dp), DIMENSION(:    ), POINTER     :: dN_dy_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_b_b                    ! Friction coefficient (tau_b = u * beta_b)
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! Driving stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_b_prev                    ! Previous velocity solution
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_b_prev
+    INTEGER :: wdu_dx_a, wdu_dy_a, wdv_dx_a, wdv_dy_a, weta_a, wN_a, wN_b
+    INTEGER :: wdN_dx_b, wdN_dy_b, wbeta_b_b, wtaudx_b, wtaudy_b, wu_b_prev, wv_b_prev
+
+    ! Parameters for the iterative solver used to solve the matrix equation representing the linearised SSA
+    REAL(dp)                                :: PETSc_rtol
+    REAL(dp)                                :: PETSc_abstol
+
+    ! Stiffness matrices and load vectors
+    TYPE(tMat)                              :: AA                          ! Total stiffness matrix
+    TYPE(tMat)                              :: AA_free                     ! Stiffness matrix describing the free SSA
+    TYPE(tMat)                              :: AA_BC_west                  ! Stiffness matrix describing boundary conditions on the western  domain boundary
+    TYPE(tMat)                              :: AA_BC_east                  ! Stiffness matrix describing boundary conditions on the eastern  domain boundary
+    TYPE(tMat)                              :: AA_BC_south                 ! Stiffness matrix describing boundary conditions on the southern domain boundary
+    TYPE(tMat)                              :: AA_BC_north                 ! Stiffness matrix describing boundary conditions on the northern domain boundary
+    TYPE(tMat)                              :: AA_BC_prescr                ! Stiffness matrix describing boundary conditions for prescribed velocities
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb                          ! Total load vector
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_free                     ! Load vector for the free SSA
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_west                  ! Load vector for the boundary conditions on the western  domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_east                  ! Load vector for the boundary conditions on the eastern  domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_south                 ! Load vector for the boundary conditions on the southern domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_north                 ! Load vector for the boundary conditions on the northern domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_prescr                ! Load vector for the boundary conditions for prescribed velocities
+    INTEGER :: wbb, wbb_free, wbb_BC_west, wbb_BC_east, wbb_BC_south, wbb_BC_north, wbb_BC_prescr
+
+    ! Matrices describing masks for the different components of the equation
+    TYPE(tMat)                              :: m_free                      ! Matrix mask for the free SSA
+    TYPE(tMat)                              :: m_BC_west                   ! Matrix mask for the boundary conditions on the western  domain boundary
+    TYPE(tMat)                              :: m_BC_east                   ! Matrix mask for the boundary conditions on the eastern  domain boundary
+    TYPE(tMat)                              :: m_BC_south                  ! Matrix mask for the boundary conditions on the southern domain boundary
+    TYPE(tMat)                              :: m_BC_north                  ! Matrix mask for the boundary conditions on the northern domain boundary
+    TYPE(tMat)                              :: m_BC_prescr                 ! Matrix mask for the boundary conditions for prescribed velocities
+
+    ! Some useful combined mesh operators
+    TYPE(tMat)                              :: M_4_d2udx2_p_3_d2vdxdy_p_d2udy2_buv_b
+    TYPE(tMat)                              :: M_4_dudx_p_2_dvdy_buv_b
+    TYPE(tMat)                              :: M_dudy_p_dvdx_buv_b
+    TYPE(tMat)                              :: M_4_d2vdy2_p_3_d2udxdy_p_d2vdx2_buv_b
+    TYPE(tMat)                              :: M_4_dvdy_p_2_dudx_buv_b
+    TYPE(tMat)                              :: M_dvdx_p_dudy_buv_b
+
+  END TYPE type_velocity_solver_SSA
+
+  TYPE type_velocity_solver_DIVA
+    ! Data fields needed to solve the Depth-Integrated Viscosity Approximation
+
+    ! Solution
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_b                      ! 3-D horizontal ice velocity [m yr^-1]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_b
+    INTEGER :: wu_3D_b, wv_3D_b
+
+    ! Intermediate data fields
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_b                     ! 2-D vertically-averaged velocity [m yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_b                    ! 2-D basal velocity [m yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_a                     ! 2-D horizontal strain rates [yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_b                  ! 3-D vertical shear strain rates [yr^-1]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_b
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: eta_3D_a                    ! Effective viscosity
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: eta_3D_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: eta_vint_a                  ! Vertically-integrated effective viscosity
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_a                         ! Product term N = eta * H
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: dN_dx_b                     ! Gradients of N
+    REAL(dp), DIMENSION(:    ), POINTER     :: dN_dy_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_b_b                    ! Friction coefficient (tau_b = u * betab)
+    REAL(dp), DIMENSION(:    ), POINTER     :: F2_a                        ! F-integral
+    REAL(dp), DIMENSION(:    ), POINTER     :: F2_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_b                  ! Beta_eff
+    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_b                     ! Basal shear stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! Driving stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_b_prev                ! Previous velocity solution
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_b_prev
+    INTEGER :: wu_vav_b, wv_vav_b, wu_base_b, wv_base_b, wdu_dx_a, wdu_dy_a, wdv_dx_a, wdv_dy_a
+    INTEGER :: wdu_dz_3D_b, wdv_dz_3D_b, wdu_dz_3D_a, wdv_dz_3D_a, weta_3D_a, weta_3D_b, weta_vint_a, wN_a, wN_b, wdN_dx_b, wdN_dy_b
+    INTEGER :: wbeta_b_b, wF2_a, wF2_b, wbeta_eff_a, wbeta_eff_b, wtaubx_b, wtauby_b, wtaudx_b, wtaudy_b, wu_vav_b_prev, wv_vav_b_prev
+
+    ! Parameters for the iterative solver used to solve the matrix equation representing the linearised DIVA
+    REAL(dp)                                :: PETSc_rtol
+    REAL(dp)                                :: PETSc_abstol
+
+    ! Stiffness matrices and load vectors
+    TYPE(tMat)                              :: AA                          ! Total stiffness matrix
+    TYPE(tMat)                              :: AA_free                     ! Stiffness matrix describing the free DIVA
+    TYPE(tMat)                              :: AA_BC_west                  ! Stiffness matrix describing boundary conditions on the western  domain boundary
+    TYPE(tMat)                              :: AA_BC_east                  ! Stiffness matrix describing boundary conditions on the eastern  domain boundary
+    TYPE(tMat)                              :: AA_BC_south                 ! Stiffness matrix describing boundary conditions on the southern domain boundary
+    TYPE(tMat)                              :: AA_BC_north                 ! Stiffness matrix describing boundary conditions on the northern domain boundary
+    TYPE(tMat)                              :: AA_BC_prescr                ! Stiffness matrix describing boundary conditions for prescribed velocities
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb                          ! Total load vector
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_free                     ! Load vector for the free DIVA
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_west                  ! Load vector for the boundary conditions on the western  domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_east                  ! Load vector for the boundary conditions on the eastern  domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_south                 ! Load vector for the boundary conditions on the southern domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_north                 ! Load vector for the boundary conditions on the northern domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_prescr                ! Load vector for the boundary conditions for prescribed velocities
+    INTEGER :: wbb, wbb_free, wbb_BC_west, wbb_BC_east, wbb_BC_south, wbb_BC_north, wbb_BC_prescr
+
+    ! Matrices describing masks for the different components of the equation
+    TYPE(tMat)                              :: m_free                      ! Matrix mask for the free DIVA
+    TYPE(tMat)                              :: m_BC_west                   ! Matrix mask for the boundary conditions on the western  domain boundary
+    TYPE(tMat)                              :: m_BC_east                   ! Matrix mask for the boundary conditions on the eastern  domain boundary
+    TYPE(tMat)                              :: m_BC_south                  ! Matrix mask for the boundary conditions on the southern domain boundary
+    TYPE(tMat)                              :: m_BC_north                  ! Matrix mask for the boundary conditions on the northern domain boundary
+    TYPE(tMat)                              :: m_BC_prescr                 ! Matrix mask for the boundary conditions for prescribed velocities
+
+    ! Some useful combined mesh operators
+    TYPE(tMat)                              :: M_4_d2udx2_p_3_d2vdxdy_p_d2udy2_buv_b
+    TYPE(tMat)                              :: M_4_dudx_p_2_dvdy_buv_b
+    TYPE(tMat)                              :: M_dudy_p_dvdx_buv_b
+    TYPE(tMat)                              :: M_4_d2vdy2_p_3_d2udxdy_p_d2vdx2_buv_b
+    TYPE(tMat)                              :: M_4_dvdy_p_2_dudx_buv_b
+    TYPE(tMat)                              :: M_dvdx_p_dudy_buv_b
+
+  END TYPE type_velocity_solver_DIVA
+
+  TYPE type_velocity_solver_BPA
+    ! Data fields needed to solve the Blatter-Pattyn Approximation
+
+    ! Solution
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_b                      ! 3-D horizontal ice velocity [m yr^-1]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_b
+    INTEGER :: wu_3D_b, wv_3D_b
+
+    ! Intermediate data fields (all in vector form)
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_bk_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_bk_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_ak_vec                ! Strain rates [yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_ak_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dz_ak_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_ak_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_ak_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dz_ak_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_bks_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_bks_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dz_bks_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_bks_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_bks_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dz_bks_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: eta_ak_vec                  ! Effective viscosity
+    REAL(dp), DIMENSION(:    ), POINTER     :: eta_bks_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: eta_bk_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: deta_dx_bk_vec              ! Gradients of eta
+    REAL(dp), DIMENSION(:    ), POINTER     :: deta_dy_bk_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_b_b                    ! Friction coefficient (tau_b = u * beta_b)
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_b_b_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! Driving stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_bk_prev_vec               ! Previous velocity solution
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_bk_prev_vec
+    INTEGER :: wu_bk_vec, wv_bk_vec
+    INTEGER :: wdu_dx_ak_vec, wdu_dy_ak_vec, wdu_dz_ak_vec, wdv_dx_ak_vec, wdv_dy_ak_vec, wdv_dz_ak_vec
+    INTEGER :: wdu_dx_bks_vec, wdu_dy_bks_vec, wdu_dz_bks_vec, wdv_dx_bks_vec, wdv_dy_bks_vec, wdv_dz_bks_vec
+    INTEGER :: weta_ak_vec, weta_bks_vec, weta_bk_vec, wdeta_dx_bk_vec, wdeta_dy_bk_vec
+    INTEGER :: wbeta_b_b, wbeta_b_b_vec, wtaudx_b, wtaudy_b, wu_bk_prev_vec, wv_bk_prev_vec
+
+    ! Parameters for the iterative solver used to solve the matrix equation representing the linearised SSA
+    REAL(dp)                                :: PETSc_rtol
+    REAL(dp)                                :: PETSc_abstol
+
+    ! Stiffness matrices and load vectors
+    TYPE(tMat)                              :: AA                          ! Total stiffness matrix
+    TYPE(tMat)                              :: AA_free                     ! Stiffness matrix describing the free SSA
+    TYPE(tMat)                              :: AA_BC_surf                  ! Stiffness matrix describing boundary conditions at the ice surface
+    TYPE(tMat)                              :: AA_BC_base                  ! Stiffness matrix describing boundary conditions at the ice bas
+    TYPE(tMat)                              :: AA_BC_west                  ! Stiffness matrix describing boundary conditions on the western  domain boundary
+    TYPE(tMat)                              :: AA_BC_east                  ! Stiffness matrix describing boundary conditions on the eastern  domain boundary
+    TYPE(tMat)                              :: AA_BC_south                 ! Stiffness matrix describing boundary conditions on the southern domain boundary
+    TYPE(tMat)                              :: AA_BC_north                 ! Stiffness matrix describing boundary conditions on the northern domain boundary
+    TYPE(tMat)                              :: AA_BC_prescr                ! Stiffness matrix describing boundary conditions for prescribed velocities
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb                          ! Total load vector
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_free                     ! Load vector for the free SSA
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_surf                  ! Load vector for the boundary conditions at the ice surface
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_base                  ! Load vector for the boundary conditions at the ice base
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_west                  ! Load vector for the boundary conditions on the western  domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_east                  ! Load vector for the boundary conditions on the eastern  domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_south                 ! Load vector for the boundary conditions on the southern domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_north                 ! Load vector for the boundary conditions on the northern domain boundary
+    REAL(dp), DIMENSION(:    ), POINTER     :: bb_BC_prescr                ! Load vector for the boundary conditions for prescribed velocities
+    INTEGER :: wbb, wbb_free, wbb_BC_surf, wbb_BC_base, wbb_BC_west, wbb_BC_east, wbb_BC_south, wbb_BC_north, wbb_BC_prescr
+
+    ! Matrices describing masks for the different components of the equation
+    TYPE(tMat)                              :: m_free                      ! Matrix mask for the free SSA
+    TYPE(tMat)                              :: m_BC_surf                   ! Matrix mask for the boundary conditions at the ice surface
+    TYPE(tMat)                              :: m_BC_base                   ! Matrix mask for the boundary conditions at the ice base
+    TYPE(tMat)                              :: m_BC_west                   ! Matrix mask for the boundary conditions on the western  domain boundary
+    TYPE(tMat)                              :: m_BC_east                   ! Matrix mask for the boundary conditions on the eastern  domain boundary
+    TYPE(tMat)                              :: m_BC_south                  ! Matrix mask for the boundary conditions on the southern domain boundary
+    TYPE(tMat)                              :: m_BC_north                  ! Matrix mask for the boundary conditions on the northern domain boundary
+    TYPE(tMat)                              :: m_BC_prescr                 ! Matrix mask for the boundary conditions for prescribed velocities
+
+    ! Some useful combined mesh operators
+    TYPE(tMat)                              :: M_4_d2udx2_p_3_d2vdxdy_p_d2udy2_bkuv_bk
+    TYPE(tMat)                              :: M_4_dudx_p_2_dvdy_bkuv_bk
+    TYPE(tMat)                              :: M_dudy_p_dvdx_bkuv_bk
+    TYPE(tMat)                              :: M_4_d2vdy2_p_3_d2udxdy_p_d2vdx2_bkuv_bk
+    TYPE(tMat)                              :: M_4_dvdy_p_2_dudx_bkuv_bk
+    TYPE(tMat)                              :: M_dvdx_p_dudy_bkuv_bk
+    TYPE(tMat)                              :: M_2_dudx_p_dvdy_bkuv_bk
+    TYPE(tMat)                              :: M_2_dvdy_p_dudx_bkuv_bk
+
+  END TYPE type_velocity_solver_BPA
+
   TYPE type_ice_model
     ! The ice dynamics sub-model data structure.
 
@@ -53,16 +306,17 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_b
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_b
     REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_b
-    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_b, wv_3D_b, ww_3D_a, ww_3D_b
+    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_b, wv_3D_b, ww_3D_a
 
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_b
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_c
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_c
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_a
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_b
-    INTEGER :: wu_vav_a, wv_vav_a, wu_vav_b, wv_vav_b, wuabs_vav_a, wuabs_vav_b
+    INTEGER :: wu_vav_a, wv_vav_a, wu_vav_b, wv_vav_b, wu_vav_c, wv_vav_c, wuabs_vav_a, wuabs_vav_b
 
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_a
@@ -82,11 +336,23 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_b
     INTEGER :: wu_base_a, wv_base_a, wu_base_b, wv_base_b, ww_base_a, wuabs_base_a, wuabs_base_b
 
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_b
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_SSA_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_SSA_b
-    INTEGER :: wu_3D_SIA_b, wv_3D_SIA_b, wu_base_SSA_b, wv_base_SSA_b
+    ! Strain rates
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dx_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dy_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dx_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dy_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dw_dx_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dw_dy_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dw_dz_3D_a
+    INTEGER :: wdu_dx_3D_a, wdu_dy_3D_a, wdu_dz_3D_a, wdv_dx_3D_a, wdv_dy_3D_a, wdv_dz_3D_a, wdw_dx_3D_a, wdw_dy_3D_a, wdw_dz_3D_a
+
+    ! Different velocity solvers
+    TYPE(type_velocity_solver_SIA)          :: SIA
+    TYPE(type_velocity_solver_SSA)          :: SSA
+    TYPE(type_velocity_solver_DIVA)         :: DIVA
+    TYPE(type_velocity_solver_BPA)          :: BPA
 
     ! Different masks
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_land_a
@@ -116,12 +382,31 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Ki_a                        ! Conductivity of ice [J m^-1 K^-1 yr^-1].
     INTEGER :: wA_flow_3D_a, wA_flow_vav_a, wTi_pmp_a, wCpi_a, wKi_a
 
-    ! Zeta derivatives
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dt_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dx_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dzeta_dz_a
-    INTEGER :: wdzeta_dt_a, wdzeta_dx_a, wdzeta_dy_a, wdzeta_dz_a
+    ! Zeta gradients
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dt_ak
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dx_ak
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dy_ak
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dz_ak
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dx2_ak
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dxdy_ak
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dy2_ak
+    INTEGER :: wdzeta_dt_ak, wdzeta_dx_ak, wdzeta_dy_ak, wdzeta_dz_ak, wd2zeta_dx2_ak, wd2zeta_dxdy_ak, wd2zeta_dy2_ak
+
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dx_bk
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dy_bk
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dz_bk
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dx2_bk
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dxdy_bk
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dy2_bk
+    INTEGER :: wdzeta_dx_bk, wdzeta_dy_bk, wdzeta_dz_bk, wd2zeta_dx2_bk, wd2zeta_dxdy_bk, wd2zeta_dy2_bk
+
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dx_bks
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dy_bks
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dz_bks
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dx2_bks
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dxdy_bks
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: d2zeta_dy2_bks
+    INTEGER :: wdzeta_dx_bks, wdzeta_dy_bks, wdzeta_dz_bks, wd2zeta_dx2_bks, wd2zeta_dxdy_bks, wd2zeta_dy2_bks
 
     ! Ice dynamics - basal hydrology
     REAL(dp), DIMENSION(:    ), POINTER     :: overburden_pressure_a       ! Overburden pressure ( = H * rho_i * g) [Pa]
@@ -130,52 +415,18 @@ MODULE data_types_module
     INTEGER :: woverburden_pressure_a, wpore_water_pressure_a, wNeff_a
 
     ! Ice dynamics - basal roughness / friction
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_b_a                    ! Friction coefficient ([basal shear stress] = [friction coefficient] * [basal velocity])
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a                  ! Till friction angle (degrees)
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_inv_a              ! Inverted till friction angle (degrees)
     REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
     REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_inv_a               ! Inverted power-law friction coefficient [Pa m^−1/3 yr^1/3]
-    INTEGER :: wphi_fric_a, wphi_fric_inv_a, wtauc_a, walpha_sq_a, wbeta_sq_a, wbeta_sq_inv_a
+    INTEGER :: wbeta_b_a, wphi_fric_a, wphi_fric_inv_a, wtauc_a, walpha_sq_a, wbeta_sq_a, wbeta_sq_inv_a
 
     ! Ice dynamics - basal inversion
     REAL(dp), DIMENSION(:    ), POINTER     :: BIV_uabs_surf_target  ! Target surface velocity for the basal inversion [m/yr]
     INTEGER :: wBIV_uabs_surf_target
-
-    ! Ice dynamics - physical terms in the SSA/DIVA
-    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! x-component of the driving stress
-    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b                     ! x-component of the driving stress
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_a                     ! Vertically averaged   xx strain rate
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_a                     ! Vertically averaged   xy strain rate
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_a                     ! Vertically averaged   yy strain rate
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_a                     ! Vertically averaged   yy strain rate
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_b                  ! 3-D                   xz strain rate
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_b                  ! 3-D                   yz strain rate
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_a               ! 3-D                   effective viscosity
-    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_a              ! Vertically integrated effective viscosity
-    REAL(dp), DIMENSION(:    ), POINTER     :: N_a                         ! Product term N = eta * H
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_a                      ! Sliding term beta (as in, [basal shear stress] = [beta] * [basal velocity])
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_a                  ! Beta_eff, appearing in the DIVA
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_b                     ! x-component of the basal shear stress
-    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_b                     ! y-component of the basal shear stress
-    REAL(dp), DIMENSION(:    ), POINTER     :: F2_a                        ! F2, appearing in the DIVA
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_prev_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_prev_b
-    INTEGER :: wtaudx_b, wtaudy_b
-    INTEGER :: wdu_dx_a, wdu_dy_a, wdv_dx_a, wdv_dy_a, wdu_dz_3D_b, wdv_dz_3D_b, wvisc_eff_3D_a, wvisc_eff_int_a, wN_a
-    INTEGER :: wbeta_a, wbeta_eff_a, wbeta_eff_b, wtaubx_b, wtauby_b, wF2_a
-    INTEGER :: wu_prev_b, wv_prev_b
-
-    ! Ice dynamics - some administrative stuff to make solving the SSA/DIVA more efficient
-    INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
-    INTEGER                                 :: DIVA_SOR_nit
-    REAL(dp)                                :: DIVA_SOR_tol
-    REAL(dp)                                :: DIVA_SOR_omega
-    REAL(dp)                                :: DIVA_PETSc_rtol
-    REAL(dp)                                :: DIVA_PETSc_abstol
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
 
     ! Ice dynamics - ice thickness calculation
@@ -267,6 +518,9 @@ MODULE data_types_module
     ! Basic meta properties
     ! =====================
 
+    ! Name
+    CHARACTER(LEN=256)                      :: name
+
     CHARACTER(LEN=3)                        :: region_name                   ! NAM, EAS, GRL, ANT
     REAL(dp),                   POINTER     :: lambda_M                      ! Oblique stereographic projection parameters
     REAL(dp),                   POINTER     :: phi_M
@@ -324,10 +578,14 @@ MODULE data_types_module
 
     ! Maps+stacks for FloodFill-style searching
     INTEGER,  DIMENSION(:    ), POINTER     :: VMap, VStack1, VStack2
+    INTEGER                                 :: VStackN1, VStackN2
     INTEGER,  DIMENSION(:    ), POINTER     :: TriMap, TriStack1, TriStack2
-    INTEGER :: wVMap, wVStack1, wVStack2, wTriMap, wTriStack1, wTriStack2
-    INTEGER :: VStackN1, VStackN2
-    INTEGER :: TriStackN1, TriStackN2
+    INTEGER                                 :: TriStackN1, TriStackN2
+    INTEGER,  DIMENSION(:    ), POINTER     :: EMap, EStack1, EStack2
+    INTEGER                                 :: EStackN1, EStackN2
+    INTEGER :: wVMap, wVStack1, wVStack2
+    INTEGER :: wTriMap, wTriStack1, wTriStack2
+    INTEGER :: wEMap, wEStack1, wEStack2
 
     ! Points-of-Interest
     INTEGER,                    POINTER     :: nPOI                          ! Number of Points of Interest (POI) in this mesh
@@ -359,63 +617,191 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: edge_index_Ac
     INTEGER :: wnAc, wVAc, wAci, wiAci, wedge_index_Ac
 
-    ! Matrix operators: mapping
-    TYPE(tMat)                              :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
-    TYPE(tMat)                              :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
-    TYPE(tMat)                              :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
-    TYPE(tMat)                              :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
-    TYPE(tMat)                              :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
-    TYPE(tMat)                              :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
+    ! Grid-cell-to-matrix-row translation tables
 
-    ! Matrix operators: d/dx
-    TYPE(tMat)                              :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    ! a-grid (vertices)
+    INTEGER                                 :: nna, nnauv, nnak, nnaks, nnakuv, nnaksuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2vi
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2viuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2vik
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2vikuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2viks
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2viksuv
+    INTEGER,  DIMENSION(:    ), POINTER     :: vi2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: viuv2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: vik2n
+    INTEGER,  DIMENSION(:,:,:), POINTER     :: vikuv2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: viks2n
+    INTEGER,  DIMENSION(:,:,:), POINTER     :: viksuv2n
+    INTEGER :: wn2vi, wn2viuv, wn2vik, wn2vikuv, wn2viks, wn2viksuv, wvi2n, wviuv2n, wvik2n, wvikuv2n, wviks2n, wviksuv2n
 
-    ! Matrix operators: d/dy
-    TYPE(tMat)                              :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(tMat)                              :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    ! b-grid (triangles)
+    INTEGER                                 :: nnb, nnbuv, nnbk, nnbks, nnbkuv, nnbksuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2tiuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2tik
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2tikuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2tiks
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2tiksuv
+    INTEGER,  DIMENSION(:    ), POINTER     :: ti2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: tiuv2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: tik2n
+    INTEGER,  DIMENSION(:,:,:), POINTER     :: tikuv2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: tiks2n
+    INTEGER,  DIMENSION(:,:,:), POINTER     :: tiksuv2n
+    INTEGER :: wn2ti, wn2tiuv, wn2tik, wn2tikuv, wn2tiks, wn2tiksuv, wti2n, wtiuv2n, wtik2n, wtikuv2n, wtiks2n, wtiksuv2n
 
-    ! 2nd-order accurate matrix operators on the b-grid
-    TYPE(tMat)                              :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
-    TYPE(tMat)                              :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
-    TYPE(tMat)                              :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
-    TYPE(tMat)                              :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
-    TYPE(tMat)                              :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
+    ! c-grid (edges)
+    INTEGER                                 :: nnc, nncuv, nnck, nncks, nnckuv, nncksuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ci
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ciuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2cik
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2cikuv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ciks
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ciksuv
+    INTEGER,  DIMENSION(:    ), POINTER     :: ci2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: ciuv2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: cik2n
+    INTEGER,  DIMENSION(:,:,:), POINTER     :: cikuv2n
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: ciks2n
+    INTEGER,  DIMENSION(:,:,:), POINTER     :: ciksuv2n
+    INTEGER :: wn2ci, wn2ciuv, wn2cik, wn2cikuv, wn2ciks, wn2ciksuv, wci2n, wciuv2n, wcik2n, wcikuv2n, wciks2n, wciksuv2n
 
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b_CSR                ! Operation: d/dx    from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b_CSR                ! Operation: d/dy    from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_b_b_CSR              ! Operation: d2/dx2  from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_b_b_CSR             ! Operation: d2/dxdy from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_b_b_CSR              ! Operation: d2/dy2  from the b-grid to the b-grid
+    TYPE(tMat)                              :: M_map_bu_b
+    TYPE(tMat)                              :: M_map_bv_b
+    TYPE(tMat)                              :: M_map_b_bu
+    TYPE(tMat)                              :: M_map_b_bv
+    TYPE(tMat)                              :: M_map_bku_bk
+    TYPE(tMat)                              :: M_map_bkv_bk
+    TYPE(tMat)                              :: M_map_bk_bku
+    TYPE(tMat)                              :: M_map_bk_bkv
 
-    ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
-    TYPE(tMat)                              :: M_Neumann_BC_b
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_Neumann_BC_b_CSR
+    ! Basic mapping and gradient operators
+
+    ! a-grid (vertices) to a-grid (vertices)
+    TYPE(tMat)                              :: M_ddx_a_a
+    TYPE(tMat)                              :: M_ddy_a_a
+    ! a-grid (vertices) to b-grid (triangles)
+    TYPE(tMat)                              :: M_map_a_b
+    TYPE(tMat)                              :: M_ddx_a_b
+    TYPE(tMat)                              :: M_ddy_a_b
+    ! a-grid (vertices) to c-grid (edges)
+    TYPE(tMat)                              :: M_map_a_c
+    TYPE(tMat)                              :: M_ddx_a_c
+    TYPE(tMat)                              :: M_ddy_a_c
+    ! b-grid (triangles) to a-grid (vertices)
+    TYPE(tMat)                              :: M_map_b_a
+    TYPE(tMat)                              :: M_ddx_b_a
+    TYPE(tMat)                              :: M_ddy_b_a
+    ! b-grid (triangles) to b-grid (triangles)
+    TYPE(tMat)                              :: M_ddx_b_b
+    TYPE(tMat)                              :: M_ddy_b_b
+    ! b-grid (triangles) to c-grid (edges)
+    TYPE(tMat)                              :: M_map_b_c
+    TYPE(tMat)                              :: M_ddx_b_c
+    TYPE(tMat)                              :: M_ddy_b_c
+    ! c-grid (edges) to a-grid (vertices)
+    TYPE(tMat)                              :: M_map_c_a
+    TYPE(tMat)                              :: M_ddx_c_a
+    TYPE(tMat)                              :: M_ddy_c_a
+    ! c-grid (edges) to b-grid (triangles)
+    TYPE(tMat)                              :: M_map_c_b
+    TYPE(tMat)                              :: M_ddx_c_b
+    TYPE(tMat)                              :: M_ddy_c_b
+    ! c-grid (edges) to c-grid (edges)
+    TYPE(tMat)                              :: M_ddx_c_c
+    TYPE(tMat)                              :: M_ddy_c_c
+    ! b-grid (triangles) to b-grid (triangles) 2nd-order accurate
+    TYPE(tMat)                              :: M2_ddx_b_b
+    TYPE(tMat)                              :: M2_ddy_b_b
+    TYPE(tMat)                              :: M2_d2dx2_b_b
+    TYPE(tMat)                              :: M2_d2dxdy_b_b
+    TYPE(tMat)                              :: M2_d2dy2_b_b
+
+    ! Operators on the zeta grids
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddzeta_k_k_1D
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_d2dzeta2_k_k_1D
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_k_ks_1D
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddzeta_k_ks_1D
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_ks_k_1D
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddzeta_ks_k_1D
+
+    ! Zeta operators in tridiagonal form for efficient use in thermodynamics
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_ddzeta_k_k_ldiag
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_ddzeta_k_k_diag
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_ddzeta_k_k_udiag
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_d2dzeta2_k_k_ldiag
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_d2dzeta2_k_k_diag
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_d2dzeta2_k_k_udiag
+
+    ! 3-D mapping and gradient operators in [x',y',zeta]
+    TYPE(tMat)                              :: M_ddxp_ak_ak
+    TYPE(tMat)                              :: M_ddyp_ak_ak
+    TYPE(tMat)                              :: M_ddxp_bk_bk
+    TYPE(tMat)                              :: M_ddyp_bk_bk
+    TYPE(tMat)                              :: M2_ddxp_bk_bk
+    TYPE(tMat)                              :: M2_ddyp_bk_bk
+    TYPE(tMat)                              :: M2_d2dxp2_bk_bk
+    TYPE(tMat)                              :: M2_d2dxpdyp_bk_bk
+    TYPE(tMat)                              :: M2_d2dyp2_bk_bk
+    TYPE(tMat)                              :: M_map_ak_bk
+    TYPE(tMat)                              :: M_ddxp_ak_bk
+    TYPE(tMat)                              :: M_ddyp_ak_bk
+    TYPE(tMat)                              :: M_map_bk_ak
+    TYPE(tMat)                              :: M_ddxp_bk_ak
+    TYPE(tMat)                              :: M_ddyp_bk_ak
+
+    ! 3-D zeta mapping and gradient operators
+    TYPE(tMat)                              :: M_ddzeta_ak_ak
+    TYPE(tMat)                              :: M_d2dzeta2_ak_ak
+    TYPE(tMat)                              :: M_ddzeta_bk_bk
+    TYPE(tMat)                              :: M_d2dzeta2_bk_bk
+    TYPE(tMat)                              :: M_map_ak_aks
+    TYPE(tMat)                              :: M_ddzeta_ak_aks
+    TYPE(tMat)                              :: M_map_aks_ak
+    TYPE(tMat)                              :: M_ddzeta_aks_ak
+    TYPE(tMat)                              :: M_map_bk_bks
+    TYPE(tMat)                              :: M_ddzeta_bk_bks
+    TYPE(tMat)                              :: M_map_bks_bk
+    TYPE(tMat)                              :: M_ddzeta_bks_bk
+    TYPE(tMat)                              :: M2_d2dxpdzeta_bk_bk
+    TYPE(tMat)                              :: M2_d2dypdzeta_bk_bk
+    TYPE(tMat)                              :: M_ddzeta_ak_bk
+    TYPE(tMat)                              :: M_ddzeta_bk_ak
+    TYPE(tMat)                              :: M_map_bks_ak
+    TYPE(tMat)                              :: M_map_ak_bks
+
+    ! 3-D gradient operators in [x,y,z]
+    TYPE(tMat)                              :: M_ddx_ak_ak
+    TYPE(tMat)                              :: M_ddy_ak_ak
+    TYPE(tMat)                              :: M_ddz_ak_ak
+    TYPE(tMat)                              :: M_ddx_bk_bk
+    TYPE(tMat)                              :: M_ddy_bk_bk
+    TYPE(tMat)                              :: M_ddz_bk_bk
+    TYPE(tMat)                              :: M_ddx_ak_bk
+    TYPE(tMat)                              :: M_ddy_ak_bk
+    TYPE(tMat)                              :: M_ddz_ak_bk
+    TYPE(tMat)                              :: M_ddx_bk_ak
+    TYPE(tMat)                              :: M_ddy_bk_ak
+    TYPE(tMat)                              :: M_ddz_bk_ak
+    TYPE(tMat)                              :: M_ddz_bk_bks
+    TYPE(tMat)                              :: M_ddz_bks_bk
+    TYPE(tMat)                              :: M2_ddx_bk_bk
+    TYPE(tMat)                              :: M2_ddy_bk_bk
+    TYPE(tMat)                              :: M2_d2dx2_bk_bk
+    TYPE(tMat)                              :: M2_d2dxdy_bk_bk
+    TYPE(tMat)                              :: M2_d2dy2_bk_bk
+
+    ! Mapping operators between 2-D grid and 3-D grid surface/base layers
+    TYPE(tMat)                              :: M_map_b_bk_surf
+    TYPE(tMat)                              :: M_map_b_bk_base
+    TYPE(tMat)                              :: M_map_bk_surf_b
+    TYPE(tMat)                              :: M_map_bk_base_b
 
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat
     REAL(dp), DIMENSION(:    ), POINTER     :: lon
     INTEGER :: wlat, wlon
-
-    ! Transect
-    INTEGER,                    POINTER     :: nV_transect                   ! Number of vertex pairs for the transect
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: vi_transect                   ! List   of vertex pairs for the transect
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: w_transect                    ! Interpolation weights for the vertex pairs
-    INTEGER :: wnV_transect, wvi_transect, ww_transect
 
     ! Parallelisation
     INTEGER                                 :: vi1, vi2                      ! Vertices
@@ -430,6 +816,9 @@ MODULE data_types_module
   TYPE type_grid
     ! A regular square grid covering a model region
 
+    ! Name
+    CHARACTER(LEN=256)                      :: name
+
     ! Basic grid data
     INTEGER,                    POINTER     :: nx, ny, n
     REAL(dp),                   POINTER     :: dx
@@ -441,8 +830,6 @@ MODULE data_types_module
     INTEGER                                 :: i1, i2, j1, j2
 
     ! Sparse matrices representing the remapping operations between a mesh and a grid
-    TYPE(tMat)                              :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
-    TYPE(tMat)                              :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
     REAL(dp),                   POINTER     :: tol_dist
     INTEGER :: wtol_dist
 
@@ -468,8 +855,11 @@ MODULE data_types_module
   TYPE type_grid_lonlat
     ! A regular square lon/lat-grid
 
+    ! Name
+    CHARACTER(LEN=256)                      :: name
+
     ! Basic grid data
-    INTEGER,                    POINTER     :: nlon, nlat
+    INTEGER,                    POINTER     :: nlon, nlat, n
     REAL(dp),                   POINTER     :: dlon, dlat
     REAL(dp), DIMENSION(:    ), POINTER     :: lon, lat
     REAL(dp),                   POINTER     :: lonmin, lonmax, latmin, latmax
@@ -478,6 +868,10 @@ MODULE data_types_module
     ! Parallelisation by domain decomposition
     INTEGER                                 :: i1, i2, j1, j2
 
+    ! Conversion tables for grid-form vs. vector-form data
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: ij2n, n2ij
+    INTEGER :: wij2n, wn2ij
+
     ! Projection parameters for the grid
     REAL(dp),                   POINTER     :: lambda_M
     REAL(dp),                   POINTER     :: phi_M
@@ -485,6 +879,20 @@ MODULE data_types_module
     INTEGER :: wlambda_M, wphi_M, wbeta_stereo
 
   END TYPE type_grid_lonlat
+
+  ! == Mapping object
+  ! =================
+
+  TYPE type_map
+    ! A mapping object
+
+    LOGICAL                                 :: is_used   = .FALSE.           ! Flag that indicates whether this map is in use
+    CHARACTER(LEN=256)                      :: name_src  = ''                ! Name of the source grid
+    CHARACTER(LEN=256)                      :: name_dst  = ''                ! Name of the destination grid
+    CHARACTER(LEN=256)                      :: method    = ''                ! Remapping method (nearest-neighbour, bilinear, 2-nd order conservative, etc.)
+    TYPE(tMat)                              :: M                             ! The actual operator matrix
+
+  END TYPE type_map
 
   ! == Reference geometries
   ! =======================
@@ -535,26 +943,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy, LI_mxydx, LI_xydy
 
   END TYPE type_single_row_mapping_matrices
-
-  TYPE type_remapping_mesh_mesh
-    ! Sparse matrices representing the remapping operations between two meshes for different remapping methods
-
-    INTEGER                                 :: int_dummy
-    TYPE(tMat)                              :: M_trilin                     ! Remapping using trilinear interpolation
-    TYPE(tMat)                              :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
-    TYPE(tMat)                              :: M_cons_1st_order             ! Remapping using first-order conservative remapping
-    TYPE(tMat)                              :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
-
-  END TYPE type_remapping_mesh_mesh
-
-  TYPE type_remapping_lonlat2mesh
-    ! Indices and weights for mapping data from a global lon/lat-grid to the model mesh using bilinear interpolation
-
-    INTEGER,  DIMENSION(:    ), POINTER     :: ilat1, ilat2, ilon1, ilon2
-    REAL(dp), DIMENSION(:    ), POINTER     :: wlat1, wlat2, wlon1, wlon2
-    INTEGER :: wilat1, wilat2, wilon1, wilon2, wwlat1, wwlat2, wwlon1, wwlon2
-
-  END TYPE type_remapping_lonlat2mesh
 
   ! == Forcing
   ! ==========
@@ -607,12 +995,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: ins_Q_TOA0, ins_Q_TOA1
     INTEGER :: wins_nyears, wins_nlat, wins_time, wins_lat, wins_t0, wins_t1, wins_Q_TOA0, wins_Q_TOA1
 
-    ! External forcing: geothermal heat flux
-    TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
-    TYPE(type_grid_lonlat)                  :: grid_ghf
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: ghf_ghf
-    INTEGER :: wghf_ghf
-
     ! External forcing: sea level record
     REAL(dp), DIMENSION(:    ), POINTER     :: sealevel_time
     REAL(dp), DIMENSION(:    ), POINTER     :: sealevel_record
@@ -633,10 +1015,7 @@ MODULE data_types_module
     TYPE(type_netcdf_climate_data)          :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
+    TYPE(type_grid_lonlat)                  :: grid
 
     ! General forcing info (not relevant for PD observations)
     REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
@@ -666,10 +1045,7 @@ MODULE data_types_module
     TYPE(type_netcdf_direct_climate_forcing_global) :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
+    TYPE(type_grid_lonlat)                  :: grid
 
     ! Time dimension
     INTEGER,                    POINTER     :: nyears
@@ -695,10 +1071,7 @@ MODULE data_types_module
     TYPE(type_netcdf_direct_SMB_forcing_global) :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
+    TYPE(type_grid_lonlat)                  :: grid
 
     ! Time dimension
     INTEGER,                    POINTER     :: nyears
@@ -739,10 +1112,7 @@ MODULE data_types_module
     TYPE(type_netcdf_ocean_data)            :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
+    TYPE(type_grid_lonlat)                  :: grid
 
     ! General forcing info (not relevant for PD observations)
     REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
@@ -755,10 +1125,10 @@ MODULE data_types_module
     ! Global 3-D ocean data on the original vertical grid
     REAL(dp),                   POINTER     :: T_ocean_mean                  ! Regional mean ocean temperature (used for basal melt when no ocean temperature data is provided)
     REAL(dp), DIMENSION(:    ), POINTER     :: z_ocean_raw                   ! Vertical coordinate of the 3-D ocean fields [m below sea surface]
-    INTEGER,                    POINTER     :: nz_ocean_raw                  ! Number of vertical layers in the 3-D ocean fields
+    INTEGER                                 :: nz_ocean_raw                  ! Number of vertical layers in the 3-D ocean fields
     REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean_raw                   ! 3-D annual mean ocean temperature [K]
     REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean_raw                   ! 3-D annual mean ocean salinity    [PSU]
-    INTEGER :: wT_ocean_mean, wz_ocean_raw, wnz_ocean_raw, wT_ocean_raw, wS_ocean_raw
+    INTEGER :: wT_ocean_mean, wz_ocean_raw, wT_ocean_raw, wS_ocean_raw
 
     ! Global 3-D ocean data on the ice-model vertical grid
     REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean                       ! 3-D annual mean ocean temperature [K]
@@ -1414,6 +1784,7 @@ MODULE data_types_module
     REAL(dp), POINTER                       :: t_last_SIA,     t_next_SIA
     REAL(dp), POINTER                       :: t_last_SSA,     t_next_SSA
     REAL(dp), POINTER                       :: t_last_DIVA,    t_next_DIVA
+    REAL(dp), POINTER                       :: t_last_BPA,     t_next_BPA
     REAL(dp), POINTER                       :: t_last_thermo,  t_next_thermo
     REAL(dp), POINTER                       :: t_last_output,  t_next_output
     REAL(dp), POINTER                       :: t_last_climate, t_next_climate
@@ -1427,6 +1798,7 @@ MODULE data_types_module
     LOGICAL,  POINTER                       :: do_SIA
     LOGICAL,  POINTER                       :: do_SSA
     LOGICAL,  POINTER                       :: do_DIVA
+    LOGICAL,  POINTER                       :: do_BPA
     LOGICAL,  POINTER                       :: do_thermo
     LOGICAL,  POINTER                       :: do_climate
     LOGICAL,  POINTER                       :: do_ocean
@@ -1437,9 +1809,9 @@ MODULE data_types_module
     LOGICAL,  POINTER                       :: do_basal
     LOGICAL,  POINTER                       :: do_SMB_inv
     INTEGER :: wdt_crit_SIA, wdt_crit_SSA, wdt_crit_ice, wdt_crit_ice_prev
-    INTEGER :: wt_last_mesh, wt_last_SIA, wt_last_SSA, wt_last_DIVA, wt_last_thermo, wt_last_output, wt_last_climate, wt_last_ocean, wt_last_SMB, wt_last_BMB, wt_last_ELRA, wt_last_basal, wt_last_SMB_inv
-    INTEGER :: wt_next_mesh, wt_next_SIA, wt_next_SSA, wt_next_DIVA, wt_next_thermo, wt_next_output, wt_next_climate, wt_next_ocean, wt_next_SMB, wt_next_BMB, wt_next_ELRA, wt_next_basal, wt_next_SMB_inv
-    INTEGER ::     wdo_mesh,     wdo_SIA,     wdo_SSA,     wdo_DIVA,     wdo_thermo,     wdo_output,     wdo_climate,     wdo_ocean,     wdo_SMB,     wdo_BMB,     wdo_ELRA,     wdo_basal,     wdo_SMB_inv
+    INTEGER :: wt_last_mesh, wt_last_SIA, wt_last_SSA, wt_last_DIVA, wt_last_BPA, wt_last_thermo, wt_last_output, wt_last_climate, wt_last_ocean, wt_last_SMB, wt_last_BMB, wt_last_ELRA, wt_last_basal, wt_last_SMB_inv
+    INTEGER :: wt_next_mesh, wt_next_SIA, wt_next_SSA, wt_next_DIVA, wt_next_BPA, wt_next_thermo, wt_next_output, wt_next_climate, wt_next_ocean, wt_next_SMB, wt_next_BMB, wt_next_ELRA, wt_next_basal, wt_next_SMB_inv
+    INTEGER ::     wdo_mesh,     wdo_SIA,     wdo_SSA,     wdo_DIVA,     wdo_BPA,     wdo_thermo,     wdo_output,     wdo_climate,     wdo_ocean,     wdo_SMB,     wdo_BMB,     wdo_ELRA,     wdo_basal,     wdo_SMB_inv
 
     ! The region's ice sheet's volume and volume above flotation (in mSLE, so the second one is the ice sheets GMSL contribution)
     REAL(dp), POINTER                       :: ice_area

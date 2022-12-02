@@ -26,7 +26,6 @@ MODULE forcing_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
   USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
   USE netcdf_extra_module,             ONLY: inquire_insolation_data_file, read_insolation_data_file_time_lat, &
                                              read_insolation_data_file_timeframes
@@ -172,9 +171,6 @@ CONTAINS
 
     ! Insolation
     CALL initialise_insolation_data
-
-    ! Geothermal heat flux
-    CALL initialise_geothermal_heat_flux_global
 
     ! Sea level
     IF (C%choice_sealevel_model == 'prescribed') THEN
@@ -1066,56 +1062,6 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected=8)
 
   END SUBROUTINE initialise_insolation_data
-
-! ===== Geothermal heat flux =====
-! ================================
-
-  SUBROUTINE initialise_geothermal_heat_flux_global
-    ! Initialise global geothermal heat flux data
-
-    IMPLICIT NONE
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER :: routine_name = 'initialise_geothermal_heat_flux_global'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (C%choice_geothermal_heat_flux == 'constant') THEN
-      ! Just use a constant value, no need to read a file.
-
-    ELSEIF (C%choice_geothermal_heat_flux == 'spatial') THEN
-      ! Use a spatially variable geothermal heat fux read from the specified NetCDF file.
-
-      IF (par%master) WRITE(0,*) ' Initialising geothermal heat flux data from ', TRIM(C%filename_geothermal_heat_flux), '...'
-
-      ! Inquire into the insolation forcing netcdf file
-      CALL allocate_shared_int_0D( forcing%grid_ghf%nlat, forcing%grid_ghf%wnlat)
-      CALL allocate_shared_int_0D( forcing%grid_ghf%nlon, forcing%grid_ghf%wnlon)
-
-      forcing%netcdf_ghf%filename = C%filename_geothermal_heat_flux
-
-      ! Read size of data fields from NetCDF file
-      IF (par%master) CALL inquire_geothermal_heat_flux_file( forcing)
-      CALL sync
-
-      ! Allocate shared memory
-      CALL allocate_shared_dp_1D( forcing%grid_ghf%nlon,                        forcing%grid_ghf%lon, forcing%grid_ghf%wlon)
-      CALL allocate_shared_dp_1D(                        forcing%grid_ghf%nlat, forcing%grid_ghf%lat, forcing%grid_ghf%wlat)
-      CALL allocate_shared_dp_2D( forcing%grid_ghf%nlon, forcing%grid_ghf%nlat, forcing%ghf_ghf,      forcing%wghf_ghf     )
-
-      ! Read data from NetCDF file
-      IF (par%master) CALL read_geothermal_heat_flux_file( forcing)
-      CALL sync
-
-    ELSE ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
-      CALL crash('unknown choice_geothermal_heat_flux "' // TRIM( C%choice_geothermal_heat_flux) // '"!')
-    END IF ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=5)
-
-  END SUBROUTINE initialise_geothermal_heat_flux_global
 
 ! ===== Sea level records =====
 ! =============================

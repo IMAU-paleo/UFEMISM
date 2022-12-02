@@ -44,14 +44,14 @@ PROGRAM UFEMISM_program
   USE data_types_module,           ONLY: type_model_region, type_netcdf_resource_tracker, &
                                          type_climate_matrix_global, type_ocean_matrix_global, &
                                          type_SELEN_global
+  USE zeta_module,                 ONLY: setup_vertical_grid
   USE forcing_module,              ONLY: forcing, initialise_global_forcing, update_global_forcing, &
                                          update_global_mean_temperature_change_history, calculate_modelled_d18O
   USE climate_module,              ONLY: initialise_climate_model_global
   USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
-  USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE text_output_module,          ONLY: create_global_text_output, write_global_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
-  USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
+  USE netcdf_extra_module,         ONLY: create_resource_tracking_file, write_to_resource_tracking_file
   USE general_sea_level_module,    ONLY: determine_GMSL_contributions, update_regional_sea_level
 
 # if (defined(DO_SELEN))
@@ -108,10 +108,10 @@ PROGRAM UFEMISM_program
 
   CALL initialise_model_configuration( version_number)
 
-  ! == Vertical scaled coordinate transformation
-  ! ============================================
+  ! == Set up the vertical zeta grid
+  ! ================================
 
-  CALL initialise_zeta_discretisation
+  CALL setup_vertical_grid
 
   ! == Initialise global forcing data
   ! =================================

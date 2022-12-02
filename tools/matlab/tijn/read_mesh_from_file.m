@@ -1,4 +1,4 @@
-function mesh = ReadMeshFromFile(filename)
+function mesh = read_mesh_from_file( filename)
 
   mesh.V              = ncread(filename,'V');
   mesh.nV             = size(mesh.V,1);
@@ -12,7 +12,7 @@ function mesh = ReadMeshFromFile(filename)
   
   mesh.nC             = ncread(filename,'nC');
   mesh.C              = ncread(filename,'C');
-  mesh.R              = ncread(filename,'R');
+  mesh.nC_mem         = size( mesh.C,2);
   
   mesh.edge_index     = ncread(filename,'edge_index');
   mesh.Tri_edge_index = ncread(filename,'Tri_edge_index');
@@ -21,14 +21,14 @@ function mesh = ReadMeshFromFile(filename)
   mesh.iTri           = ncread(filename,'iTri');
   
   mesh.TriC           = ncread(filename,'TriC');
-  
-  mesh.vi_transect    = ncread(filename,'vi_transect');
-  mesh.nV_transect    = size(mesh.vi_transect,1);
-  mesh.w_transect     = ncread(filename,'w_transect');
+  mesh.Tricc          = ncread(filename,'Tricc');
   
   mesh.VAc            = ncread(filename,'VAc');
   mesh.nAc            = size( mesh.VAc,1);
   mesh.Aci            = ncread(filename,'Aci');
   mesh.iAci           = ncread(filename,'iAci');
+  
+  mesh.A              = ncread(filename,'A');
+  mesh.R              = ncread(filename,'R');
 
 end

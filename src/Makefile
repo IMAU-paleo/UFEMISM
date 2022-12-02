@@ -50,6 +50,7 @@ UFEMISM_program_objects = \
         parallel_module.o \
         petsc_module.o \
         parameters_module.o \
+        zeta_module.o \
         utilities_module.o \
         sparse_matrix_module.o \
         mesh_memory_module.o \
@@ -60,8 +61,6 @@ UFEMISM_program_objects = \
         mesh_mapping_module.o \
         mesh_creation_module.o \
         mesh_update_module.o \
-        zeta_module.o \
-        netcdf_module.o \
         netcdf_basic_module.o \
         netcdf_input_module.o \
         netcdf_output_module.o \
@@ -78,7 +77,11 @@ UFEMISM_program_objects = \
         general_ice_model_data_module.o \
         general_sea_level_module.o \
         calving_module.o \
-        ice_velocity_module.o \
+        ice_velocity_SIA_module.o \
+        ice_velocity_SSA_module.o \
+        ice_velocity_DIVA_module.o \
+        ice_velocity_BPA_module.o \
+        ice_velocity_main_module.o \
         ice_thickness_module.o \
         thermodynamics_module.o \
         ice_dynamics_module.o \
@@ -107,6 +110,7 @@ UFEMISM_program_objects = \
         parallel_module.o \
         petsc_module.o \
         parameters_module.o \
+        zeta_module.o \
         utilities_module.o \
         sparse_matrix_module.o \
         mesh_memory_module.o \
@@ -117,8 +121,6 @@ UFEMISM_program_objects = \
         mesh_mapping_module.o \
         mesh_creation_module.o \
         mesh_update_module.o \
-        zeta_module.o \
-        netcdf_module.o \
         netcdf_basic_module.o \
         netcdf_input_module.o \
         netcdf_output_module.o \
@@ -135,7 +137,11 @@ UFEMISM_program_objects = \
         general_ice_model_data_module.o \
         general_sea_level_module.o \
         calving_module.o \
-        ice_velocity_module.o \
+        ice_velocity_SIA_module.o \
+        ice_velocity_SSA_module.o \
+        ice_velocity_DIVA_module.o \
+        ice_velocity_BPA_module.o \
+        ice_velocity_main_module.o \
         ice_thickness_module.o \
         thermodynamics_module.o \
         ice_dynamics_module.o \

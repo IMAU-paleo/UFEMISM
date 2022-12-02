@@ -56,33 +56,41 @@ MODULE mesh_help_functions_module
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_Voronoi_cell_areas'
-    INTEGER                                            :: vi, nVor, n
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
-    REAL(dp)                                           :: Aerr
+    INTEGER                                            :: vi
+    REAL(dp), DIMENSION( mesh%nC_mem,2)                :: Vor
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_vi
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_ti
+    INTEGER                                            :: nVor
+    INTEGER                                            :: vori, vori_next
+    REAL(dp)                                           :: A_tot_Vor, A_tot_ex, Aerr
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ALLOCATE(Vor(mesh%nC_mem+2,2))
-
     mesh%A(mesh%vi1:mesh%vi2) = 0._dp
+
     DO vi = mesh%vi1, mesh%vi2
 
-      CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
+      CALL calc_Voronoi_cell( mesh, vi, 0._dp, Vor, Vor_vi, Vor_ti, nVor)
 
-      DO n = 2, nVor
-        mesh%A(vi) = mesh%A(vi) + ABS(cross2( &
-        [Vor(n  ,1)-mesh%V(vi,1), Vor(n  ,2)-mesh%V(vi,2)], &
-        [Vor(n-1,1)-mesh%V(vi,1), Vor(n-1,2)-mesh%V(vi,2)] )) / 2._dp
+      DO vori = 1, nVor
+
+        vori_next = vori + 1
+        IF (vori_next == nVor + 1) vori_next = 1
+
+        mesh%A( vi) = mesh%A( vi) + ABS( cross2( &
+          [Vor( vori_next,1) - mesh%V( vi,1), Vor( vori_next,2) - mesh%V( vi,2)], &
+          [Vor( vori     ,1) - mesh%V( vi,1), Vor( vori     ,2) - mesh%V( vi,2)] )) / 2._dp
       END DO
+
     END DO
     CALL sync
 
-    DEALLOCATE(Vor)
-
     ! Check if everything went alright
     IF (par%master) THEN
-      Aerr = ABS(1._dp - SUM(mesh%A ) / ((mesh%xmax-mesh%xmin)*(mesh%ymax-mesh%ymin))) / 100._dp
+      A_tot_Vor = SUM( mesh%A)
+      A_tot_ex  = (mesh%xmax - mesh%xmin) * (mesh%ymax - mesh%ymin)
+      Aerr = ABS(1._dp - A_tot_vor / A_tot_ex) / 100._dp
       IF (Aerr > 0.0001_dp) CALL warning('sum of Voronoi cell areas doesnt match square area of mesh! (error of {dp_01} %)', dp_01 = Aerr)
     END IF
 
@@ -99,60 +107,46 @@ MODULE mesh_help_functions_module
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_Voronoi_cell_geometric_centres'
-    INTEGER                                       :: vi, nvi
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Vor
-    INTEGER                                       :: nVor
-    REAL(dp), DIMENSION(2)                        :: p, q
-    REAL(dp)                                      :: LI_mxydx, LI_xydy
-    REAL(dp)                                      :: LI_mxydx_seg, LI_xydy_seg
+    INTEGER                                            :: vi
+    REAL(dp), DIMENSION( mesh%nC_mem,2)                :: Vor
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_vi
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_ti
+    INTEGER                                            :: nVor
+    INTEGER                                            :: vori, vori_next
+    REAL(dp), DIMENSION(2)                             :: p, q
+    REAL(dp)                                           :: LI_mxydx, LI_xydy
+    REAL(dp)                                           :: LI_mxydx_seg, LI_xydy_seg
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    mesh%VorGC( mesh%vi1:mesh%vi2,:) = 0._dp
-
-    ALLOCATE(Vor(mesh%nC_mem+2,2))
-
     DO vi = mesh%vi1, mesh%vi2
 
-      CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
+      CALL calc_Voronoi_cell( mesh, vi, 0._dp, Vor, Vor_vi, Vor_ti, nVor)
 
       LI_mxydx = 0._dp
       LI_xydy  = 0._dp
 
-      DO nvi = 2, nVor
-        p = Vor( nvi-1,:)
-        q = Vor( nvi,:)
+      DO vori = 1, nVor
+
+        vori_next = vori + 1
+        IF (vori_next == nVor + 1) vori_next = 1
+
+        p = Vor( vori     ,:)
+        q = Vor( vori_next,:)
+
         CALL line_integral_mxydx( p, q, mesh%tol_dist, LI_mxydx_seg)
         CALL line_integral_xydy(  p, q, mesh%tol_dist, LI_xydy_seg )
+
         LI_mxydx = LI_mxydx + LI_mxydx_seg
         LI_xydy  = LI_xydy  + LI_xydy_seg
+
       END DO
-
-      IF (mesh%edge_index( vi) > 0) THEN
-
-        p = Vor( nVor,:)
-        q = mesh%V( vi,:)
-        CALL line_integral_mxydx( p, q, mesh%tol_dist, LI_mxydx_seg)
-        CALL line_integral_xydy(  p, q, mesh%tol_dist, LI_xydy_seg)
-        LI_mxydx = LI_mxydx + LI_mxydx_seg
-        LI_xydy  = LI_xydy  + LI_xydy_seg
-
-        p = mesh%V( vi,:)
-        q = Vor( 1,:)
-        CALL line_integral_mxydx( p, q, mesh%tol_dist, LI_mxydx_seg)
-        CALL line_integral_xydy(  p, q, mesh%tol_dist, LI_xydy_seg)
-        LI_mxydx = LI_mxydx + LI_mxydx_seg
-        LI_xydy  = LI_xydy  + LI_xydy_seg
-
-      END IF
 
       mesh%VorGC( vi,:) = [LI_mxydx / mesh%A( vi), LI_xydy / mesh%A( vi)]
 
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
-
-    DEALLOCATE(Vor)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -317,294 +311,309 @@ MODULE mesh_help_functions_module
 
   END SUBROUTINE calc_triangle_geometric_centres
 
-! == Finding the vertices of a vertex' Voronoi cell
-  SUBROUTINE find_Voronoi_cell_vertices(        mesh, vi, Vor, nVor)
-    ! Find the coordinates of the points making up a vertex's Voronoi cell
+! == Determine the Voronoi cell of a mesh vertex
+  SUBROUTINE calc_Voronoi_cell( mesh, vi, dx, Vor, Vor_vi, Vor_ti, nVor)
+    ! Find the points spanning the Voronoi cell of vertex vi of the mesh.
+    ! Sorted counted-clockwise, with no double entries.
+    !
+    ! Point Vor( i) corresponds to the circumcentre of triangle Vor_ti( i).
+    !
+    ! The line connecting Vor( i) and Vor( i+1) is shared with the Voronoi cell
+    ! of vertex Vor_vi( i).
 
     IMPLICIT NONE
 
-    TYPE(type_mesh),          INTENT(IN)          :: mesh
-    INTEGER,                  INTENT(IN)          :: vi
-    REAL(dp), DIMENSION(:,:), INTENT(INOUT)       :: Vor
-    INTEGER,                  INTENT(OUT)         :: nVor
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    INTEGER,                             INTENT(IN)    :: vi
+    REAL(dp),                            INTENT(IN)    :: dx
+    REAL(dp), DIMENSION(mesh%nC_mem,2),  INTENT(OUT)   :: Vor
+    INTEGER,  DIMENSION(mesh%nC_mem  ),  INTENT(OUT)   :: Vor_vi
+    INTEGER,  DIMENSION(mesh%nC_mem  ),  INTENT(OUT)   :: Vor_ti
+    INTEGER,                             INTENT(OUT)   :: nVor
 
-    ! Local variables
-    INTEGER                                       :: vvi
+    ! Local variables:
 
-    IF (mesh%edge_index(vi)==0) THEN
-      CALL find_Voronoi_cell_vertices_free(mesh, vi, Vor, nVor)
-    ELSEIF (mesh%edge_index(vi)==2 .OR. mesh%edge_index(vi)==4 .OR. mesh%edge_index(vi)==6 .OR. mesh%edge_index(vi)==8) THEN
-      CALL find_Voronoi_cell_vertices_corner(mesh, vi, Vor, nVor)
+    ! Vertices lying on the domain border or corners are best treated separately
+    IF (mesh%edge_index( vi) == 0) THEN
+      ! Free vertex
+      CALL calc_Voronoi_cell_free(   mesh, vi, dx, Vor, Vor_vi, Vor_ti, nVor)
     ELSE
-      CALL find_Voronoi_cell_vertices_edge(mesh, vi, Vor, nVor)
+      ! Border vertex
+      CALL calc_Voronoi_cell_border( mesh, vi, dx, Vor, Vor_vi, Vor_ti, nVor)
     END IF
 
-    DO vvi = 1, nVor
-      IF (Vor(vvi,1) < mesh%xmin - mesh%tol_dist .OR. &
-          Vor(vvi,1) > mesh%xmax + mesh%tol_dist .OR. &
-          Vor(vvi,2) < mesh%ymin - mesh%tol_dist .OR. &
-          Vor(vvi,2) > mesh%ymax + mesh%tol_dist) THEN
-        WRITE(0,*) '   find_Voronoi_cell_vertices - ERROR: found Voronoi cell vertex outside of mesh domain!'
-        STOP
-      END IF
-      Vor(vvi,1) = MAX( MIN( Vor(vvi,1), mesh%xmax), mesh%xmin)
-      Vor(vvi,2) = MAX( MIN( Vor(vvi,2), mesh%ymax), mesh%ymin)
+  END SUBROUTINE calc_Voronoi_cell
+  SUBROUTINE calc_Voronoi_cell_free( mesh, vi, dx, Vor, Vor_vi, Vor_ti, nVor)
+    ! Find the points spanning the Voronoi cell of vertex vi of the mesh%
+    ! Sorted counted-clockwise, with no double entries.
+    !
+    ! Point Vor( i) corresponds to the circumcentre of triangle Vor_ti( i).
+    !
+    ! The line connecting Vor( i) and Vor( i+1) is shared with the Voronoi cell
+    ! of vertex Vor_vi( i).
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    INTEGER,                             INTENT(IN)    :: vi
+    REAL(dp),                            INTENT(IN)    :: dx
+    REAL(dp), DIMENSION(mesh%nC_mem,2),  INTENT(OUT)   :: Vor
+    INTEGER,  DIMENSION(mesh%nC_mem  ),  INTENT(OUT)   :: Vor_vi
+    INTEGER,  DIMENSION(mesh%nC_mem  ),  INTENT(OUT)   :: Vor_ti
+    INTEGER,                             INTENT(OUT)   :: nVor
+
+    ! Local variables:
+    INTEGER                                            :: iti,ti,vj,n1,n2,vori,vori_prev,vori_next,vk
+    REAL(dp), DIMENSION(2)                             :: cc,cc_prev,cc_next,cc_prev0,cc_next0,cc1,cc2
+    LOGICAL                                            :: is_valid_line
+
+    ! Initialise
+    Vor    = 0._dp
+    Vor_vi = 0
+    Vor_ti = 0
+    nVor   = 0
+
+    ! List the circumcentres of all triangles surrounding vi
+    ! as points spanning the Voronoi cell
+
+    DO iti = 1, mesh%niTri( vi)
+
+      ti  = mesh%iTri( vi,iti)
+
+      ! Find vertex vj such that triangle ti lies to the right of the line vi-vj
+      vj = 0
+      DO n1 = 1, 3
+        n2 = n1 + 1
+        IF (n2 == 4) n2 = 1
+        IF (mesh%Tri( ti,n2) == vi) THEN
+          vj = mesh%Tri( ti,n1)
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (vj == 0) CALL crash('calc_Voronoi_cell_free - couldnt find vertex vj in triangle ti!')
+
+      ! List the new Voronoi cell-spanning point
+      nVor = nVor + 1
+      Vor(     nVor,:) = mesh%Tricc( ti,:)
+      Vor_vi(  nVor  ) = vj
+      Vor_ti(  nVor  ) = ti
+
     END DO
 
-  END SUBROUTINE find_Voronoi_cell_vertices
-  SUBROUTINE find_Voronoi_cell_vertices_free(   mesh, vi, Vor, nVor)
-    ! Find the coordinates of the points making up a free vertex's Voronoi cell
+    ! Correct any circumcentres that lie outside of the mesh domain
+    vori = 1
+    DO WHILE (vori < nVor)
 
-    IMPLICIT NONE
+      vori_prev = vori - 1
+      IF (vori_prev == 0   ) vori_prev = nVor
+      vori_next = vori + 1
+      IF (vori_next >  nVor) vori_next = 1
 
-    TYPE(type_mesh),          INTENT(IN)          :: mesh
-    INTEGER,                  INTENT(IN)          :: vi
-    REAL(dp), DIMENSION(:,:), INTENT(INOUT)       :: Vor
-    INTEGER,                  INTENT(OUT)         :: nVor
+      cc      = Vor( vori     ,:)
+      cc_prev = Vor( vori_prev,:)
+      cc_next = Vor( vori_next,:)
 
-    ! Local variables
-    INTEGER                                       :: iti, iti_clock, iti_anti, ti, ti_clock, ti_anti
-    REAL(dp), DIMENSION(2)                        :: cc, cc_clock, cc_anti
+      IF (cc( 1) < mesh%xmin .OR. cc( 1) > mesh%xmax .OR. cc( 2) < mesh%ymin .OR. cc( 2) > mesh%ymax) THEN
+        ! This triangle circumcentre is outside of the mesh domain
 
-    Vor  = 0._dp
-    nVor = 0
+        ! Find the two points on the domain border that should actually be part
+        ! of the Voronoi cell boundary
+        CALL crop_line_to_domain( cc_prev, cc, mesh%xmin - dx, mesh%xmax + dx, mesh%ymin - dx, mesh%ymax + dx, mesh%tol_dist, cc_prev0, cc1, is_valid_line)
+        CALL crop_line_to_domain( cc_next, cc, mesh%xmin - dx, mesh%xmax + dx, mesh%ymin - dx, mesh%ymax + dx, mesh%tol_dist, cc_next0, cc2, is_valid_line)
 
-    DO iti = 1, mesh%niTri(vi)
+        ! The previous and next vertex, and the edge connecting them
+        vj  = Vor_vi(  vori_prev)
+        vk  = Vor_vi(  vori)
 
-      ! Find indices of current, clockwise neighbouring and anticlockwise
-      ! neighbouring triangles.
-      iti_clock = iti - 1
-      IF (iti_clock==0) iti_clock = mesh%niTri(vi)
-      iti_anti  = iti + 1
-      IF (iti_anti>mesh%niTri(vi)) iti_anti = 1
+        ! Split the invalid Voronoi cell boundary point
+        nVor = nVor + 1
+        Vor(     1:nVor,1) = [Vor(     1:vori-1,1), cc1( 1), cc2( 1), Vor(     vori+1:nVor-1,1)]
+        Vor(     1:nVor,2) = [Vor(     1:vori-1,2), cc1( 2), cc2( 2), Vor(     vori+1:nVor-1,2)]
+        Vor_vi(  1:nVor  ) = [Vor_vi(  1:vori-1  ), 0      , vk     , Vor_vi(  vori+1:nVor-1  )]
+        Vor_ti(  1:nVor  ) = [Vor_ti(  1:vori-1  ), 0      , 0      , Vor_ti(  vori+1:nVor-1  )]
 
-      ti       = mesh%iTri(vi,iti)
-      ti_clock = mesh%iTri(vi,iti_clock)
-      ti_anti  = mesh%iTri(vi,iti_anti)
+        ! Move to the next to-be-checked point
+        vori = vori + 2
 
-      ! If necessary, crop (split) the circumcenter of the current triangle.
-      cc       = mesh%Tricc(ti,:)
-      CALL crop_circumcenter(mesh, ti, ti_clock, cc_clock)
-      CALL crop_circumcenter(mesh, ti, ti_anti,  cc_anti)
-
-      ! Add the resulting Voronoi vertex/vertices
-      IF (cc_clock(1) /= cc_anti(1) .OR. cc_clock(2) /= cc_anti(2)) THEN
-        nVor = nVor+1
-        Vor(nVor,:) = cc_clock
-        nVor = nVor+1
-        Vor(nVor,:) = cc_anti
       ELSE
-        nVor = nVor+1
-        Vor(nVor,:) = cc
+        ! This triangle circumcentre is inside the mesh domain; move the next one
+
+        vori = vori + 1
+
       END IF
 
-    END DO ! DO t = 1, mesh%niTri(vi)
+    END DO
 
-    ! Repeat the first Voronoi vertex
-    nVor = nVor+1
-    Vor(nVor,:) = Vor(1,:)
-
-  END SUBROUTINE find_Voronoi_cell_vertices_free
-  SUBROUTINE find_Voronoi_cell_vertices_edge(   mesh, vi, Vor, nVor)
-    ! Find the coordinates of the points making up an edge vertex's Voronoi cell
+  END SUBROUTINE calc_Voronoi_cell_free
+  SUBROUTINE calc_Voronoi_cell_border( mesh, vi, dx, Vor, Vor_vi, Vor_ti, nVor)
+    ! Find the points spanning the Voronoi cell of vertex vi of the mesh.
+    ! Sorted counted-clockwise, with no double entries.
+    !
+    ! Point Vor( i) corresponds to the circumcentre of triangle Vor_ti( i).
+    !
+    ! The line connecting Vor( i) and Vor( i+1) is shared with the Voronoi cell
+    ! of vertex Vor_vi( i).
 
     IMPLICIT NONE
 
-    TYPE(type_mesh),          INTENT(IN)          :: mesh
-    INTEGER,                  INTENT(IN)          :: vi
-    REAL(dp), DIMENSION(:,:), INTENT(INOUT)       :: Vor
-    INTEGER,                  INTENT(OUT)         :: nVor
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    INTEGER,                             INTENT(IN)    :: vi
+    REAL(dp),                            INTENT(IN)    :: dx
+    REAL(dp), DIMENSION(mesh%nC_mem,2),  INTENT(OUT)   :: Vor
+    INTEGER,  DIMENSION(mesh%nC_mem  ),  INTENT(OUT)   :: Vor_vi
+    INTEGER,  DIMENSION(mesh%nC_mem  ),  INTENT(OUT)   :: Vor_ti
+    INTEGER,                             INTENT(OUT)   :: nVor
 
-    ! Local variables
-    INTEGER                                       :: iti
-    REAL(dp), DIMENSION(2)                        :: cc, cc_clock, cc_anti, cc_cropped
+    ! Local variables:
+    INTEGER                                            :: ci,vj,ti,iti,tj,n,n2
+    REAL(dp), DIMENSION(2)                             :: p,q,pp,qq
+    LOGICAL                                            :: is_valid_line
 
-    Vor  = 0._dp
-    nVor = 0
+    ! Initialise
+    Vor    = 0._dp
+    Vor_vi = 0
+    Vor_ti = 0
+    nVor   = 0
 
-    ! == Boundary cell ==
-    ! If the first or last circumcenter lies outside of the grid, crop it.
-    ! If not, add the point on the edge closest to that circumcenter as an additional Voronoi cell vertex.
+    ! For each neighbouring vertex vj, list the circumcentre of the triangle
+    ! lying right of the line vi-vj. Except, we skip the first neighbouring
+    ! vertex, as DO that one the area to the right of the line vi-vj is
+    ! outside of the mesh domain
 
-    DO iti = 1, mesh%niTri(vi)
+    DO ci = 2, mesh%nC( vi)
 
-      cc = mesh%Tricc(mesh%iTri(vi,iti),:)
+      vj  = mesh%C( vi,ci)
 
-      IF (iti == 1) THEN
-        ! Start by possibly adding the boundary projection of the vertex
-        IF     ((mesh%edge_index(vi)==1 .OR. mesh%edge_index(vi)==2) .AND. cc(2)<mesh%ymax) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = [cc(1), mesh%ymax]
-        ELSEIF ((mesh%edge_index(vi)==3 .OR. mesh%edge_index(vi)==4) .AND. cc(1)<mesh%xmax) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = [mesh%xmax, cc(2)]
-        ELSEIF ((mesh%edge_index(vi)==5 .OR. mesh%edge_index(vi)==6) .AND. cc(2)>mesh%ymin) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = [cc(1), mesh%ymin]
-        ELSEIF ((mesh%edge_index(vi)==7 .OR. mesh%edge_index(vi)==8) .AND. cc(1)>mesh%xmin) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = [mesh%xmin, cc(2)]
-        END IF
+      ! Find the triangle ti lying right of the line vi-vj
+      ti = 0
+      DO iti = 1, mesh%niTri( vi)
+        tj = mesh%iTri( vi,iti)
+        DO n = 1, 3
+          n2 = n + 1
+          IF (n2 == 4) n2 = 1
+          IF (mesh%Tri( tj,n) == vj .AND. mesh%Tri( tj,n2) == vi) THEN
+            ti = tj
+            EXIT
+          END IF
+        END DO
+        IF (ti > 0) EXIT
+      END DO
 
-        ! Then add the (possibly cropped) vertex
-        CALL crop_circumcenter(mesh, mesh%iTri(vi,1), mesh%iTri(vi,2), cc_cropped)
-        nVor = nVor+1
-        Vor(nVor,:) = cc_cropped
-      END IF ! IF (iti == 1) THEN
+      ! Safety
+      IF (ti == 0) CALL crash('couldnt find triangle right of the line vi-vj!')
 
-      IF (iti > 1 .AND. iti < mesh%niTri(vi)) THEN
-        ! Split the circumcenter
-        CALL crop_circumcenter(mesh, mesh%iTri(vi,iti), mesh%iTri(vi,iti+1), cc_anti)
-        CALL crop_circumcenter(mesh, mesh%iTri(vi,iti), mesh%iTri(vi,iti-1), cc_clock)
-        IF (cc_anti(1)/=cc_clock(1) .OR. cc_anti(2)/=cc_clock(2)) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = cc_clock
-          nVor = nVor+1
-          Vor(nVor,:) = cc_anti
-        ELSE
-          nVor = nVor+1
-          Vor(nVor,:) = cc
-        END IF
-      END IF ! IF (iti > 1 .AND. iti < mesh%niTri(vi)) THEN
+      ! List the circumcentre of this triangle
+      nVor = nVor + 1
+      Vor(     nVor,:) = mesh%Tricc( ti,:)
+      Vor_vi(  nVor  ) = vj
+      Vor_ti(  nVor  ) = ti
 
-      IF (iti == mesh%niTri(vi)) THEN
-        ! First add the (possibly cropped) vertex
-        CALL crop_circumcenter(mesh, mesh%iTri(vi,iti), mesh%iTri(vi,iti-1), cc_cropped)
-        nVor = nVor+1
-        Vor(nVor,:) = cc_cropped
+    END DO ! DO ci = 2, mesh%nC( vi)
 
-        ! Then possibly add the boundary projection of the vertex
-        IF     ((mesh%edge_index(vi)==1 .OR. mesh%edge_index(vi)==8) .AND. cc(2)<mesh%ymax) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = [cc(1), mesh%ymax]
-        ELSEIF ((mesh%edge_index(vi)==3 .OR. mesh%edge_index(vi)==2) .AND. cc(1)<mesh%xmax) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = [mesh%xmax, cc(2)]
-        ELSEIF ((mesh%edge_index(vi)==5 .OR. mesh%edge_index(vi)==4) .AND. cc(2)>mesh%ymin) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = [cc(1), mesh%ymin]
-        ELSEIF ((mesh%edge_index(vi)==7 .OR. mesh%edge_index(vi)==6) .AND. cc(1)>mesh%xmin) THEN
-          nVor = nVor+1
-          Vor(nVor,:) = [mesh%xmin, cc(2)]
-        END IF
+    ! Fix the first point
 
-      END IF ! IF (iti == mesh%niTri(vi)) THEN
+    IF (Vor( 1,1) < mesh%xmin - dx .OR. Vor( 1,1) > mesh%xmax + dx .OR. &
+        Vor( 1,2) < mesh%ymin - dx .OR. Vor( 1,2) > mesh%ymax + dx) THEN
+      ! The first circumcentre lies outside the mesh domain; crop it
 
-    END DO ! DO n = 1, mesh%niTri(vi)
+      p = Vor( 1,:)
+      q = Vor( 2,:)
 
-  END SUBROUTINE find_Voronoi_cell_vertices_edge
-  SUBROUTINE find_Voronoi_cell_vertices_corner( mesh, vi, Vor, nVor)
-    ! Find the coordinates of the points making up a corner vertex's Voronoi cell
+      CALL crop_line_to_domain( p, q, mesh%xmin - dx, mesh%xmax + dx, mesh%ymin - dx, mesh%ymax + dx, mesh%tol_dist, pp, qq, is_valid_line)
 
-    IMPLICIT NONE
-
-    TYPE(type_mesh),          INTENT(IN)          :: mesh
-    INTEGER,                  INTENT(IN)          :: vi
-    REAL(dp), DIMENSION(:,:), INTENT(INOUT)       :: Vor
-    INTEGER,                  INTENT(OUT)         :: nVor
-
-    ! Local variables
-    REAL(dp), DIMENSION(2)                        :: cc
-
-    Vor  = 0._dp
-    nVor = 0
-
-    IF (mesh%niTri(vi) > 1) THEN
-      ! This corner vertex has more than one triangle, can be handled by Edge version
-
-      CALL find_Voronoi_cell_vertices_edge(mesh, vi, Vor, nVor)
-
-      IF     (mesh%edge_index( vi) == 2) THEN
-        ! Northeast corner
-        nVor = nVor + 1
-        Vor( nVor,:) = [mesh%xmax, mesh%ymax]
-      ELSEIF (mesh%edge_index( vi) == 4) THEN
-        ! Southeast corner
-        nVor = nVor + 1
-        Vor( nVor,:) = [mesh%xmax, mesh%ymin]
-      ELSEIF (mesh%edge_index( vi) == 6) THEN
-        ! Southwest corner
-        nVor = nVor + 1
-        Vor( nVor,:) = [mesh%xmin, mesh%ymin]
-      ELSEIF (mesh%edge_index( vi) == 8) THEN
-        ! Northwest corner
-        nVor = nVor + 1
-        Vor( nVor,:) = [mesh%xmin, mesh%ymax]
-      END IF
+      Vor(    1,:) = pp
+      Vor_ti( 1  ) = 0
 
     ELSE
-      ! This corner vertex has only a single triangle, best handled manually
+      ! The first circumcentre lies inside the mesh domain; add its projection
+      ! on the domain boundary as an additional point
 
-      cc = mesh%Tricc(mesh%iTri(vi,1),:)
+      nVor = nVor + 1
+      Vor(     2:nVor,:) = Vor(     1:nVor-1,:)
+      Vor_vi(  2:nVor  ) = Vor_vi(  1:nVor-1  )
+      Vor_ti(  2:nVor  ) = Vor_ti(  1:nVor-1  )
 
-      IF     (mesh%edge_index(vi)==2) THEN
-        ! Northeast corner
-        nVor = 3
-        Vor(1,:) = [cc(1), mesh%ymax]
-        Vor(2,:) = cc
-        Vor(3,:) = [mesh%xmax, cc(2)]
-      ELSEIF (mesh%edge_index(vi)==4) THEN
-        ! Southeast corner
-        nVor = 3
-        Vor(1,:) = [mesh%xmax, cc(2)]
-        Vor(2,:) = cc
-        Vor(3,:) = [cc(1), mesh%ymin]
-      ELSEIF (mesh%edge_index(vi)==6) THEN
-        ! Southwest corner
-        nVor = 3
-        Vor(1,:) = [cc(1), mesh%ymin]
-        Vor(2,:) = cc
-        Vor(3,:) = [mesh%xmin, cc(2)]
-      ELSEIF (mesh%edge_index(vi)==8) THEN
-        ! Northwest corner
-        nVor = 3
-        Vor(1,:) = [mesh%xmin, cc(2)]
-        Vor(2,:) = cc
-        Vor(3,:) = [cc(1), mesh%ymax]
-      ELSE
-        WRITE(0,*) 'A non-corner vertex has only one triangle? This cannot be!'
-        STOP
-      END IF ! IF (mesh%edge_index(vi)==2) THEN
+      Vor_vi( 1) = mesh%C(    vi,1)
+      Vor_ti( 1) = mesh%iTri( vi,1)
+
+      IF     (mesh%edge_index( vi) == 1 .OR. mesh%edge_index( vi) == 2) THEN
+        ! vi is on the northern border, or on the northeast corner; its first neighbour lies on the northern border
+        Vor(    1,:) = [Vor( 2,1), mesh%ymax + dx]
+      ELSEIF (mesh%edge_index( vi) == 3 .OR. mesh%edge_index( vi) == 4) THEN
+        ! vi is on the eastern border, or on the southeast corner; its first neighbour lies on the eastern border
+        Vor(    1,:) = [mesh%xmax + dx, Vor( 2,2)]
+      ELSEIF (mesh%edge_index( vi) == 5 .OR. mesh%edge_index( vi) == 6) THEN
+        ! vi is on the southern border, or on the southwest corner; its first neighbour lies on the southern border
+        Vor(    1,:) = [Vor( 2,1), mesh%ymin - dx]
+      ELSEIF (mesh%edge_index( vi) == 7 .OR. mesh%edge_index( vi) == 8) THEN
+        ! vi is on the western border, or on the northwest corner; its first neighbour lies on the western border
+        Vor(    1,:) = [mesh%xmin - dx, Vor( 2,2)]
+      END IF
 
     END IF
 
-  END SUBROUTINE find_Voronoi_cell_vertices_corner
-  SUBROUTINE crop_circumcenter( mesh, t1, t2, ccc)
-    ! Crop the circumcenter of triangle t1 in the direction of t2
+    ! Fix the last point
 
-    IMPLICIT NONE
+    IF (Vor( nVor,1) < mesh%xmin - dx .OR. Vor( nVor,1) > mesh%xmax + dx .OR. &
+        Vor( nVor,2) < mesh%ymin - dx .OR. Vor( nVor,2) > mesh%ymax + dx) THEN
+      ! The last circumcentre lies outside the mesh domain; crop it
 
-    TYPE(type_mesh),          INTENT(IN)          :: mesh
-    INTEGER,                  INTENT(IN)          :: t1, t2
-    REAL(dp), DIMENSION(2),   INTENT(OUT)         :: ccc
+      p = Vor( nVor-1,:)
+      q = Vor( nVor  ,:)
 
-    REAL(dp)                                      :: la, lb, lc, le, lf, lg
-    REAL(dp), DIMENSION(2)                        :: p, q
+      CALL crop_line_to_domain( p, q, mesh%xmin - dx, mesh%xmax + dx, mesh%ymin - dx, mesh%ymax + dx, mesh%tol_dist, pp, qq, is_valid_line)
 
-    ccc  = mesh%Tricc(t1,:)
+      Vor( nVor,:) = qq
 
-    IF     (mesh%Tri_edge_index(t1)==1 .AND. mesh%Tricc(t1,2)>mesh%ymax) THEN
-      ! North boundary triangle
-      CALL line_from_points([mesh%xmin, mesh%ymax], [mesh%xmax, mesh%ymax], la, lb, lc)
-    ELSEIF (mesh%Tri_edge_index(t1)==3 .AND. mesh%Tricc(t1,1)>mesh%xmax) THEN
-      ! East boundary triangle
-      CALL line_from_points([mesh%xmax, mesh%ymax], [mesh%xmax, mesh%ymin], la, lb, lc)
-    ELSEIF (mesh%Tri_edge_index(t1)==5 .AND. mesh%Tricc(t1,2)<mesh%ymin) THEN
-      ! South boundary triangle
-      CALL line_from_points([mesh%xmin, mesh%ymin], [mesh%xmax, mesh%ymin], la, lb, lc)
-    ELSEIF (mesh%Tri_edge_index(t1)==7 .AND. mesh%Tricc(t1,1)<mesh%xmin) THEN
-      ! West boundary triangle
-      CALL line_from_points([mesh%xmin, mesh%ymax], [mesh%xmin, mesh%ymin], la, lb, lc)
     ELSE
-      RETURN
+      ! The last circumcentre lies inside the mes domain; add its projection
+      ! on the domain boundary as an additional point
+
+      nVor = nVor + 1
+
+      Vor_vi( nVor) = mesh%C(    vi, mesh%nC( vi))
+      Vor_ti( nVor) = mesh%iTri( vi, mesh%nC( vi))
+
+      IF     (mesh%edge_index( vi) == 2 .OR. mesh%edge_index( vi) == 3) THEN
+        ! vi is on the eastern border, or on the northeast corner; its last neighbour lies on the eastern border
+        Vor(    nVor,:) = [mesh%xmax + dx, Vor( nVor-1,2)]
+      ELSEIF (mesh%edge_index( vi) == 4 .OR. mesh%edge_index( vi) == 5) THEN
+        ! vi is on the southern border, or on the southeast corner; its last neighbour lies on the southern border
+        Vor(    nVor,:) = [Vor( nVor-1,1), mesh%ymin - dx]
+      ELSEIF (mesh%edge_index( vi) == 6 .OR. mesh%edge_index( vi) == 7) THEN
+        ! vi is on the western border, or on the southwest corner; its last neighbour lies on the western border
+        Vor(    nVor,:) = [mesh%xmin - dx, Vor( nVor-1,2)]
+      ELSEIF (mesh%edge_index( vi) == 8 .OR. mesh%edge_index( vi) == 1) THEN
+        ! vi is on the northern border, or on the northwest corner; its last neighbour lies on the northern border
+        Vor(    nVor,:) = [Vor( nVor-1,1), mesh%ymax + dx]
+      END IF
+
     END IF
 
-   p = mesh%Tricc(t1,:)
-   q = mesh%Tricc(t2,:)
-   CALL line_from_points(p, q, le, lf, lg)
-   CALL line_line_intersection(la, lb, lc, le, lf, lg, ccc);
+    ! In the case of the four corners, add the corners themselves as well
+    IF     (mesh%edge_index( vi) == 2) THEN
+      ! Northeast corner
+      nVor = nVor + 1
+      Vor( nVor,:) = [mesh%xmax + dx, mesh%ymax + dx]
+    ELSEIF (mesh%edge_index( vi) == 4) THEN
+      ! Southeast corner
+      nVor = nVor + 1
+      Vor( nVor,:) = [mesh%xmax + dx, mesh%ymin - dx]
+    ELSEIF (mesh%edge_index( vi) == 6) THEN
+      ! Southwest corner
+      nVor = nVor + 1
+      Vor( nVor,:) = [mesh%xmin - dx, mesh%ymin - dx]
+    ELSEIF (mesh%edge_index( vi) == 8) THEN
+      ! Northwest corner
+      nVor = nVor + 1
+      Vor( nVor,:) = [mesh%xmin - dx, mesh%ymax + dx]
+    END IF
 
-  END SUBROUTINE crop_circumcenter
+  END SUBROUTINE calc_Voronoi_cell_border
   SUBROUTINE find_shared_Voronoi_boundary( mesh, aci, cc1, cc2)
     ! Return the endpoints of the shared Voronoi cell boundary represented by edge aci
 
@@ -616,41 +625,507 @@ MODULE mesh_help_functions_module
     REAL(dp), DIMENSION(2),   INTENT(OUT)         :: cc1, cc2
 
     ! Local variables
-    INTEGER                                       :: til,tir
+    REAL(dp)                                      :: dx
+    INTEGER                                       :: til,tir,ti
+    REAL(dp), DIMENSION(2)                        :: cc1_raw, cc2_raw
+    LOGICAL                                       :: is_valid_line
+
+    dx = ((mesh%xmax - mesh%xmin) + (mesh%ymax - mesh%ymin)) / 100._dp
 
     til = mesh%Aci( aci,5)
     tir = mesh%Aci( aci,6)
 
-    IF (mesh%edge_index_Ac( aci) > 0) THEN
-      ! Boundary segments have only one adjacent triangle
+    IF (mesh%edge_index_Ac( aci) == 0) THEN
+      ! This is an internal edge, with two adjacent triangles
 
-      IF (til > 0) THEN
-        cc1 = mesh%Tricc( til,:)
+      cc1_raw = mesh%Tricc( til,:)
+      cc2_raw = mesh%Tricc( tir,:)
+
+      ! Crop the line to the mesh domain
+      CALL crop_line_to_domain( cc1_raw, cc2_raw, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, mesh%tol_dist, cc1, cc2, is_valid_line)
+
+      ! Safety
+      IF (.NOT. is_valid_line) CALL crash('find_shared_Voronoi_boundary - couldnt crop shared Voronoi boundary!')
+
+    ELSE ! IF (mesh%edge_index_Ac( aci) > 0)
+      ! This edge lies on the domain border, so the two vertices share only a single triangle
+
+      IF     (til > 0 .AND. tir == 0) THEN
+        ti = til
+      ELSEIF (tir > 0 .AND. til == 0) THEN
+        ti = tir
       ELSE
-        cc1 = mesh%Tricc( tir,:)
+        CALL crash('find_shared_Voronoi_boundary - something is seriously wrong with edge_index_Ac!')
       END IF
+
+      cc1 = mesh%Tricc( ti,:)
+
+      ! Get the projection of this circumcentre on the domain border
       IF     (mesh%edge_index_Ac( aci) == 1) THEN
-        ! North
-        cc2 = [cc1(1), mesh%ymax]
+        ! Northern border
+        cc2 = [cc1( 1), mesh%ymax + dx]
       ELSEIF (mesh%edge_index_Ac( aci) == 3) THEN
-        ! East
-        cc2 = [mesh%xmax, cc1(2)]
+        ! Eastern border
+        cc2 = [mesh%xmax + dx, cc1( 2)]
       ELSEIF (mesh%edge_index_Ac( aci) == 5) THEN
-        ! South
-        cc2 = [cc1(1), mesh%ymin]
+        ! Southern border
+        cc2 = [cc1( 1), mesh%ymin - dx]
       ELSEIF (mesh%edge_index_Ac( aci) == 7) THEN
-        ! West
-        cc2 = [mesh%xmin, cc1(2)]
+        ! Western border
+        cc2 = [mesh%xmin - dx, cc1( 2)]
       END IF
 
-    ELSE ! IF (mesh%edge_index_Ac( aci) > 0) THEN
+      ! The circumcentre itself may not lie outside of the domain
+      cc1( 1) = MIN( mesh%xmax, MAX( mesh%xmin, cc1( 1) ))
+      cc1( 2) = MIN( mesh%ymax, MAX( mesh%ymin, cc1( 2) ))
 
-      cc1 = mesh%Tricc( til,:)
-      cc2 = mesh%Tricc( tir,:)
-
-    END IF ! IF (mesh%edge_index_Ac( aci) > 0) THEN
+    END IF ! IF (mesh%edge_index_Ac( aci) > 0)
 
   END SUBROUTINE find_shared_Voronoi_boundary
+  SUBROUTINE crop_line_to_domain( p, q, xmin, xmax, ymin, ymax, tol_dist, pp, qq, is_valid_line)
+    ! Crop the line [pq] so that it lies within the specified domain;
+    ! if [pq] doesn't pass through the domain at all, return is_valid_line = .FALSE.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: p, q
+    REAL(dp),                            INTENT(IN)    :: xmin, xmax, ymin, ymax, tol_dist
+    REAL(dp), DIMENSION(2),              INTENT(OUT)   :: pp, qq
+    LOGICAL,                             INTENT(OUT)   :: is_valid_line
+
+    ! Local variables:
+    REAL(dp), DIMENSION(2)                             :: sw, se, nw, ne, llis
+    INTEGER                                            :: edge_index_p, edge_index_q
+    LOGICAL                                            :: do_cross
+
+    pp = p
+    qq = q
+    is_valid_line = .TRUE.
+
+    sw = [xmin,ymin]
+    se = [xmax,ymin]
+    nw = [xmin,ymax]
+    ne = [xmax,ymax]
+
+    ! Determine in which quadrants p and q lie
+    ! (same as with edge_index; 1-8 clockwise starting north, 0 means inside
+
+    IF     (pp(1) >= xmin .AND. pp(1) <= xmax .AND. pp(2) > ymax) THEN
+      ! North
+      edge_index_p = 1
+    ELSEIF (pp(1) > xmax .AND. pp(2) > ymax) THEN
+      ! Northeast
+      edge_index_p = 2
+    ELSEIF (pp(1) > xmax .AND. pp(2) >= ymin .AND. pp(2) <= ymax) THEN
+      ! East
+      edge_index_p = 3
+    ELSEIF (pp(1) > xmax .AND. pp(2) < ymin) THEN
+      ! Southeast
+      edge_index_p = 4
+    ELSEIF (pp(1) >= xmin .AND. pp(1) <= xmax .AND. pp(2) < ymin) THEN
+      ! South
+      edge_index_p = 5
+    ELSEIF (pp(1) < xmin .AND. pp(2) < ymin) THEN
+      ! Southwest
+      edge_index_p = 6
+    ELSEIF (pp(1) < xmin .AND. pp(2) >= ymin .AND. pp(2) <= ymax) THEN
+      ! West
+      edge_index_p = 7
+    ELSEIF (pp(1) < xmin .AND. pp(2) > ymax) THEN
+      ! Northwest
+      edge_index_p = 8
+    ELSE
+      ! Inside the mesh domain
+      edge_index_p = 0
+    END IF
+
+    IF     (qq(1) >= xmin .AND. qq(1) <= xmax .AND. qq(2) > ymax) THEN
+      ! North
+      edge_index_q = 1
+    ELSEIF (qq(1) > xmax .AND. qq(2) > ymax) THEN
+      ! Northeast
+      edge_index_q = 2
+    ELSEIF (qq(1) > xmax .AND. qq(2) >= ymin .AND. qq(2) <= ymax) THEN
+      ! East
+      edge_index_q = 3
+    ELSEIF (qq(1) > xmax .AND. qq(2) < ymin) THEN
+      ! Southeast
+      edge_index_q = 4
+    ELSEIF (qq(1) >= xmin .AND. qq(1) <= xmax .AND. qq(2) < ymin) THEN
+      ! South
+      edge_index_q = 5
+    ELSEIF (qq(1) < xmin .AND. qq(2) < ymin) THEN
+      ! Southwest
+      edge_index_q = 6
+    ELSEIF (qq(1) < xmin .AND. qq(2) >= ymin .AND. qq(2) <= ymax) THEN
+      ! West
+      edge_index_q = 7
+    ELSEIF (qq(1) < xmin .AND. qq(2) > ymax) THEN
+      ! Northwest
+      edge_index_q = 8
+    ELSE
+      ! Inside the mesh domain
+      edge_index_q = 0
+    END IF
+
+    IF (edge_index_p == 0 .AND. edge_index_q == 0) THEN
+      ! Both p and q lie inside the mesh domain
+      RETURN
+    END IF
+
+    IF (edge_index_p == 0 .AND. edge_index_q > 0) THEN
+      ! p lies inside the mesh domain, q lies outside
+
+      ! Check IF [pq] passes through any of the four corners
+      IF     (lies_on_line_segment( pp, qq, sw, tol_dist)) THEN
+        ! [pq] passes through the southwest corner of the mesh
+        qq = sw
+        RETURN
+      ELSEIF (lies_on_line_segment( pp, qq, se, tol_dist)) THEN
+        ! [pq] passes through the southeast corner of the mesh
+        qq = se
+        RETURN
+      ELSEIF (lies_on_line_segment( pp, qq, nw, tol_dist)) THEN
+        ! [pq] passes through the northwest corner of the mesh
+        qq = nw
+        RETURN
+      ELSEIF (lies_on_line_segment( pp, qq, ne, tol_dist)) THEN
+        ! [pq] passes through the northeast corner of the mesh
+        qq = ne
+        RETURN
+      END IF
+
+      ! Check IF [pq] crosses any of the four borders
+
+      ! South
+      CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
+      IF (do_cross) THEN
+        ! [pq] crosses the southern border
+        qq = llis
+        RETURN
+      END IF
+
+      ! West
+      CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
+      IF (do_cross) THEN
+        ! [pq] crosses the western border
+        qq = llis
+        RETURN
+      END IF
+
+      ! North
+      CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
+      IF (do_cross) THEN
+        ! [pq] crosses the northern border
+        qq = llis
+        RETURN
+      END IF
+
+      ! East
+      CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
+      IF (do_cross) THEN
+        ! [pq] crosses the eastern border
+        qq = llis
+        RETURN
+      END IF
+
+      ! This point should be unreachable
+      CALL crash('crop_line_to_mesh_domain - reached the unreachable point (p inside, q outside)!')
+
+    END IF ! IF (edge_index_p == 0 .AND. edge_index_q > 0)
+
+    IF (edge_index_q == 0 .AND. edge_index_p > 0) THEN
+      ! q lies inside the mesh domain, p lies outside
+
+      ! Check IF [pq] passes through any of the four corners
+      IF     (lies_on_line_segment( pp, qq, sw, tol_dist)) THEN
+        ! [pq] passes through the southwest corner of the mesh
+        pp = sw
+        RETURN
+      ELSEIF (lies_on_line_segment( pp, qq, se, tol_dist)) THEN
+        ! [pq] passes through the southeast corner of the mesh
+        pp = se
+        RETURN
+      ELSEIF (lies_on_line_segment( pp, qq, nw, tol_dist)) THEN
+        ! [pq] passes through the northwest corner of the mesh
+        pp = nw
+        RETURN
+      ELSEIF (lies_on_line_segment( pp, qq, ne, tol_dist)) THEN
+        ! [pq] passes through the northeast corner of the mesh
+        pp = ne
+        RETURN
+      END IF
+
+      ! Check IF [pq] crosses any of the four borders
+
+      ! South
+      CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
+      IF (do_cross) THEN
+        ! [pq] crosses the southern border
+        pp = llis
+        RETURN
+      END IF
+
+      ! West
+      CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
+      IF (do_cross) THEN
+        ! [pq] crosses the western border
+        pp = llis
+        RETURN
+      END IF
+
+      ! North
+      CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
+      IF (do_cross) THEN
+        ! [pq] crosses the northern border
+        pp = llis
+        RETURN
+      END IF
+
+      ! East
+      CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
+      IF (do_cross) THEN
+        ! [pq] crosses the eastern border
+        pp = llis
+        RETURN
+      END IF
+
+      ! This point should be unreachable
+      CALL crash('crop_line_to_mesh_domain - reached the unreachable point (q inside, p outside)!')
+
+    END IF ! IF (edge_index_q == 0 .AND. edge_index_p > 0)
+
+    ! Both p and q lie outside the mesh domain
+
+    IF     (pp(1) < xmin .AND. qq(1) < xmin) THEN
+      ! Both p and q lie west of the western mesh border; [pq] cannot pass through the mesh domain
+      is_valid_line = .FALSE.
+      RETURN
+    ELSEIF (pp(1) > xmax .AND. qq(1) > xmax) THEN
+      ! Both p and q lie east of the eastern mesh border; [pq] cannot pass through the mesh domain
+      is_valid_line = .FALSE.
+      RETURN
+    ELSEIF (pp(2) < ymin .AND. qq(2) < ymin) THEN
+      ! Both p and q lie south of the southern mesh border; [pq] cannot pass through the mesh domain
+      is_valid_line = .FALSE.
+      RETURN
+    ELSEIF (pp(2) > ymax .AND. qq(2) > ymax) THEN
+      ! Both p and q lie north of the northern mesh border; [pq] cannot pass through the mesh domain
+      is_valid_line = .FALSE.
+      RETURN
+    END IF
+
+    IF (edge_index_p == 1) THEN
+      ! p lies in the northern quadrant
+
+      IF (edge_index_q == 3) THEN
+        ! q lies in the eastern quadrant; check IF [pq] cuts through the northeast corner
+
+        IF (cross2( (ne - qq), (pp - qq)) > 0) THEN
+          ! [pq] cuts through the northeast corner
+          CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
+          END IF
+          pp = llis
+          CALL segment_intersection( pp, qq, ne, se, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect ne-se, but it doesnt!')
+          END IF
+          qq = llis
+          RETURN
+        ELSE
+          ! [pq] does not pass through the mesh domain
+          is_valid_line = .FALSE.
+          RETURN
+        END IF
+
+      ELSEIF (edge_index_q == 7) THEN
+        ! q lies in the western quadrant; check IF [pq] cuts through the northwest corner
+
+        IF (cross2( (pp - qq), (ne - qq)) > 0) THEN
+          ! [pq] cuts through the northeast corner
+          CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
+          END IF
+          pp = llis
+          CALL segment_intersection( pp, qq, nw, sw, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-sw, but it doesnt!')
+          END IF
+          qq = llis
+          RETURN
+        ELSE
+          ! [pq] does not pass through the mesh domain
+          is_valid_line = .FALSE.
+          RETURN
+        END IF
+
+      ELSE
+        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
+      END IF
+
+    ELSEIF (edge_index_p == 3) THEN
+      ! p lies in the eastern quadrant
+
+      IF (edge_index_q == 1) THEN
+        ! q lies in the northern quadrant; check IF [pq] cuts through the northeast corner
+
+        IF (cross2( (ne - pp), (qq - pp)) > 0) THEN
+          ! [pq] cuts through the northeast corner
+          CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
+          END IF
+          qq = llis
+          CALL segment_intersection( pp, qq, ne, se, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect ne-se, but it doesnt!')
+          END IF
+          pp = llis
+          RETURN
+        ELSE
+          ! [pq] does not pass through the mesh domain
+          is_valid_line = .FALSE.
+          RETURN
+        END IF
+
+      ELSEIF (edge_index_q == 5) THEN
+        ! q lies in the southern quadrant; check IF [pq] cuts through the southeast corner
+
+        IF (cross2( (se - qq), (pp - qq)) > 0) THEN
+          ! [pq] cuts through the southeast corner
+          CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect se-ne, but it doesnt!')
+          END IF
+          pp = llis
+          CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
+          END IF
+          qq = llis
+          RETURN
+        ELSE
+          ! [pq] does not pass through the mesh domain
+          is_valid_line = .FALSE.
+          RETURN
+        END IF
+
+      ELSE
+        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
+      END IF
+
+    ELSEIF (edge_index_p == 5) THEN
+      ! p lies in the southern quadrant
+
+      IF (edge_index_q == 3) THEN
+        ! q lies in the eastern quadrant; check IF [pq] cuts through the southeast corner
+
+        IF (cross2( (se - pp), (qq - pp)) > 0) THEN
+          ! [pq] cuts through the southwest corner
+          CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
+          END IF
+          pp = llis
+          CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect se-ne, but it doesnt!')
+          END IF
+          qq = llis
+          RETURN
+        ELSE
+          ! [pq] does not pass through the mesh domain
+          is_valid_line = .FALSE.
+          RETURN
+        END IF
+
+      ELSEIF (edge_index_q == 7) THEN
+        ! q lies in the western quadrant; check IF [pq] cuts through the southwest corner
+
+        IF (cross2( (qq - pp), (sw - pp)) > 0) THEN
+          ! [pq] cuts through the southwest corner
+          CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
+          END IF
+          pp = llis
+          CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
+          END IF
+          qq = llis
+          RETURN
+        ELSE
+          ! [pq] does not pass through the mesh domain
+          is_valid_line = .FALSE.
+          RETURN
+        END IF
+
+      ELSE
+        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
+      END IF
+
+    ELSEIF (edge_index_p == 7) THEN
+      ! p lies in the western quadrant
+
+      IF (edge_index_q == 5) THEN
+        ! q lies in the southern quadrant; check IF [pq] cuts through the southwest corner
+
+        IF (cross2( (pp - qq), (sw - qq)) > 0) THEN
+          ! [pq] cuts through the southwest corner
+          CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
+          END IF
+          qq = llis
+          CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
+          END IF
+          pp = llis
+          RETURN
+        ELSE
+          ! [pq] does not pass through the mesh domain
+          is_valid_line = .FALSE.
+          RETURN
+        END IF
+
+      ELSEIF (edge_index_q == 1) THEN
+        ! q lies in the northern quadrant; check IF [pq] cuts through the northwest corner
+
+        IF (cross2( (qq - pp), (nw - pp)) > 0) THEN
+          ! [pq] cuts through the northwest corner
+          CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
+          END IF
+          pp = llis
+          CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
+          IF (.NOT. do_cross) THEN
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
+          END IF
+          qq = llis
+          RETURN
+        ELSE
+          ! [pq] does not pass through the mesh domain
+          is_valid_line = .FALSE.
+          RETURN
+        END IF
+
+      ELSE
+        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
+      END IF
+
+    END IF ! IF (edge_index_p == 1)
+
+    ! This point should be unreachable
+    CALL crash('crop_line_to_mesh_domain - reached the unreachable end of the subroutine!')
+
+  END SUBROUTINE crop_line_to_domain
 
 ! == The oblique stereographic projection
   SUBROUTINE calc_lat_lon_coordinates( mesh)
@@ -2039,43 +2514,40 @@ MODULE mesh_help_functions_module
 
     IMPLICIT NONE
 
-    TYPE(type_mesh),          INTENT(IN)          :: mesh
-    REAL(dp), DIMENSION(:,:), INTENT(IN)          :: d          ! Data field
-    REAL(dp), DIMENSION(:  ), INTENT(IN)          :: x          ! Data x grid
-    REAL(dp), DIMENSION(:  ), INTENT(IN)          :: y          ! Data y grid
-    INTEGER,                  INTENT(IN)          :: nx         ! Number of x elements
-    INTEGER,                  INTENT(IN)          :: ny         ! Number of y elements
-    INTEGER,                  INTENT(IN)          :: vi
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d          ! Data field
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: x          ! Data x grid
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: y          ! Data y grid
+    INTEGER,                             INTENT(IN)    :: nx         ! Number of x elements
+    INTEGER,                             INTENT(IN)    :: ny         ! Number of y elements
+    INTEGER,                             INTENT(IN)    :: vi
+    REAL(dp),                            INTENT(OUT)   :: v
 
-    REAL(dp),                 INTENT(OUT)         :: v
-
-    REAL(dp)                                      :: sumel, trisumel
-    INTEGER                                       :: nel, trinel
-    INTEGER                                       :: nVor, n
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Vor
+    REAL(dp)                                           :: sumel, trisumel
+    INTEGER                                            :: nel, trinel
+    REAL(dp), DIMENSION( mesh%nC_mem,2)                :: Vor
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_vi
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_ti
+    INTEGER                                            :: nVor, n
 
     sumel = 0._dp
     nel   = 0
 
-    ALLOCATE(Vor(mesh%nC_mem+2,2))
-
-    CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
+    CALL calc_Voronoi_cell( mesh, vi, 0._dp, Vor, Vor_vi, Vor_ti, nVor)
 
     DO n = 2, nVor
-      CALL sum_cart_over_triangle_dp( mesh%V(vi,:), Vor(n-1,:), Vor(n,:), d, x, y, nx, ny, trisumel, trinel)
+      CALL sum_cart_over_triangle_dp( mesh%V( vi,:), Vor( n-1,:), Vor( n,:), d, x, y, nx, ny, trisumel, trinel)
       sumel = sumel + trisumel
       nel   = nel   + trinel
     END DO
 
-    IF (nel>4) THEN
+    IF (nel > 4) THEN
       v = sumel / nel
     ELSE
-      ! Too few elements for a proper mean - just do bicubic interpolation to
+      ! Too few elements for a proper mean - just do bilinear interpolation to
       ! the vertex location
-      CALL cart_bilinear_dp( d, x, y, nx, ny, mesh%V(vi,:), v)
+      CALL cart_bilinear_dp( d, x, y, nx, ny, mesh%V( vi,:), v)
     END IF
-
-    DEALLOCATE(Vor)
 
   END SUBROUTINE mean_cart_over_Voronoi_cell_dp
   SUBROUTINE mean_cart_over_Voronoi_cell_int( mesh, d, x, y, nx, ny, vi, v)
@@ -2084,44 +2556,41 @@ MODULE mesh_help_functions_module
 
     IMPLICIT NONE
 
-    TYPE(type_mesh),          INTENT(IN)          :: mesh
-    INTEGER, DIMENSION(:,:),  INTENT(IN)          :: d          ! Data field
-    REAL(dp), DIMENSION(:  ), INTENT(IN)          :: x          ! Data x grid
-    REAL(dp), DIMENSION(:  ), INTENT(IN)          :: y          ! Data y grid
-    INTEGER,                  INTENT(IN)          :: nx         ! Number of x elements
-    INTEGER,                  INTENT(IN)          :: ny         ! Number of y elements
-    INTEGER,                  INTENT(IN)          :: vi
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    INTEGER,  DIMENSION(:,:  ),          INTENT(IN)    :: d          ! Data field
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: x          ! Data x grid
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: y          ! Data y grid
+    INTEGER,                             INTENT(IN)    :: nx         ! Number of x elements
+    INTEGER,                             INTENT(IN)    :: ny         ! Number of y elements
+    INTEGER,                             INTENT(IN)    :: vi
+    REAL(dp),                            INTENT(OUT)   :: v
 
-    REAL(dp),                 INTENT(OUT)         :: v
-
-    INTEGER                                       :: trisumel
-    REAL(dp)                                      :: sumel
-    INTEGER                                       :: nel, trinel
-    INTEGER                                       :: nVor, n
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Vor
+    INTEGER                                            :: trisumel
+    REAL(dp)                                           :: sumel
+    INTEGER                                            :: nel, trinel
+    REAL(dp), DIMENSION( mesh%nC_mem,2)                :: Vor
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_vi
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_ti
+    INTEGER                                            :: nVor, n
 
     sumel = 0._dp
     nel   = 0
 
-    ALLOCATE(Vor(mesh%nC_mem+2,2))
-
-    CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
+    CALL calc_Voronoi_cell( mesh, vi, 0._dp, Vor, Vor_vi, Vor_ti, nVor)
 
     DO n = 2, nVor
-      CALL sum_cart_over_triangle_int( mesh%V(vi,:), Vor(n-1,:), Vor(n,:), d, x, y, nx, ny, trisumel, trinel)
+      CALL sum_cart_over_triangle_int( mesh%V( vi,:), Vor( n-1,:), Vor( n,:), d, x, y, nx, ny, trisumel, trinel)
       sumel = sumel + REAL(trisumel)
       nel   = nel   + trinel
     END DO
 
-    IF (nel>4) THEN
+    IF (nel > 4) THEN
       v = sumel / REAL(nel)
     ELSE
-      ! Too few elements for a proper mean - just do bicubic interpolation to
+      ! Too few elements for a proper mean - just do bilinear interpolation to
       ! the vertex location
-      CALL cart_bilinear_int( d, x, y, nx, ny, mesh%V(vi,:), v)
+      CALL cart_bilinear_int( d, x, y, nx, ny, mesh%V( vi,:), v)
     END IF
-
-    DEALLOCATE(Vor)
 
   END SUBROUTINE mean_cart_over_Voronoi_cell_int
   SUBROUTINE sum_cart_over_triangle_dp(  p1, p2, p3, d, x, y, nx, ny, trisumel, trinel)
@@ -2660,6 +3129,91 @@ MODULE mesh_help_functions_module
     CALL sync
 
   END SUBROUTINE rotate_xy_to_po_stag
+  SUBROUTINE rotate_xy_to_po_stag_3D( mesh, u_c, v_c, p_c, o_c)
+    ! Rotate a vector field [u,v] to local [p,o] components on the staggered c (edge) grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),            INTENT(IN)        :: mesh
+    REAL(dp), DIMENSION(:,:  ), INTENT(IN)        :: u_c, v_c
+    REAL(dp), DIMENSION(:,:  ), INTENT(OUT)       :: p_c, o_c
+
+    ! Local variables:
+    INTEGER                                       :: ci, vi, vj
+    REAL(dp)                                      :: Dx, Dy, D
+
+    DO ci = mesh%ci1, mesh%ci2
+
+      vi = mesh%Aci( ci,1)
+      vj = mesh%Aci( ci,2)
+
+      Dx = mesh%V( vj,1) - mesh%V( vi,1)
+      Dy = mesh%V( vj,2) - mesh%V( vi,2)
+      D  = SQRT(Dx**2 + Dy**2)
+
+      p_c( ci,:) = u_c( ci,:) * Dx/D + v_c( ci,:) * Dy/D
+      o_c( ci,:) = v_c( ci,:) * Dx/D - u_c( ci,:) * Dy/D
+
+    END DO ! DO ci = mesh%ci1, mesh%ci2
+    CALL sync
+
+  END SUBROUTINE rotate_xy_to_po_stag_3D
+
+! == ISMIP-HOM periodic boundary conditions
+  SUBROUTINE find_ti_copy_ISMIP_HOM_periodic( mesh, ti, ti_copy)
+    ! Periodic boundary conditions in the ISMIP-HOM experiments are implemented by
+    ! taking advantage of the fact that u(x,y) = u(x+L/2,y+L/2)
+    !
+    ! Velocities at the boundary can therefore be set equal to the interior value
+    ! diagonally across from the boundary point (displaced by [L/2,L/2])
+    !
+    ! This routine finds the interior triangle to copy velocities from
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT)           :: mesh
+    INTEGER,                             INTENT(IN)              :: ti
+    INTEGER,                             INTENT(OUT)             :: ti_copy
+
+    ! Local variables:
+    REAL(dp), DIMENSION(2)                                       :: gc, p
+    INTEGER                                                      :: n, tj
+
+    ! This triangle's geometric centre
+    gc = mesh%TriGC( ti,:)
+
+    ! The point where we want to copy the previous velocity solution
+    IF (gc( 1) > 0._dp) THEN
+      p( 1) = gc( 1) - C%ISMIP_HOM_L / 2._dp
+    ELSE
+      p( 1) = gc( 1) + C%ISMIP_HOM_L / 2._dp
+    END IF
+    IF (gc( 2) > 0._dp) THEN
+      p( 2) = gc( 2) - C%ISMIP_HOM_L / 2._dp
+    ELSE
+      p( 2) = gc( 2) + C%ISMIP_HOM_L / 2._dp
+    END IF
+
+    ! The triangle where we want to copy the previous velocity solution
+    ti_copy = ti
+    CALL find_containing_triangle( mesh, p, ti_copy)
+
+    ! Safety: make sure ti_copy does not also lie on the domain boundary
+    IF (mesh%Tri_edge_index( ti_copy) > 0) THEN
+      DO n = 1, 3
+        tj = mesh%TriC( ti_copy,n)
+        IF (tj == 0) CYCLE
+        IF (mesh%Tri_edge_index( tj) == 0) THEN
+          ti_copy = tj
+          EXIT
+        END IF
+      END DO
+    END IF
+    IF (mesh%Tri_edge_index( ti_copy) > 0) CALL crash('couldnt find non-boundary triangle to copy data from!')
+
+  END SUBROUTINE find_ti_copy_ISMIP_HOM_periodic
 
 ! == Diagnostic tools: write a (small) mesh to the screen, and check if mesh data is self-consistent
   SUBROUTINE write_mesh_to_screen( mesh)

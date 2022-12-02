@@ -1,6 +1,9 @@
 MODULE mesh_mapping_module
 
-  ! Routines for creating mapping arrays and mapping data between meshes and grids
+  ! Routines for creating mapping objects and mapping data between meshes and grids
+  !
+  ! Mapping objects are stored in the Atlas.
+
 
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
@@ -24,423 +27,997 @@ MODULE mesh_mapping_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_remapping_mesh_mesh, type_grid, type_grid_lonlat, &
-                                             type_remapping_lonlat2mesh, type_single_row_mapping_matrices, type_sparse_matrix_CSR_dp
+  USE data_types_module,               ONLY: type_map, type_mesh, type_grid, type_grid_lonlat, &
+                                             type_single_row_mapping_matrices, type_sparse_matrix_CSR_dp
   USE mesh_help_functions_module,      ONLY: is_in_triangle, write_mesh_to_text_file, lies_on_line_segment, segment_intersection, &
-                                             find_containing_vertex, find_containing_triangle, is_in_Voronoi_cell, &
-                                             find_shared_Voronoi_boundary, cross2, find_Voronoi_cell_vertices, find_triangle_area
+                                             find_containing_vertex, find_containing_triangle, is_in_Voronoi_cell, crop_line_to_domain, &
+                                             find_shared_Voronoi_boundary, cross2, find_triangle_area, calc_Voronoi_cell
   USE utilities_module,                ONLY: line_integral_xdy, line_integral_mxydx, line_integral_xydy, smooth_Gaussian_2D_grid, &
                                              smooth_Gaussian_3D_grid
   USE petsc_module,                    ONLY: multiply_PETSc_matrix_with_vector_1D, multiply_PETSc_matrix_with_vector_2D, mat_CSR2petsc
-  USE mesh_operators_module,           ONLY: calc_matrix_operators_grid, apply_Neumann_BC_direct_a_2D, apply_Neumann_BC_direct_a_3D
+  USE mesh_operators_module,           ONLY: calc_matrix_operators_grid
   USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, add_entry_CSR_dist, finalise_matrix_CSR_dist, deallocate_matrix_CSR
 
   IMPLICIT NONE
 
-  LOGICAL, PARAMETER :: do_check_matrices = .TRUE.
+  ! The Atlas: the complete collection of all mapping objects.
+  ! ==========================================================
+
+  TYPE(type_map), DIMENSION(1000) :: Atlas
 
 CONTAINS
 
-! == Mapping data between a grid and a mesh
-  SUBROUTINE map_grid2mesh_2D( grid, mesh, d_grid, d_mesh)
-    ! Map a 2-D data field from the grid to the mesh using 2nd-order conservative remapping.
+! == High-level functions
+! =======================
+
+  ! From an x/y-grid to a mesh
+  SUBROUTINE map_from_xy_grid_to_mesh_2D( grid, mesh, d_grid, d_mesh, method)
+    ! Map a 2-D data field from an x/y-grid to a mesh.
 
     IMPLICIT NONE
 
     ! In/output variables
     TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_grid
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_mesh
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_grid2mesh_2D'
-    INTEGER                                            :: n1,n2,n,i,j
-    REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
-    INTEGER                                            :: wd_grid_vec
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_xy_grid_to_mesh_2D'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Safety
-    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny) THEN
-      CALL crash('data fields are the wrong size!')
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == grid%name .AND. Atlas( mi)%name_dst == mesh%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_xy_grid_to_mesh( grid, mesh, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
     END IF
 
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( grid%n, d_grid_vec, wd_grid_vec)
-
-    ! Reshape data from vector form to grid form
-    CALL partition_list( grid%n, par%i, par%n, n1, n2)
-    DO n = n1, n2
-      i = grid%n2ij( n,1)
-      j = grid%n2ij( n,2)
-      d_grid_vec( n) = d_grid( i,j)
-    END DO
-    CALL sync
-
-    ! Perform the mapping operation as a matrix multiplication
-    CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_grid2mesh, d_grid_vec, d_mesh)
-
-    ! Fix border elements because the remapping often is inaccurate there
-    CALL apply_Neumann_BC_direct_a_2D( mesh, d_mesh)
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wd_grid_vec)
+    ! Apply the appropriate mapping object
+    CALL apply_map_xy_grid_to_mesh_2D( grid, mesh, Atlas( mi), d_grid, d_mesh)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_grid2mesh_2D
-  SUBROUTINE map_grid2mesh_3D( grid, mesh, d_grid, d_mesh)
-    ! Map a 3-D data field from the grid to the mesh using 2nd-order conservative remapping.
+  END SUBROUTINE map_from_xy_grid_to_mesh_2D
+
+  SUBROUTINE map_from_xy_grid_to_mesh_2D_monthly( grid, mesh, d_grid, d_mesh, method)
+    ! Map a 2-D monthly data field from an x/y-grid to a mesh.
 
     IMPLICIT NONE
 
     ! In/output variables
     TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_grid2mesh_3D'
-    INTEGER                                            :: n1,n2,n,i,j,nz
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
-    INTEGER                                            :: wd_grid_vec
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_xy_grid_to_mesh_2D_monthly'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Safety
-    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. SIZE( d_grid,3) /= SIZE( d_mesh,2)) THEN
-      CALL crash('data fields are the wrong size!')
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == grid%name .AND. Atlas( mi)%name_dst == mesh%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_xy_grid_to_mesh( grid, mesh, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
     END IF
 
-    nz = SIZE( d_mesh,2)
-
-    ! Allocate shared memory
-    CALL allocate_shared_dp_2D( grid%n, nz, d_grid_vec, wd_grid_vec)
-
-    ! Reshape data from vector form to grid form
-    CALL partition_list( grid%n, par%i, par%n, n1, n2)
-    DO n = n1, n2
-      i = grid%n2ij( n,1)
-      j = grid%n2ij( n,2)
-      d_grid_vec( n,:) = d_grid( i,j,:)
-    END DO
-    CALL sync
-
-    ! Perform the mapping operation as a matrix multiplication
-    CALL multiply_PETSc_matrix_with_vector_2D( grid%M_map_grid2mesh, d_grid_vec, d_mesh)
-
-    ! Fix border elements because the remapping often is inaccurate there
-    CALL apply_Neumann_BC_direct_a_3D( mesh, d_mesh)
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wd_grid_vec)
+    ! Apply the appropriate mapping object
+    CALL apply_map_xy_grid_to_mesh_2D_monthly( grid, mesh, Atlas( mi), d_grid, d_mesh)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_grid2mesh_3D
-  SUBROUTINE map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
-    ! Map a 2-D data field from the mesh to the grid using 2nd-order conservative remapping.
+  END SUBROUTINE map_from_xy_grid_to_mesh_2D_monthly
+
+  SUBROUTINE map_from_xy_grid_to_mesh_3D( grid, mesh, d_grid, d_mesh, method)
+    ! Map a 3-D data field from an x/y-grid to a mesh.
 
     IMPLICIT NONE
 
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_xy_grid_to_mesh_3D'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == grid%name .AND. Atlas( mi)%name_dst == mesh%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_xy_grid_to_mesh( grid, mesh, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_xy_grid_to_mesh_3D( grid, mesh, Atlas( mi), d_grid, d_mesh)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_from_xy_grid_to_mesh_3D
+
+  SUBROUTINE map_from_xy_grid_to_mesh_3D_ocean( grid, mesh, d_grid, d_mesh, method)
+    ! Map a 3-D ocean data field from an x/y-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_xy_grid_to_mesh_3D_ocean'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == grid%name .AND. Atlas( mi)%name_dst == mesh%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_xy_grid_to_mesh( grid, mesh, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_xy_grid_to_mesh_3D_ocean( grid, mesh, Atlas( mi), d_grid, d_mesh)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_from_xy_grid_to_mesh_3D_ocean
+
+  ! From a mesh to an x/y-grid
+  SUBROUTINE map_from_mesh_to_xy_grid_2D( mesh, grid, d_mesh, d_grid, method)
+    ! Map a 2-D data field from an x/y-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_mesh
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_grid
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_mesh2grid_2D'
-    INTEGER                                            :: n1,n2,n,i,j
-    REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
-    INTEGER                                            :: wd_grid_vec
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_xy_grid_2D'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Safety
-    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny) THEN
-      CALL crash('data fields are the wrong size!')
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == mesh%name .AND. Atlas( mi)%name_dst == grid%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_mesh_to_xy_grid( mesh, grid,Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
     END IF
 
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( grid%n, d_grid_vec, wd_grid_vec)
-
-    ! Perform the mapping operation as a matrix multiplication
-    CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_mesh2grid, d_mesh, d_grid_vec)
-
-    ! Reshape data from vector form to grid form
-    CALL partition_list( grid%n, par%i, par%n, n1, n2)
-    DO n = n1, n2
-      i = grid%n2ij( n,1)
-      j = grid%n2ij( n,2)
-      d_grid( i,j) = d_grid_vec( n)
-    END DO
-    CALL sync
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wd_grid_vec)
+    ! Apply the appropriate mapping object
+    CALL apply_map_mesh_to_xy_grid_2D( mesh, grid, Atlas( mi), d_mesh, d_grid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_mesh2grid_2D
-  SUBROUTINE map_mesh2grid_3D( mesh, grid, d_mesh, d_grid)
-    ! Map a 3-D data field from the mesh to the grid using 2nd-order conservative remapping.
+  END SUBROUTINE map_from_mesh_to_xy_grid_2D
+
+  SUBROUTINE map_from_mesh_to_xy_grid_2D_monthly( mesh, grid, d_mesh, d_grid, method)
+    ! Map a 2-D monthly data field from an x/y-grid to a mesh.
 
     IMPLICIT NONE
 
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_mesh
     REAL(dp), DIMENSION(:,:,:),          INTENT(OUT)   :: d_grid
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_mesh2grid_3D'
-    INTEGER                                            :: n1,n2,n,i,j,nz
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
-    INTEGER                                            :: wd_grid_vec
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_xy_grid_2D_monthly'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Safety
-    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. SIZE( d_mesh,2) /= SIZE( d_grid,3)) THEN
-      CALL crash('data fields are the wrong size!')
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == mesh%name .AND. Atlas( mi)%name_dst == grid%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_mesh_to_xy_grid( mesh, grid, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
     END IF
 
-    nz = SIZE( d_grid,3)
-
-    ! Allocate shared memory
-    CALL allocate_shared_dp_2D( grid%n, nz, d_grid_vec, wd_grid_vec)
-
-    ! Perform the mapping operation as a matrix multiplication
-    CALL multiply_PETSc_matrix_with_vector_2D( grid%M_map_mesh2grid, d_mesh, d_grid_vec)
-
-    ! Reshape data from vector form to grid form
-    CALL partition_list( grid%n, par%i, par%n, n1, n2)
-    DO n = n1, n2
-      i = grid%n2ij( n,1)
-      j = grid%n2ij( n,2)
-      d_grid( i,j,:) = d_grid_vec( n,:)
-    END DO
-    CALL sync
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wd_grid_vec)
+    ! Apply the appropriate mapping object
+    CALL apply_map_mesh_to_xy_grid_2D_monthly( mesh, grid, Atlas( mi), d_mesh, d_grid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_mesh2grid_3D
+  END SUBROUTINE map_from_mesh_to_xy_grid_2D_monthly
 
-! == Subroutine for mapping data from a lat/lon-grid and the mesh ==
-  SUBROUTINE create_remapping_arrays_lonlat_mesh( mesh, grid_lonlat, map)
-    ! Create remapping arrays for remapping data from a global lon/lat-grid to the model mesh
-    ! using bilinear interpolation
+  SUBROUTINE map_from_mesh_to_xy_grid_3D( mesh, grid, d_mesh, d_grid, method)
+    ! Map a 3-D data field from an x/y-grid to a mesh.
 
     IMPLICIT NONE
 
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid_lonlat
-    TYPE(type_remapping_lonlat2mesh),    INTENT(INOUT) :: map
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(OUT)   :: d_grid
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_remapping_arrays_lonlat_mesh'
-    INTEGER                                            :: vi
-    INTEGER                                            :: il,iu,jl,ju
-    REAL(dp)                                           :: wil,wiu,wjl,wju
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_xy_grid_3D'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Allocate shared memory for the mapping arrays
-    CALL allocate_shared_int_1D( mesh%nV, map%ilat1, map%wilat1)
-    CALL allocate_shared_int_1D( mesh%nV, map%ilat2, map%wilat2)
-    CALL allocate_shared_int_1D( mesh%nV, map%ilon1, map%wilon1)
-    CALL allocate_shared_int_1D( mesh%nV, map%ilon2, map%wilon2)
-    CALL allocate_shared_dp_1D(  mesh%nV, map%wlat1, map%wwlat1)
-    CALL allocate_shared_dp_1D(  mesh%nV, map%wlat2, map%wwlat2)
-    CALL allocate_shared_dp_1D(  mesh%nV, map%wlon1, map%wwlon1)
-    CALL allocate_shared_dp_1D(  mesh%nV, map%wlon2, map%wwlon2)
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Find enveloping lat-lon indices
-      il  = MAX(1, MIN( grid_lonlat%nlon-1, 1 + FLOOR((mesh%lon( vi) - MINVAL(grid_lonlat%lon)) / (grid_lonlat%lon(2) - grid_lonlat%lon(1)))))
-      iu  = il + 1
-      wil = (grid_lonlat%lon(iu) - mesh%lon( vi)) / (grid_lonlat%lon(2) - grid_lonlat%lon(1))
-      wiu = 1._dp - wil
-
-      ! Exception for pixels near the zero meridian
-      IF (mesh%lon( vi) < MINVAL(grid_lonlat%lon)) THEN
-        il  = grid_lonlat%nlon
-        iu  = 1
-        wil = (grid_lonlat%lon( iu) - mesh%lon( vi)) / (grid_lonlat%lon(2) - grid_lonlat%lon(1))
-        wiu = 1._dp - wil
-      ELSEIF (mesh%lon( vi) > MAXVAL(grid_lonlat%lon)) THEN
-        il  = grid_lonlat%nlon
-        iu  = 1
-        wiu = (mesh%lon( vi) - grid_lonlat%lon( il)) / (grid_lonlat%lon(2) - grid_lonlat%lon(1))
-        wil = 1._dp - wiu
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == mesh%name .AND. Atlas( mi)%name_dst == grid%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
       END IF
+    END DO
 
-      jl  = MAX(1, MIN( grid_lonlat%nlat-1, 1 + FLOOR((mesh%lat( vi) - MINVAL(grid_lonlat%lat)) / (grid_lonlat%lat(2) - grid_lonlat%lat(1)))))
-      ju  = jl + 1
-      wjl = (grid_lonlat%lat( ju) - mesh%lat( vi)) / (grid_lonlat%lat(2) - grid_lonlat%lat(1))
-      wju = 1 - wjl
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_mesh_to_xy_grid( mesh, grid, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
 
-      ! Write to mapping arrays
-      map%ilon1( vi) = il
-      map%ilon2( vi) = iu
-      map%ilat1( vi) = jl
-      map%ilat2( vi) = ju
-      map%wlon1( vi) = wil
-      map%wlon2( vi) = wiu
-      map%wlat1( vi) = wjl
-      map%wlat2( vi) = wju
-
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
+    ! Apply the appropriate mapping object
+    CALL apply_map_mesh_to_xy_grid_3D( mesh, grid, Atlas( mi), d_mesh, d_grid)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=8)
+    CALL finalise_routine( routine_name)
 
-  END SUBROUTINE create_remapping_arrays_lonlat_mesh
-  SUBROUTINE map_lonlat2mesh_2D( mesh, map, d_grid, d_mesh)
-    ! Map data from a lon/lat-grid to the model mesh using bilinear interpolation
+  END SUBROUTINE map_from_mesh_to_xy_grid_3D
+
+  SUBROUTINE map_from_mesh_to_xy_grid_3D_ocean( mesh, grid, d_mesh, d_grid, method)
+    ! Map a 3-D ocean data field from an x/y-grid to a mesh.
 
     IMPLICIT NONE
 
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_remapping_lonlat2mesh),    INTENT(IN)    :: map
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(OUT)   :: d_grid
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_xy_grid_3D_ocean'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == mesh%name .AND. Atlas( mi)%name_dst == grid%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_mesh_to_xy_grid( mesh, grid, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_mesh_to_xy_grid_3D_ocean( mesh, grid, Atlas( mi), d_mesh, d_grid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_from_mesh_to_xy_grid_3D_ocean
+
+  ! From a lon/lat-grid to a mesh
+  SUBROUTINE map_from_lonlat_grid_to_mesh_2D( grid, mesh, d_grid, d_mesh, method)
+    ! Map a 2-D data field from a lon/lat-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_grid
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_mesh
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_lonlat2mesh_2D'
-    INTEGER                                            :: vi
-    INTEGER                                            :: il,iu,jl,ju
-    REAL(dp)                                           :: wil,wiu,wjl,wju
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_lonlat_grid_to_mesh_2D'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    DO vi = mesh%vi1, mesh%vi2
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == grid%name .AND. Atlas( mi)%name_dst == mesh%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
 
-      il  = map%ilon1( vi)
-      iu  = map%ilon2( vi)
-      jl  = map%ilat1( vi)
-      ju  = map%ilat2( vi)
-      wil = map%wlon1( vi)
-      wiu = map%wlon2( vi)
-      wjl = map%wlat1( vi)
-      wju = map%wlat2( vi)
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_lonlat_grid_to_mesh( grid, mesh, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
 
-      d_mesh( vi) = (wil * wjl * d_grid( il,jl)) + &
-                    (wil * wju * d_grid( il,ju)) + &
-                    (wiu * wjl * d_grid( iu,jl)) + &
-                    (wiu * wju * d_grid( iu,ju))
-
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
+    ! Apply the appropriate mapping object
+    CALL apply_map_lonlat_grid_to_mesh_2D( grid, mesh, Atlas( mi), d_grid, d_mesh)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_lonlat2mesh_2D
-  SUBROUTINE map_lonlat2mesh_3D( mesh, map, d_grid, d_mesh)
-    ! Map data from a lon/lat-grid to the model mesh using bilinear interpolation
+  END SUBROUTINE map_from_lonlat_grid_to_mesh_2D
+
+  SUBROUTINE map_from_lonlat_grid_to_mesh_2D_monthly( grid, mesh, d_grid, d_mesh, method)
+    ! Map a 2-D monthly data field from a lon/lat-grid to a mesh.
 
     IMPLICIT NONE
 
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_remapping_lonlat2mesh),    INTENT(IN)    :: map
+    ! In/output variables
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_lonlat2mesh_3D'
-    INTEGER                                            :: vi
-    INTEGER                                            :: il,iu,jl,ju
-    REAL(dp)                                           :: wil,wiu,wjl,wju
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_lonlat_grid_to_mesh_2D_monthly'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    DO vi = mesh%vi1, mesh%vi2
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == grid%name .AND. Atlas( mi)%name_dst == mesh%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
 
-      il  = map%ilon1( vi)
-      iu  = map%ilon2( vi)
-      jl  = map%ilat1( vi)
-      ju  = map%ilat2( vi)
-      wil = map%wlon1( vi)
-      wiu = map%wlon2( vi)
-      wjl = map%wlat1( vi)
-      wju = map%wlat2( vi)
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_lonlat_grid_to_mesh( grid, mesh, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
 
-      d_mesh( vi,:) = (wil * wjl * d_grid( il,jl,:)) + &
-                      (wil * wju * d_grid( il,ju,:)) + &
-                      (wiu * wjl * d_grid( iu,jl,:)) + &
-                      (wiu * wju * d_grid( iu,ju,:))
-
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
+    ! Apply the appropriate mapping object
+    CALL apply_map_lonlat_grid_to_mesh_2D_monthly( grid, mesh, Atlas( mi), d_grid, d_mesh)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_lonlat2mesh_3D
-  SUBROUTINE deallocate_remapping_arrays_lonlat_mesh( map)
+  END SUBROUTINE map_from_lonlat_grid_to_mesh_2D_monthly
+
+  SUBROUTINE map_from_lonlat_grid_to_mesh_3D( grid, mesh, d_grid, d_mesh, method)
+    ! Map a 3-D data field from a lon/lat-grid to a mesh.
 
     IMPLICIT NONE
 
-    ! In/output variables:
-    TYPE(type_remapping_lonlat2mesh),    INTENT(INOUT) :: map
+    ! In/output variables
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_arrays_lonlat_mesh'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_lonlat_grid_to_mesh_3D'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL deallocate_shared( map%wilat1)
-    CALL deallocate_shared( map%wilat2)
-    CALL deallocate_shared( map%wilon1)
-    CALL deallocate_shared( map%wilon2)
-    CALL deallocate_shared( map%wwlat1)
-    CALL deallocate_shared( map%wwlat2)
-    CALL deallocate_shared( map%wwlon1)
-    CALL deallocate_shared( map%wwlon2)
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == grid%name .AND. Atlas( mi)%name_dst == mesh%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_lonlat_grid_to_mesh( grid, mesh, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_lonlat_grid_to_mesh_3D( grid, mesh, Atlas( mi), d_grid, d_mesh)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE deallocate_remapping_arrays_lonlat_mesh
+  END SUBROUTINE map_from_lonlat_grid_to_mesh_3D
 
-! == Medium-level remapping routines, where the memory containing the data is reallocated
-  SUBROUTINE remap_field_dp_2D( mesh_src, mesh_dst, map, d, w, method)
+  SUBROUTINE map_from_lonlat_grid_to_mesh_3D_ocean( grid, mesh, d_grid, d_mesh, method)
+    ! Map a 3-D ocean data field from a lon/lat-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_lonlat_grid_to_mesh_3D_ocean'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == grid%name .AND. Atlas( mi)%name_dst == mesh%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          CALL create_map_from_lonlat_grid_to_mesh( grid, mesh, Atlas( mi))
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_lonlat_grid_to_mesh_3D_ocean( grid, mesh, Atlas( mi), d_grid, d_mesh)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_from_lonlat_grid_to_mesh_3D_ocean
+
+  ! From a mesh to a mesh
+  SUBROUTINE map_from_mesh_to_mesh_2D( mesh_src, mesh_dst, d_src, d_dst, method)
+    ! Map a 2-D data field from a mesh to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_dst
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_mesh_2D'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == mesh_src%name .AND. Atlas( mi)%name_dst == mesh_dst%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          IF (PRESENT( method)) THEN
+            IF     (method == 'nearest_neighbour') THEN
+              CALL create_map_from_mesh_to_mesh_nearest_neighbour(      mesh_src, mesh_dst, Atlas( mi))
+            ELSEIF (method == 'trilin') THEN
+              CALL create_map_from_mesh_to_mesh_trilin(                 mesh_src, mesh_dst, Atlas( mi))
+            ELSEIF (method == '2nd_order_conservative') THEN
+              CALL create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, Atlas( mi))
+            END IF
+          ELSE
+              CALL create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, Atlas( mi))
+          END IF
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_mesh_to_mesh_2D( mesh_src, mesh_dst, Atlas( mi), d_src, d_dst)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_from_mesh_to_mesh_2D
+
+  SUBROUTINE map_from_mesh_to_mesh_2D_monthly( mesh_src, mesh_dst, d_src, d_dst, method)
+    ! Map a 2-D monthly data field from a mesh to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_dst
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_mesh_2D_monthly'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == mesh_src%name .AND. Atlas( mi)%name_dst == mesh_dst%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          IF (PRESENT( method)) THEN
+            IF     (method == 'nearest_neighbour') THEN
+              CALL create_map_from_mesh_to_mesh_nearest_neighbour(      mesh_src, mesh_dst, Atlas( mi))
+            ELSEIF (method == 'trilin') THEN
+              CALL create_map_from_mesh_to_mesh_trilin(                 mesh_src, mesh_dst, Atlas( mi))
+            ELSEIF (method == '2nd_order_conservative') THEN
+              CALL create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, Atlas( mi))
+            END IF
+          ELSE
+              CALL create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, Atlas( mi))
+          END IF
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_mesh_to_mesh_2D_monthly( mesh_src, mesh_dst, Atlas( mi), d_src, d_dst)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_from_mesh_to_mesh_2D_monthly
+
+  SUBROUTINE map_from_mesh_to_mesh_3D( mesh_src, mesh_dst, d_src, d_dst, method)
+    ! Map a 3-D data field from a mesh to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_dst
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_mesh_3D'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == mesh_src%name .AND. Atlas( mi)%name_dst == mesh_dst%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          IF (PRESENT( method)) THEN
+            IF     (method == 'nearest_neighbour') THEN
+              CALL create_map_from_mesh_to_mesh_nearest_neighbour(      mesh_src, mesh_dst, Atlas( mi))
+            ELSEIF (method == 'trilin') THEN
+              CALL create_map_from_mesh_to_mesh_trilin(                 mesh_src, mesh_dst, Atlas( mi))
+            ELSEIF (method == '2nd_order_conservative') THEN
+              CALL create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, Atlas( mi))
+            END IF
+          ELSE
+              CALL create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, Atlas( mi))
+          END IF
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_mesh_to_mesh_3D( mesh_src, mesh_dst, Atlas( mi), d_src, d_dst)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_from_mesh_to_mesh_3D
+
+  SUBROUTINE map_from_mesh_to_mesh_3D_ocean( mesh_src, mesh_dst, d_src, d_dst, method)
+    ! Map a 3-D ocean data field from a mesh to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_dst
+    CHARACTER(LEN=256), OPTIONAL,        INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_mesh_3D_ocean'
+    INTEGER                                            :: mi, mi_valid
+    LOGICAL                                            :: found_map, found_empty_page
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Browse the Atlas to see if an appropriate mapping object already exists.
+    found_map = .FALSE.
+    DO mi = 1, SIZE( Atlas, 1)
+      IF (Atlas( mi)%name_src == mesh_src%name .AND. Atlas( mi)%name_dst == mesh_dst%name) THEN
+        ! If so specified, look for a mapping object with the correct method
+        IF (PRESENT( method)) THEN
+          IF (Atlas( mi)%method /= method) CYCLE
+        END IF
+        found_map = .TRUE.
+        mi_valid  = mi
+        EXIT
+      END IF
+    END DO
+
+    ! If no appropriate mapping object could be found, create one.
+    IF (.NOT. found_map) THEN
+      found_empty_page = .FALSE.
+      DO mi = 1, SIZE( Atlas,1)
+        IF (.NOT. Atlas( mi)%is_used) THEN
+          found_empty_page = .TRUE.
+          IF (PRESENT( method)) THEN
+            IF     (method == 'nearest_neighbour') THEN
+              CALL create_map_from_mesh_to_mesh_nearest_neighbour(      mesh_src, mesh_dst, Atlas( mi))
+            ELSEIF (method == 'trilin') THEN
+              CALL create_map_from_mesh_to_mesh_trilin(                 mesh_src, mesh_dst, Atlas( mi))
+            ELSEIF (method == '2nd_order_conservative') THEN
+              CALL create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, Atlas( mi))
+            END IF
+          ELSE
+              CALL create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, Atlas( mi))
+          END IF
+          mi_valid = mi
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (.NOT. found_empty_page) CALL crash('No more room in Atlas - assign more memory!')
+    END IF
+
+    ! Apply the appropriate mapping object
+    CALL apply_map_mesh_to_mesh_3D_ocean ( mesh_src, mesh_dst, Atlas( mi), d_src, d_dst)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_from_mesh_to_mesh_3D_ocean
+
+  ! Mesh-to-mesh remapping including memory reallocation (used after mesh update)
+  SUBROUTINE remap_field_dp_2D( mesh_src, mesh_dst, d, w, method)
     ! Remap a 2-D data field from mesh_src to mesh_dst using the specified remapping method. Includes memory reallocation.
 
     IMPLICIT NONE
 
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_src
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_dst
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map          ! Remapping matrices
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
     REAL(dp), DIMENSION(:    ), POINTER, INTENT(INOUT) :: d            ! Pointer to the data
     INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
-    CHARACTER(LEN=*),                    INTENT(IN)    :: method
+    CHARACTER(LEN=*), OPTIONAL,          INTENT(IN)    :: method
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_2D'
@@ -468,17 +1045,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh_dst%nV, d, w)
 
     ! Map data field from source mesh to new mesh
-    IF     (method == 'trilin') THEN
-      CALL multiply_PETSc_matrix_with_vector_1D( map%M_trilin,            d_temp, d)
-    ELSEIF (method == 'nearest_neighbour') THEN
-      CALL multiply_PETSc_matrix_with_vector_1D( map%M_nearest_neighbour, d_temp, d)
-    ELSEIF (method == 'cons_1st_order') THEN
-      CALL multiply_PETSc_matrix_with_vector_1D( map%M_cons_1st_order,    d_temp, d)
-    ELSEIF (method == 'cons_2nd_order') THEN
-      CALL multiply_PETSc_matrix_with_vector_1D( map%M_cons_2nd_order,    d_temp, d)
-    ELSE
-      CALL crash('unknown remapping method "' // TRIM( method) // '"!')
-    END IF
+    CALL map_from_mesh_to_mesh_2D( mesh_src, mesh_dst, d_temp, d, method)
 
     ! Deallocate temporary memory
     CALL deallocate_shared( w_temp)
@@ -487,36 +1054,34 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_field_dp_2D
-  SUBROUTINE remap_field_dp_3D( mesh_src, mesh_dst, map, d, w, method)
-    ! Remap a 3-D data field from mesh_src to mesh_dst using the specified remapping method. Includes memory reallocation.
+
+  SUBROUTINE remap_field_dp_2D_monthly( mesh_src, mesh_dst, d, w, method)
+    ! Remap a 2-D monthly data field from mesh_src to mesh_dst using the specified remapping method. Includes memory reallocation.
 
     IMPLICIT NONE
 
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_src
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_dst
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map          ! Remapping matrices
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
     REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d            ! Pointer to the data
     INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
-    CHARACTER(LEN=*),                    INTENT(IN)    :: method
+    CHARACTER(LEN=*), OPTIONAL,          INTENT(IN)    :: method
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_3D'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_2D_monthly'
     REAL(dp), DIMENSION(:,:  ), POINTER                :: d_temp
-    INTEGER                                            :: w_temp, nz
+    INTEGER                                            :: w_temp
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Safety
-    IF (SIZE( d,1) /= mesh_src%nV) THEN
+    IF (SIZE( d,1) /= mesh_src%nV .OR. SIZE( d,2) /= 12) THEN
       CALL crash('data field is the wrong size!')
     END IF
 
-    nz = SIZE( d,2)
-
     ! Allocate temporary memory
-    CALL allocate_shared_dp_2D( mesh_src%nV, nz, d_temp, w_temp)
+    CALL allocate_shared_dp_2D( mesh_src%nV, 12, d_temp, w_temp)
 
     ! Copy data to temporary memory
     d_temp( mesh_src%vi1: mesh_src%vi2,:) = d( mesh_src%vi1: mesh_src%vi2,:)
@@ -525,20 +1090,58 @@ CONTAINS
     CALL deallocate_shared( w)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D( mesh_dst%nV, nz, d, w)
+    CALL allocate_shared_dp_2D( mesh_dst%nV, 12, d, w)
 
     ! Map data field from source mesh to new mesh
-    IF     (method == 'trilin') THEN
-      CALL multiply_PETSc_matrix_with_vector_2D( map%M_trilin,            d_temp, d)
-    ELSEIF (method == 'nearest_neighbour') THEN
-      CALL multiply_PETSc_matrix_with_vector_2D( map%M_nearest_neighbour, d_temp, d)
-    ELSEIF (method == 'cons_1st_order') THEN
-      CALL multiply_PETSc_matrix_with_vector_2D( map%M_cons_1st_order,    d_temp, d)
-    ELSEIF (method == 'cons_2nd_order') THEN
-      CALL multiply_PETSc_matrix_with_vector_2D( map%M_cons_2nd_order,    d_temp, d)
-    ELSE
-      CALL crash('data fields are the wrong size!')
+    CALL map_from_mesh_to_mesh_2D_monthly( mesh_src, mesh_dst, d_temp, d, method)
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( w_temp)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE remap_field_dp_2D_monthly
+
+  SUBROUTINE remap_field_dp_3D( mesh_src, mesh_dst, d, w, method)
+    ! Remap a 3-D data field from mesh_src to mesh_dst using the specified remapping method. Includes memory reallocation.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
+    REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d            ! Pointer to the data
+    INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
+    CHARACTER(LEN=*), OPTIONAL,          INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_3D'
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_temp
+    INTEGER                                            :: w_temp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d,1) /= mesh_src%nV .OR. SIZE( d,2) /= C%nz) THEN
+      CALL crash('data field is the wrong size!')
     END IF
+
+    ! Allocate temporary memory
+    CALL allocate_shared_dp_2D( mesh_src%nV, C%nz, d_temp, w_temp)
+
+    ! Copy data to temporary memory
+    d_temp( mesh_src%vi1: mesh_src%vi2,:) = d( mesh_src%vi1: mesh_src%vi2,:)
+
+    ! Deallocate memory
+    CALL deallocate_shared( w)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( mesh_dst%nV, C%nz, d, w)
+
+    ! Map data field from source mesh to new mesh
+    CALL map_from_mesh_to_mesh_3D( mesh_src, mesh_dst, d_temp, d, method)
 
     ! Deallocate temporary memory
     CALL deallocate_shared( w_temp)
@@ -548,7 +1151,87 @@ CONTAINS
 
   END SUBROUTINE remap_field_dp_3D
 
+  SUBROUTINE remap_field_dp_3D_ocean( mesh_src, mesh_dst, d, w, method)
+    ! Remap a 3-D ocean data field from mesh_src to mesh_dst using the specified remapping method. Includes memory reallocation.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
+    REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d            ! Pointer to the data
+    INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
+    CHARACTER(LEN=*), OPTIONAL,          INTENT(IN)    :: method
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_3D_ocean'
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_temp
+    INTEGER                                            :: w_temp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d,1) /= mesh_src%nV .OR. SIZE( d,2) /= C%nz_ocean) THEN
+      CALL crash('data field is the wrong size!')
+    END IF
+
+    ! Allocate temporary memory
+    CALL allocate_shared_dp_2D( mesh_src%nV, C%nz_ocean, d_temp, w_temp)
+
+    ! Copy data to temporary memory
+    d_temp( mesh_src%vi1: mesh_src%vi2,:) = d( mesh_src%vi1: mesh_src%vi2,:)
+
+    ! Deallocate memory
+    CALL deallocate_shared( w)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( mesh_dst%nV, C%nz_ocean, d, w)
+
+    ! Map data field from source mesh to new mesh
+    CALL map_from_mesh_to_mesh_3D_ocean( mesh_src, mesh_dst, d_temp, d, method)
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( w_temp)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE remap_field_dp_3D_ocean
+
+  ! Clean up the Atlas after a mesh update
+  SUBROUTINE clear_all_maps_involving_this_mesh( mesh)
+    ! Clear all mapping objects involving a mesh by this name from the Atlas
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_xy_grid_to_mesh_2D'
+    INTEGER                                            :: mi
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO mi = 1, SIZE( Atlas,1)
+      IF (Atlas( mi)%is_used .AND. Atlas( mi)%name_src == mesh%name .OR. Atlas( mi)%name_dst == mesh%name) THEN
+        Atlas( mi)%is_used  = .FALSE.
+        Atlas( mi)%name_src = ''
+        Atlas( mi)%name_dst = ''
+        CALL MatDestroy( Atlas( mi)%M, perr)
+      END IF
+    END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE clear_all_maps_involving_this_mesh
+
 ! == Smoothing operations on the mesh
+! ===================================
+
   SUBROUTINE smooth_Gaussian_2D( mesh, grid, d_mesh, r)
     ! Use 2nd-order conservative remapping to map the 2-D data from the mesh
     ! to the square grid. Apply the smoothing on the gridded data, then map
@@ -558,7 +1241,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_mesh
     REAL(dp),                            INTENT(IN)    :: r
@@ -580,13 +1263,13 @@ CONTAINS
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
 
     ! Map data to the grid
-    CALL map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
+    CALL map_from_mesh_to_xy_grid_2D( mesh, grid, d_mesh, d_grid)
 
     ! Apply smoothing on the gridded data
     CALL smooth_Gaussian_2D_grid( grid, d_grid, r)
 
     ! Map data back to the mesh
-    CALL map_grid2mesh_2D( grid, mesh, d_grid, d_mesh)
+    CALL map_from_xy_grid_to_mesh_2D( grid, mesh, d_grid, d_mesh)
 
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid)
@@ -595,6 +1278,54 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE smooth_Gaussian_2D
+
+  SUBROUTINE smooth_Gaussian_2D_monthly( mesh, grid, d_mesh, r)
+    ! Use 2nd-order conservative remapping to map the 3-D data from the mesh
+    ! to the square grid. Apply the smoothing on the gridded data, then map
+    ! it back to the mesh. The numerical diffusion arising from the two mapping
+    ! operations is not a problem since we're smoothing the data anyway.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d_mesh
+    REAL(dp),                            INTENT(IN)    :: r
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_2D_monthly'
+    REAL(dp), DIMENSION(:,:,:), POINTER                :: d_grid
+    INTEGER                                            :: wd_grid
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_mesh,2) /= 12) THEN
+      CALL crash('data field is the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_3D( grid%nx, grid%ny, 12, d_grid, wd_grid)
+
+    ! Map data to the grid
+    CALL map_from_mesh_to_xy_grid_2D_monthly( mesh, grid, d_mesh, d_grid)
+
+    ! Apply smoothing on the gridded data
+    CALL smooth_Gaussian_3D_grid( grid, d_grid, r)
+
+    ! Map data back to the mesh
+    CALL map_from_xy_grid_to_mesh_2D_monthly( grid, mesh, d_grid, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE smooth_Gaussian_2D_monthly
+
   SUBROUTINE smooth_Gaussian_3D( mesh, grid, d_mesh, r)
     ! Use 2nd-order conservative remapping to map the 3-D data from the mesh
     ! to the square grid. Apply the smoothing on the gridded data, then map
@@ -604,7 +1335,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d_mesh
     REAL(dp),                            INTENT(IN)    :: r
@@ -612,29 +1343,27 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_3D'
     REAL(dp), DIMENSION(:,:,:), POINTER                :: d_grid
-    INTEGER                                            :: wd_grid, nz
+    INTEGER                                            :: wd_grid
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Safety
-    IF (SIZE( d_mesh,1) /= mesh%nV) THEN
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_mesh,2) /= C%nz) THEN
       CALL crash('data field is the wrong size!')
     END IF
 
-    nz = SIZE( d_mesh,2)
-
     ! Allocate shared memory
-    CALL allocate_shared_dp_3D( grid%nx, grid%ny, nz, d_grid, wd_grid)
+    CALL allocate_shared_dp_3D( grid%nx, grid%ny, C%nz, d_grid, wd_grid)
 
     ! Map data to the grid
-    CALL map_mesh2grid_3D( mesh, grid, d_mesh, d_grid)
+    CALL map_from_mesh_to_xy_grid_3D( mesh, grid, d_mesh, d_grid)
 
     ! Apply smoothing on the gridded data
     CALL smooth_Gaussian_3D_grid( grid, d_grid, r)
 
     ! Map data back to the mesh
-    CALL map_grid2mesh_3D( grid, mesh, d_grid, d_mesh)
+    CALL map_from_xy_grid_to_mesh_3D( grid, mesh, d_grid, d_mesh)
 
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid)
@@ -644,12 +1373,794 @@ CONTAINS
 
   END SUBROUTINE smooth_Gaussian_3D
 
-! == Calculating the remapping matrices
-  SUBROUTINE calc_remapping_operator_grid2mesh( grid, mesh)
-    ! Calculate the remapping operators from the square grid to the mesh using 2nd-order conservative remapping
+  SUBROUTINE smooth_Gaussian_3D_ocean( mesh, grid, d_mesh, r)
+    ! Use 2nd-order conservative remapping to map the 3-D data from the mesh
+    ! to the square grid. Apply the smoothing on the gridded data, then map
+    ! it back to the mesh. The numerical diffusion arising from the two mapping
+    ! operations is not a problem since we're smoothing the data anyway.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d_mesh
+    REAL(dp),                            INTENT(IN)    :: r
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_3D_ocean'
+    REAL(dp), DIMENSION(:,:,:), POINTER                :: d_grid
+    INTEGER                                            :: wd_grid
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_mesh,2) /= C%nz_ocean) THEN
+      CALL crash('data field is the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_3D( grid%nx, grid%ny, C%nz_ocean, d_grid, wd_grid)
+
+    ! Map data to the grid
+    CALL map_from_mesh_to_xy_grid_3D_ocean( mesh, grid, d_mesh, d_grid)
+
+    ! Apply smoothing on the gridded data
+    CALL smooth_Gaussian_3D_grid( grid, d_grid, r)
+
+    ! Map data back to the mesh
+    CALL map_from_xy_grid_to_mesh_3D_ocean( grid, mesh, d_grid, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE smooth_Gaussian_3D_ocean
+
+! == Apply existing mapping objects to remap data between grids
+! =============================================================
+
+  ! From an x/y-grid to a mesh
+  SUBROUTINE apply_map_xy_grid_to_mesh_2D( grid, mesh, map, d_grid, d_mesh)
+    ! Map a 2-D data field from an x/y-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_xy_grid_to_mesh_2D'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( grid%n, d_grid_vec, wd_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n) = d_grid( i,j)
+    END DO
+    CALL sync
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_1D( map%M, d_grid_vec, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_xy_grid_to_mesh_2D
+
+  SUBROUTINE apply_map_xy_grid_to_mesh_2D_monthly( grid, mesh, map, d_grid, d_mesh)
+    ! Map a 2-D monthly data field from an x/y-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_xy_grid_to_mesh_2D_monthly'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. &
+        SIZE( d_mesh,2) /= 12 .OR. SIZE( d_grid,3) /= 12) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, 12, d_grid_vec, wd_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n,:) = d_grid( i,j,:)
+    END DO
+    CALL sync
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_grid_vec, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_xy_grid_to_mesh_2D_monthly
+
+  SUBROUTINE apply_map_xy_grid_to_mesh_3D( grid, mesh, map, d_grid, d_mesh)
+    ! Map a 3-D data field from an x/y-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_xy_grid_to_mesh_3D'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. &
+        SIZE( d_mesh,2) /= C%nz .OR. SIZE( d_grid,3) /= C%nz) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, C%nz, d_grid_vec, wd_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n,:) = d_grid( i,j,:)
+    END DO
+    CALL sync
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_grid_vec, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_xy_grid_to_mesh_3D
+
+  SUBROUTINE apply_map_xy_grid_to_mesh_3D_ocean( grid, mesh, map, d_grid, d_mesh)
+    ! Map a 3-D ocean data field from an x/y-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_xy_grid_to_mesh_3D_ocean'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. &
+        SIZE( d_mesh,2) /= C%nz_ocean .OR. SIZE( d_grid,3) /= C%nz_ocean) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, C%nz_ocean, d_grid_vec, wd_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n,:) = d_grid( i,j,:)
+    END DO
+    CALL sync
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_grid_vec, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_xy_grid_to_mesh_3D_ocean
+
+  ! From a mesh to an x/y-grid
+  SUBROUTINE apply_map_mesh_to_xy_grid_2D( mesh, grid, map, d_mesh, d_grid)
+    ! Map a 2-D data field from a mesh to an x/y-grid.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_mesh
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_grid
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_mesh_to_xy_grid_2D'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( grid%n, d_grid_vec, wd_grid_vec)
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_1D( map%M, d_mesh, d_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid( i,j) = d_grid_vec( n)
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_mesh_to_xy_grid_2D
+
+  SUBROUTINE apply_map_mesh_to_xy_grid_2D_monthly( mesh, grid, map, d_mesh, d_grid)
+    ! Map a 2-D monthly data field from a mesh to an x/y-grid.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(OUT)   :: d_grid
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_mesh_to_xy_grid_2D_monthly'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. &
+        SIZE( d_mesh,2) /= 12 .OR. SIZE( d_grid,3) /= 12) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, 12, d_grid_vec, wd_grid_vec)
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_mesh, d_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid( i,j,:) = d_grid_vec( n,:)
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_mesh_to_xy_grid_2D_monthly
+
+  SUBROUTINE apply_map_mesh_to_xy_grid_3D( mesh, grid, map, d_mesh, d_grid)
+    ! Map a 3-D data field from a mesh to an x/y-grid.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(OUT)   :: d_grid
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_mesh_to_xy_grid_3D'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. &
+        SIZE( d_mesh,2) /= C%nz .OR. SIZE( d_grid,3) /= C%nz) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, C%nz, d_grid_vec, wd_grid_vec)
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_mesh, d_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid( i,j,:) = d_grid_vec( n,:)
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_mesh_to_xy_grid_3D
+
+  SUBROUTINE apply_map_mesh_to_xy_grid_3D_ocean( mesh, grid, map, d_mesh, d_grid)
+    ! Map a 3-D ocean data field from a mesh to an x/y-grid.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_mesh
+    REAL(dp), DIMENSION(:,:,:),          INTENT(OUT)   :: d_grid
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_mesh_to_xy_grid_3D_ocean'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. &
+        SIZE( d_mesh,2) /= C%nz_ocean .OR. SIZE( d_grid,3) /= C%nz_ocean) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, C%nz_ocean, d_grid_vec, wd_grid_vec)
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_mesh, d_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid( i,j,:) = d_grid_vec( n,:)
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_mesh_to_xy_grid_3D_ocean
+
+  ! From a lon/lat-grid to a mesh
+  SUBROUTINE apply_map_lonlat_grid_to_mesh_2D( grid, mesh, map, d_grid, d_mesh)
+    ! Map a 2-D data field from a lon/lat-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_lonlat_grid_to_mesh_2D'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nlon .OR. SIZE( d_grid,2) /= grid%nlat) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( grid%n, d_grid_vec, wd_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n) = d_grid( i,j)
+    END DO
+    CALL sync
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_1D( map%M, d_grid_vec, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_lonlat_grid_to_mesh_2D
+
+  SUBROUTINE apply_map_lonlat_grid_to_mesh_2D_monthly( grid, mesh, map, d_grid, d_mesh)
+    ! Map a 2-D monthly data field from a lon/lat-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_lonlat_grid_to_mesh_2D_monthly'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nlon .OR. SIZE( d_grid,2) /= grid%nlat .OR. &
+        SIZE( d_mesh,2) /= 12 .OR. SIZE( d_grid,3) /= 12) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, 12, d_grid_vec, wd_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n,:) = d_grid( i,j,:)
+    END DO
+    CALL sync
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_grid_vec, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_lonlat_grid_to_mesh_2D_monthly
+
+  SUBROUTINE apply_map_lonlat_grid_to_mesh_3D( grid, mesh, map, d_grid, d_mesh)
+    ! Map a 3-D data field from a lon/lat-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_lonlat_grid_to_mesh_3D'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nlon .OR. SIZE( d_grid,2) /= grid%nlat .OR. &
+        SIZE( d_mesh,2) /= C%nz .OR. SIZE( d_grid,3) /= C%nz) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, C%nz, d_grid_vec, wd_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n,:) = d_grid( i,j,:)
+    END DO
+    CALL sync
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_grid_vec, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_lonlat_grid_to_mesh_3D
+
+  SUBROUTINE apply_map_lonlat_grid_to_mesh_3D_ocean( grid, mesh, map, d_grid, d_mesh)
+    ! Map a 3-D ocean data field from a lon/lat-grid to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_lonlat_grid_to_mesh_3D_ocean'
+    INTEGER                                            :: n1,n2,n,i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
+    INTEGER                                            :: wd_grid_vec
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nlon .OR. SIZE( d_grid,2) /= grid%nlat .OR. &
+        SIZE( d_mesh,2) /= C%nz_ocean .OR. SIZE( d_grid,3) /= C%nz_ocean) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%n, C%nz_ocean, d_grid_vec, wd_grid_vec)
+
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n,:) = d_grid( i,j,:)
+    END DO
+    CALL sync
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_grid_vec, d_mesh)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_vec)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_lonlat_grid_to_mesh_3D_ocean
+
+  ! From a mesh to a mesh
+  SUBROUTINE apply_map_mesh_to_mesh_2D( mesh_src, mesh_dst, map, d_src, d_dst)
+    ! Map a 2-D data field from a mesh to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_src
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_dst
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_dst
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_mesh_to_mesh_2D'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_src,1) /= mesh_src%nV .OR. SIZE( d_dst,1) /= mesh_dst%nV) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_1D( map%M, d_src, d_dst)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_mesh_to_mesh_2D
+
+  SUBROUTINE apply_map_mesh_to_mesh_2D_monthly( mesh_src, mesh_dst, map, d_src, d_dst)
+    ! Map a 2-D monthly data field from a mesh to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_src
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_dst
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_dst
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_mesh_to_mesh_2D_monthly'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_src,1) /= mesh_src%nV .OR. SIZE( d_dst,1) /= mesh_dst%nV .OR. &
+        SIZE( d_src,2) /= 12 .OR. SIZE( d_dst,2) /= 12) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_src, d_dst)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_mesh_to_mesh_2D_monthly
+
+  SUBROUTINE apply_map_mesh_to_mesh_3D( mesh_src, mesh_dst, map, d_src, d_dst)
+    ! Map a 3-D data field from a mesh to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_src
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_dst
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_dst
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_mesh_to_mesh_3D'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_src,1) /= mesh_src%nV .OR. SIZE( d_dst,1) /= mesh_dst%nV .OR. &
+        SIZE( d_src,2) /= C%nz .OR. SIZE( d_dst,2) /= C%nz) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_src, d_dst)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_mesh_to_mesh_3D
+
+  SUBROUTINE apply_map_mesh_to_mesh_3D_ocean( mesh_src, mesh_dst, map, d_src, d_dst)
+    ! Map a 3-D ocean data field from a mesh to a mesh.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_src
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_dst
+    TYPE(type_map),                      INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_dst
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_map_mesh_to_mesh_3D_ocean'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (SIZE( d_src,1) /= mesh_src%nV .OR. SIZE( d_dst,1) /= mesh_dst%nV .OR. &
+        SIZE( d_src,2) /= C%nz_ocean .OR. SIZE( d_dst,2) /= C%nz_ocean) THEN
+      CALL crash('data fields are the wrong size!')
+    END IF
+
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_2D( map%M, d_src, d_dst)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_map_mesh_to_mesh_3D_ocean
+
+! == Create remapping objects
+! ===========================
+
+  SUBROUTINE create_map_from_xy_grid_to_mesh( grid, mesh, map)
+    ! Create a new mapping object from an x/y-grid to a mesh.
+    !
+    ! By default uses 2nd-order conservative remapping.
     !
     ! NOTE: the current implementation is a compromise. For "small" triangles (defined as having an area smaller
-    !       than four times that of a square grid cell), a 2nd-order conservative remapping operation is calculated
+    !       than ten times that of a square grid cell), a 2nd-order conservative remapping operation is calculated
     !       explicitly, using the line integrals around area of overlap. However, for "large" triangles (defined as
     !       all the rest), the result is generally very close to simply averaging over all the overlapping grid cells.
     !       Explicitly calculating the line integrals around all the grid cells is very slow, so this
@@ -658,19 +2169,25 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables
-    TYPE(type_grid),                     INTENT(INOUT) :: grid
+    TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(INOUT) :: map
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operator_grid2mesh'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_map_from_xy_grid_to_mesh'
     TYPE(PetscErrorCode)                               :: perr
     LOGICAL                                            :: count_coincidences
     INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: A_xdy_a_g_CSR, A_mxydx_a_g_CSR, A_xydy_a_g_CSR
     TYPE(tMat)                                         :: A_xdy_a_g    , A_mxydx_a_g    , A_xydy_a_g
+    INTEGER,  DIMENSION(:    ), POINTER                ::  mask_do_simple_average
+    INTEGER                                            :: wmask_do_simple_average
     INTEGER                                            :: vi1, vi2, vi
-    INTEGER                                            :: nVor, vori1, vori2
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
+    REAL(dp), DIMENSION( mesh%nC_mem,2)                :: Vor
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_vi
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_ti
+    INTEGER                                            :: nVor
+    INTEGER                                            :: vori1, vori2
     REAL(dp), DIMENSION(2)                             :: p, q
     INTEGER                                            :: k, n, i, j, kk, vj
     REAL(dp)                                           :: xl, xu, yl, yu
@@ -689,6 +2206,17 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Safety
+    IF (map%is_used) CALL crash('this map is already in use!')
+
+  ! == Initialise map metadata
+  ! ==========================
+
+    map%is_used  = .TRUE.
+    map%name_src = grid%name
+    map%name_dst = mesh%name
+    map%method   = '2nd_order_conservative'
 
   ! == Initialise the three matrices using the native UFEMISM CSR-matrix format
   ! ===========================================================================
@@ -720,15 +2248,16 @@ CONTAINS
     ALLOCATE( single_row_grid%LI_mxydx(   single_row_grid%n_max))
     ALLOCATE( single_row_grid%LI_xydy(    single_row_grid%n_max))
 
-    ALLOCATE( Vor( mesh%nC_mem+2,2))
-
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating all the line integrals...'
+    CALL allocate_shared_int_1D( mesh%nV, mask_do_simple_average, wmask_do_simple_average)
+    mask_do_simple_average( mesh%vi1:mesh%vi2) = 0
 
     ! Calculate line integrals around all Voronoi cells
     DO vi = mesh%vi1, mesh%vi2
 
-      IF (mesh%A( vi) < 4._dp * grid%dx**2) THEN
+      IF (mesh%A( vi) < 10._dp * grid%dx**2) THEN
         ! This Voronoi cell is small enough to warrant a proper line integral
+
+        mask_do_simple_average( vi) = 0
 
         ! Clean up single row results
         single_row_Vor%n          = 0
@@ -738,12 +2267,8 @@ CONTAINS
         single_row_Vor%LI_xydy    = 0._dp
 
         ! Integrate around the complete Voronoi cell boundary
-        CALL find_Voronoi_cell_vertices( mesh, vi, Vor, nVor)
-        IF (mesh%edge_index( vi) > 0) THEN
-          Vor( nVor+1,:) = Vor( 1,:)
-          nVor = nVor + 1
-        END IF
-        DO vori1 = 1, nVor-1
+        CALL calc_Voronoi_cell( mesh, vi, 0._dp, Vor, Vor_vi, Vor_ti, nVor)
+        DO vori1 = 1, nVor
           vori2 = vori1 + 1
           IF (vori2 > nVor) vori2 = 1
           p = Vor( vori1,:)
@@ -804,14 +2329,16 @@ CONTAINS
 
         END DO ! DO k = 1, single_row_Vor%n
 
-      ELSE ! IF (mesh%A( vi) < 4._dp * grid%dx**2) THEN
+      ELSE ! IF (mesh%A( vi) < 10._dp * grid%dx**2) THEN
         ! This Voronoi cell is big enough that we can just average over the grid cells it contains
+
+        mask_do_simple_average( vi) = 1
 
         ! Clean up single row results
         single_row_Vor%n = 0
 
         ! Find the square of grid cells enveloping this Voronoi cell
-        CALL find_Voronoi_cell_vertices( mesh, vi, Vor, nVor)
+        CALL calc_Voronoi_cell( mesh, vi, 0._dp, Vor, Vor_vi, Vor_ti, nVor)
 
         xmin = MINVAL( Vor( 1:nVor,1))
         xmax = MAXVAL( Vor( 1:nVor,1))
@@ -866,8 +2393,6 @@ CONTAINS
     DEALLOCATE( single_row_grid%LI_mxydx   )
     DEALLOCATE( single_row_grid%LI_xydy    )
 
-    DEALLOCATE( Vor)
-
     ! Assemble matrices
     CALL finalise_matrix_CSR_dist( A_xdy_a_g_CSR  , mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( A_mxydx_a_g_CSR, mesh%vi1, mesh%vi2)
@@ -885,8 +2410,6 @@ CONTAINS
 
   ! Calculate w0, w1x, w1y for the mesh-to-grid remapping operator
   ! ==============================================================
-
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating w0, w1x, w1y...'
 
     CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
     CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
@@ -912,29 +2435,34 @@ CONTAINS
       END DO
       CALL MatRestoreRow( A_xdy_a_g, vi-1, ncols, cols, vals, perr)
 
-      ! w1x
-      CALL MatGetRow( A_mxydx_a_g, vi-1, ncols, cols, vals, perr)
-      DO k = 1, ncols
-        n = cols( k)+1
-        i = grid%n2ij( n,1)
-        j = grid%n2ij( n,2)
-        w1x_row( k) = (vals( k) / A_overlap_tot) - (grid%x( i) * w0_row( k))
-        CALL MatSetValues( w1x, 1, vi-1, 1, cols( k), w1x_row( k), INSERT_VALUES, perr)
-      END DO
-      CALL MatRestoreRow( A_mxydx_a_g, vi-1, ncols, cols, vals, perr)
+      IF (mask_do_simple_average( vi) == 0) THEN
+        ! For small vertices, include the gradient terms
 
-      ! w1y
-      CALL MatGetRow( A_xydy_a_g, vi-1, ncols, cols, vals, perr)
-      DO k = 1, ncols
-        n = cols( k)+1
-        i = grid%n2ij( n,1)
-        j = grid%n2ij( n,2)
-        w1y_row( k) = (vals( k) / A_overlap_tot) - (grid%y( j) * w0_row( k))
-        CALL MatSetValues( w1y, 1, vi-1, 1, cols( k), w1y_row( k), INSERT_VALUES, perr)
-      END DO
-      CALL MatRestoreRow( A_xydy_a_g, vi-1, ncols, cols, vals, perr)
+        ! w1x
+        CALL MatGetRow( A_mxydx_a_g, vi-1, ncols, cols, vals, perr)
+        DO k = 1, ncols
+          n = cols( k)+1
+          i = grid%n2ij( n,1)
+          j = grid%n2ij( n,2)
+          w1x_row( k) = (vals( k) / A_overlap_tot) - (grid%x( i) * w0_row( k))
+          CALL MatSetValues( w1x, 1, vi-1, 1, cols( k), w1x_row( k), INSERT_VALUES, perr)
+        END DO
+        CALL MatRestoreRow( A_mxydx_a_g, vi-1, ncols, cols, vals, perr)
 
-    END DO
+        ! w1y
+        CALL MatGetRow( A_xydy_a_g, vi-1, ncols, cols, vals, perr)
+        DO k = 1, ncols
+          n = cols( k)+1
+          i = grid%n2ij( n,1)
+          j = grid%n2ij( n,2)
+          w1y_row( k) = (vals( k) / A_overlap_tot) - (grid%y( j) * w0_row( k))
+          CALL MatSetValues( w1y, 1, vi-1, 1, cols( k), w1y_row( k), INSERT_VALUES, perr)
+        END DO
+        CALL MatRestoreRow( A_xydy_a_g, vi-1, ncols, cols, vals, perr)
+
+      END IF ! IF (mask_do_simple_average( vi) == 0) THEN
+
+    END DO ! DO vi = vi1+1, vi2 ! +1 because PETSc indexes from 0
     CALL sync
 
     CALL MatDestroy( A_xdy_a_g  , perr)
@@ -956,11 +2484,9 @@ CONTAINS
 
     ! Calculate the remapping matrix
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating remapping matrix...'
-
     CALL calc_matrix_operators_grid( grid, grid_M_ddx, grid_M_ddy)
 
-    CALL MatDuplicate( w0, MAT_COPY_VALUES, grid%M_map_grid2mesh, perr)
+    CALL MatDuplicate( w0, MAT_COPY_VALUES, map%M, perr)
     CALL MatMatMult( w1x, grid_M_ddx, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
     CALL MatMatMult( w1y, grid_M_ddy, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
 
@@ -970,34 +2496,40 @@ CONTAINS
     CALL MatDestroy( w1x           , perr)
     CALL MatDestroy( w1y           , perr)
 
-    CALL MatAXPY( grid%M_map_grid2mesh, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
-    CALL MatAXPY( grid%M_map_grid2mesh, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
+    CALL MatAXPY( map%M, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
+    CALL MatAXPY( map%M, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
 
     CALL MatDestroy( M1, perr)
     CALL MatDestroy( M2, perr)
 
+    CALL deallocate_shared( wmask_do_simple_average)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE calc_remapping_operator_grid2mesh
-  SUBROUTINE calc_remapping_operator_mesh2grid( mesh, grid)
-    ! Calculate the remapping operators from the mesh to the square grid using 2nd-order conservative remapping
+  END SUBROUTINE create_map_from_xy_grid_to_mesh
+
+  SUBROUTINE create_map_from_mesh_to_xy_grid( mesh, grid, map)
+    ! Create a new mapping object from a mesh to an x/y-grid.
     !
-    ! NOTE: the current implementation is a compromise. For "small" triangles (defined as being having an area smaller
-    !       than four times that of a square grid cell), a 2nd-order conservative remapping operation is calculated
+    ! By default uses 2nd-order conservative remapping.
+    !
+    ! NOTE: the current implementation is a compromise. For "small" triangles (defined as having an area smaller
+    !       than ten times that of a square grid cell), a 2nd-order conservative remapping operation is calculated
     !       explicitly, using the line integrals around area of overlap. However, for "large" triangles (defined as
     !       all the rest), the result is generally very close to simply averaging over all the overlapping grid cells.
-    !       Explicitly calculating the line integrals around all the grid cells is prohibitively slow, so this
+    !       Explicitly calculating the line integrals around all the grid cells is very slow, so this
     !       seems like a reasonable compromise.
 
     IMPLICIT NONE
 
     ! In/output variables
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(type_grid),                     INTENT(INOUT) :: grid
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_map),                      INTENT(INOUT) :: map
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operator_mesh2grid'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_map_from_mesh_to_xy_grid'
     TYPE(PetscErrorCode)                               :: perr
     LOGICAL                                            :: count_coincidences
     INTEGER,  DIMENSION(:,:  ), POINTER                ::  overlaps_with_small_triangle,  containing_triangle
@@ -1024,14 +2556,24 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
     REAL(dp)                                           :: A_overlap_tot
     TYPE(tMat)                                         :: M1, M2
+    LOGICAL                                            :: has_value
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Safety
+    IF (map%is_used) CALL crash('this map is already in use!')
+
+  ! == Initialise map metadata
+  ! ==========================
+
+    map%is_used  = .TRUE.
+    map%name_src = mesh%name
+    map%name_dst = grid%name
+    map%method   = '2nd_order_conservative'
+
   ! == Find all grid cells that overlap with small triangles
   ! ========================================================
-
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - finding all grid cells overlapping with small/big triangles...'
 
     CALL allocate_shared_int_2D( grid%nx, grid%ny, overlaps_with_small_triangle, woverlaps_with_small_triangle)
     CALL allocate_shared_int_2D( grid%nx, grid%ny, containing_triangle         , wcontaining_triangle         )
@@ -1064,7 +2606,7 @@ CONTAINS
       jl = MAX( 1      , jl - 1)
       ju = MIN( grid%ny, ju + 1)
 
-      IF (mesh%TriA( ti) < 4._dp * grid%dx**2) THEN
+      IF (mesh%TriA( ti) < 10._dp * grid%dx**2) THEN
         ! This triangle is small; mark all grid cells it overlaps with
 
         ! Mark all these grid cells
@@ -1138,11 +2680,9 @@ CONTAINS
   ! == Integrate around all grid cells that overlap with small triangles
   ! ====================================================================
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating all line integrals...'
-
     ! Initialise the three matrices using the native UFEMISM CSR-matrix format
 
-    ! Matrix sise
+    ! Matrix size
     nrows_A         = grid%n     ! to
     ncols_A         = mesh%nTri  ! from
     nnz_est         = 4 * MAX( nrows_A, ncols_A)
@@ -1179,15 +2719,47 @@ CONTAINS
       j = grid%n2ij( n,2)
       p = [grid%x( i), grid%y( j)]
 
+      ! The four sides of the grid cell
+      xl = grid%x( i) - grid%dx / 2._dp
+      xu = grid%x( i) + grid%dx / 2._dp
+      yl = grid%y( j) - grid%dx / 2._dp
+      yu = grid%y( j) + grid%dx / 2._dp
+
+      ! If this grid cell lies entirely outside of the mesh domain, use
+      ! nearest-neighbour extrapolation
+
+      DO WHILE (xl <= mesh%xmin)
+        i = i+1
+        p( 1) = grid%x( i)
+        xl = grid%x( i) - grid%dx / 2._dp
+        xu = grid%x( i) + grid%dx / 2._dp
+        IF (i > grid%nx) CALL crash('grid domain doesnt overlap with mesh domain at all!')
+      END DO
+      DO WHILE (xu >= mesh%xmax)
+        i = i-1
+        p( 1) = grid%x( i)
+        xl = grid%x( i) - grid%dx / 2._dp
+        xu = grid%x( i) + grid%dx / 2._dp
+        IF (i < 1) CALL crash('grid domain doesnt overlap with mesh domain at all!')
+      END DO
+      DO WHILE (yl <= mesh%ymin)
+        j = j+1
+        p( 2) = grid%y( j)
+        yl = grid%y( j) - grid%dx / 2._dp
+        yu = grid%y( j) + grid%dx / 2._dp
+        IF (j > grid%ny) CALL crash('grid domain doesnt overlap with mesh domain at all!')
+      END DO
+      DO WHILE (yu >= mesh%ymax)
+        j = j-1
+        p( 2) = grid%y( j)
+        yl = grid%y( j) - grid%dx / 2._dp
+        yu = grid%y( j) + grid%dx / 2._dp
+        IF (j < 1) CALL crash('grid domain doesnt overlap with mesh domain at all!')
+      END DO
+
       IF (overlaps_with_small_triangle( i,j) == 1) THEN
         ! This grid cell overlaps with a small triangle; integrate around it, and around
         ! all triangles overlapping with it
-
-        ! The four sides of the grid cell
-        xl = grid%x( i) - grid%dx / 2._dp
-        xu = grid%x( i) + grid%dx / 2._dp
-        yl = grid%y( j) - grid%dx / 2._dp
-        yu = grid%y( j) + grid%dx / 2._dp
 
         sw = [xl, yl]
         nw = [xl, yu]
@@ -1304,8 +2876,6 @@ CONTAINS
   ! Calculate w0, w1x, w1y for the mesh-to-grid remapping operator
   ! ==============================================================
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating w0, w1x, w1y...'
-
     CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
     CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
     CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w1y, perr)
@@ -1350,6 +2920,12 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Clean up after yourself
+    DEALLOCATE( cols   )
+    DEALLOCATE( vals   )
+    DEALLOCATE( w0_row )
+    DEALLOCATE( w1x_row)
+    DEALLOCATE( w1y_row)
     CALL MatDestroy( A_xdy_g_b  , perr)
     CALL MatDestroy( A_mxydx_g_b, perr)
     CALL MatDestroy( A_xydy_g_b , perr)
@@ -1369,62 +2945,246 @@ CONTAINS
 
     ! Calculate the remapping matrix
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating remapping matrix...'
-
-    CALL MatMatMult( w0,  mesh%M_map_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, grid%M_map_mesh2grid, perr)
-    CALL MatMatMult( w1x, mesh%M_ddx_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
-    CALL MatMatMult( w1y, mesh%M_ddy_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
+    CALL MatMatMult( w0,  mesh%M_map_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, map%M, perr)
+    CALL MatMatMult( w1x, mesh%M_ddx_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1   , perr)  ! This can be done more efficiently now that the non-zero structure is known...
+    CALL MatMatMult( w1y, mesh%M_ddy_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2   , perr)
 
     CALL MatDestroy( w0            , perr)
     CALL MatDestroy( w1x           , perr)
     CALL MatDestroy( w1y           , perr)
 
-    CALL MatAXPY( grid%M_map_mesh2grid, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
-    CALL MatAXPY( grid%M_map_mesh2grid, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
+    CALL MatAXPY( map%M, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
+    CALL MatAXPY( map%M, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
 
     CALL MatDestroy( M1, perr)
     CALL MatDestroy( M2, perr)
 
+    ! Safety: check if all grid cells get values
+
+    ALLOCATE( cols(    nnz_per_row_max))
+    ALLOCATE( vals(    nnz_per_row_max))
+
+    CALL MatGetOwnershipRange( map%M, n1, n2, perr)
+
+    DO n = n1+1, n2 ! +1 because PETSc indexes from 0
+
+      ! w0
+      CALL MatGetRow( map%M, n-1, ncols, cols, vals, perr)
+      IF (ncols == 0) CALL crash('ncols == 0!')
+      has_value = .FALSE.
+      DO k = 1, ncols
+        IF (vals( k) /= 0._dp) has_value = .TRUE.
+      END DO
+      IF (.NOT. has_value) CALL crash('only zeroes!')
+      CALL MatRestoreRow( map%M, n-1, ncols, cols, vals, perr)
+
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    DEALLOCATE( cols   )
+    DEALLOCATE( vals   )
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE calc_remapping_operator_mesh2grid
-  SUBROUTINE calc_remapping_operators_mesh_mesh( mesh_src, mesh_dst, map)
-    ! Calculate all the remapping operators between two meshes
+  END SUBROUTINE create_map_from_mesh_to_xy_grid
+
+  SUBROUTINE create_map_from_lonlat_grid_to_mesh( grid, mesh, map)
+    ! Create a new mapping object from a lon/lat-grid to a mesh.
+    !
+    ! By default uses bilinear interpolation.
 
     IMPLICIT NONE
 
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
-    TYPE(type_remapping_mesh_mesh),      INTENT(INOUT) :: map
+    ! In/output variables:
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_map),                      INTENT(INOUT) :: map
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operators_mesh_mesh'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_map_from_lonlat_grid_to_mesh'
+    INTEGER                                            :: nrows, ncols, nnz_est, nnz_est_proc, nnz_per_row_max
+    TYPE(type_sparse_matrix_CSR_dp)                    :: M_CSR
+    INTEGER                                            :: vi
+    INTEGER                                            :: il,iu,jl,ju
+    REAL(dp)                                           :: wil,wiu,wjl,wju
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL calc_remapping_operators_mesh_mesh_trilin(            mesh_src, mesh_dst, map%M_trilin)
-    CALL calc_remapping_operators_mesh_mesh_nearest_neighbour( mesh_src, mesh_dst, map%M_nearest_neighbour)
-    CALL calc_remapping_operators_mesh_mesh_conservative(      mesh_src, mesh_dst, map%M_cons_1st_order, map%M_cons_2nd_order)
+    ! Safety
+    IF (map%is_used) CALL crash('this map is already in use!')
+
+  ! == Initialise map metadata
+  ! ==========================
+
+    map%is_used  = .TRUE.
+    map%name_src = grid%name
+    map%name_dst = mesh%name
+    map%method   = 'bilin'
+
+  ! == Initialise the mapping matrix using the native UFEMISM CSR-matrix format
+  ! ===========================================================================
+
+    ! Matrix sise
+    nrows           = mesh%nV  ! to
+    ncols           = grid%n   ! from
+    nnz_per_row_max = 4
+    nnz_est         = nnz_per_row_max * nrows
+    nnz_est_proc    = CEILING( REAL( nnz_est, dp) / REAL( par%n, dp))
+
+    CALL allocate_matrix_CSR_dist( M_CSR, nrows, ncols, nnz_est_proc)
+
+    ! Fill in the CSR matrix
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Find enveloping lat-lon indices
+      il  = MAX(1, MIN( grid%nlon-1, 1 + FLOOR((mesh%lon( vi) - MINVAL(grid%lon)) / (grid%lon(2) - grid%lon(1)))))
+      iu  = il + 1
+      wil = (grid%lon(iu) - mesh%lon( vi)) / (grid%lon(2) - grid%lon(1))
+      wiu = 1._dp - wil
+
+      ! Exception for pixels near the zero meridian
+      IF (mesh%lon( vi) < MINVAL(grid%lon)) THEN
+        il  = grid%nlon
+        iu  = 1
+        wil = (grid%lon( iu) - mesh%lon( vi)) / (grid%lon(2) - grid%lon(1))
+        wiu = 1._dp - wil
+      ELSEIF (mesh%lon( vi) > MAXVAL(grid%lon)) THEN
+        il  = grid%nlon
+        iu  = 1
+        wiu = (mesh%lon( vi) - grid%lon( il)) / (grid%lon(2) - grid%lon(1))
+        wil = 1._dp - wiu
+      END IF
+
+      jl  = MAX(1, MIN( grid%nlat-1, 1 + FLOOR((mesh%lat( vi) - MINVAL(grid%lat)) / (grid%lat(2) - grid%lat(1)))))
+      ju  = jl + 1
+      wjl = (grid%lat( ju) - mesh%lat( vi)) / (grid%lat(2) - grid%lat(1))
+      wju = 1 - wjl
+
+      ! Add values to the CSR matrix
+      CALL add_entry_CSR_dist( M_CSR, vi, grid%ij2n( il,jl), wil * wjl)
+      CALL add_entry_CSR_dist( M_CSR, vi, grid%ij2n( il,ju), wil * wju)
+      CALL add_entry_CSR_dist( M_CSR, vi, grid%ij2n( iu,jl), wiu * wjl)
+      CALL add_entry_CSR_dist( M_CSR, vi, grid%ij2n( iu,ju), wiu * wju)
+
+    END DO ! DO vi = mesh%vi1, mesh%vi2
+    CALL sync
+
+    ! Assemble matrices
+    CALL finalise_matrix_CSR_dist( M_CSR, mesh%vi1, mesh%vi2)
+
+    ! Convert matrices from Fortran to PETSc types
+    CALL mat_CSR2petsc( M_CSR, map%M)
+
+    ! Clean up the Fortran versions
+    CALL deallocate_matrix_CSR( M_CSR)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE calc_remapping_operators_mesh_mesh
-  SUBROUTINE calc_remapping_operators_mesh_mesh_trilin( mesh_src, mesh_dst, M_trilin)
-    ! Calculate the trilinear interpolation operator from mesh_src to mesh_dst
+  END SUBROUTINE create_map_from_lonlat_grid_to_mesh
+
+  SUBROUTINE create_map_from_mesh_to_mesh_nearest_neighbour( mesh_src, mesh_dst, map)
+    ! Create a new mapping object from a mesh to a mesh.
+    !
+    ! Uses nearest-neighbour interpolation.
 
     IMPLICIT NONE
 
     ! In/output variables
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
-    TYPE(tMat),                          INTENT(INOUT) :: M_trilin
+    TYPE(type_map),                      INTENT(INOUT) :: map
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operators_mesh_mesh_trilin'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_map_from_mesh_to_mesh_nearest_neighbour'
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
+    INTEGER                                            :: vi_dst
+    REAL(dp), DIMENSION(2)                             :: p
+    INTEGER                                            :: vi_src
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF (map%is_used) CALL crash('this map is already in use!')
+
+  ! == Initialise map metadata
+  ! ==========================
+
+    map%is_used  = .TRUE.
+    map%name_src = mesh_src%name
+    map%name_dst = mesh_dst%name
+    map%method   = 'nearest_neighbour'
+
+  ! == Use PETSc routines to initialise the matrix object
+  ! =====================================================
+
+    ! Matrix size
+    nrows           = mesh_dst%nV   ! to
+    ncols           = mesh_src%nV   ! from
+    nnz_per_row_max = 1
+
+    ! Initialise the matrix object
+    CALL MatCreate( PETSC_COMM_WORLD, map%M, perr)
+
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( map%M, 'mpiaij', perr)
+
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( map%M, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( map%M, perr)
+
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( map%M, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( map%M, istart, iend, perr)
+
+    ! For all mesh_dst vertices, find the mesh_src triangle containing them
+    vi_src = 1
+    DO vi_dst = istart+1, iend ! +1 because PETSc indexes from 0
+
+      p = mesh_dst%V( vi_dst,:)
+      CALL find_containing_vertex( mesh_src, p, vi_src)
+
+      ! Add to the matrix
+      CALL MatSetValues( map%M, 1, vi_dst-1, 1, vi_src-1, 1._dp, INSERT_VALUES, perr)
+
+    END DO ! DO vi_dst = istart+1, iend ! +1 because PETSc indexes from 0
+    CALL sync
+
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
+
+    CALL MatAssemblyBegin( map%M, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   map%M, MAT_FINAL_ASSEMBLY, perr)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE create_map_from_mesh_to_mesh_nearest_neighbour
+
+  SUBROUTINE create_map_from_mesh_to_mesh_trilin( mesh_src, mesh_dst, map)
+    ! Create a new mapping object from a mesh to a mesh.
+    !
+    ! Uses trilinear interpolation.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
+    TYPE(type_map),                      INTENT(INOUT) :: map
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_map_from_mesh_to_mesh_trilin'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER                                            :: vi_dst
     REAL(dp), DIMENSION(2)                             :: p
@@ -1435,6 +3195,17 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Safety
+    IF (map%is_used) CALL crash('this map is already in use!')
+
+  ! == Initialise map metadata
+  ! ==========================
+
+    map%is_used  = .TRUE.
+    map%name_src = mesh_src%name
+    map%name_dst = mesh_dst%name
+    map%method   = 'trilin'
+
   ! == Use PETSc routines to initialise the matrix object
   ! =====================================================
 
@@ -1444,22 +3215,22 @@ CONTAINS
     nnz_per_row_max = 3
 
     ! Initialise the matrix object
-    CALL MatCreate( PETSC_COMM_WORLD, M_trilin, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, map%M, perr)
 
     ! Set the matrix type to parallel (MPI) Aij
-    CALL MatSetType( M_trilin, 'mpiaij', perr)
+    CALL MatSetType( map%M, 'mpiaij', perr)
 
     ! Set the size, let PETSc automatically determine parallelisation domains
-    CALL MatSetSizes( M_trilin, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( map%M, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
 
     ! Not entirely sure what this one does, but apparently it's really important
-    CALL MatSetFromOptions( M_trilin, perr)
+    CALL MatSetFromOptions( map%M, perr)
 
     ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( M_trilin, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( map%M, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
 
     ! Get parallelisation domains ("ownership ranges")
-    CALL MatGetOwnershipRange( M_trilin, istart, iend, perr)
+    CALL MatGetOwnershipRange( map%M, istart, iend, perr)
 
     ! For all mesh_dst vertices, find the mesh_src triangle containing them
     ti_src = 1
@@ -1487,9 +3258,9 @@ CONTAINS
       wc = Atri_abp / Atri_abc
 
       ! Add to the matrix
-      CALL MatSetValues( M_trilin, 1, vi_dst-1, 1, via-1, wa, INSERT_VALUES, perr)
-      CALL MatSetValues( M_trilin, 1, vi_dst-1, 1, vib-1, wb, INSERT_VALUES, perr)
-      CALL MatSetValues( M_trilin, 1, vi_dst-1, 1, vic-1, wc, INSERT_VALUES, perr)
+      CALL MatSetValues( map%M, 1, vi_dst-1, 1, via-1, wa, INSERT_VALUES, perr)
+      CALL MatSetValues( map%M, 1, vi_dst-1, 1, vib-1, wb, INSERT_VALUES, perr)
+      CALL MatSetValues( map%M, 1, vi_dst-1, 1, vic-1, wc, INSERT_VALUES, perr)
 
     END DO ! DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
     CALL sync
@@ -1499,96 +3270,28 @@ CONTAINS
     ! Computations can be done while messages are in transition
     ! by placing code between these two statements.
 
-    CALL MatAssemblyBegin( M_trilin, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   M_trilin, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( map%M, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   map%M, MAT_FINAL_ASSEMBLY, perr)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE calc_remapping_operators_mesh_mesh_trilin
-  SUBROUTINE calc_remapping_operators_mesh_mesh_nearest_neighbour( mesh_src, mesh_dst, M_nearest_neighbour)
-    ! Calculate the nearest-neighbour interpolation operator from mesh_src to mesh_dst
+  END SUBROUTINE create_map_from_mesh_to_mesh_trilin
+
+  SUBROUTINE create_map_from_mesh_to_mesh_2nd_order_conservative( mesh_src, mesh_dst, map)
+    ! Create a new mapping object from a mesh to a mesh.
+    !
+    ! Uses 2nd-order conservative interpolation.
 
     IMPLICIT NONE
 
     ! In/output variables
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
-    TYPE(tMat),                          INTENT(INOUT) :: M_nearest_neighbour
+    TYPE(type_map),                      INTENT(INOUT) :: map
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operators_mesh_mesh_nearest_neighbour'
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
-    INTEGER                                            :: vi_dst
-    REAL(dp), DIMENSION(2)                             :: p
-    INTEGER                                            :: vi_src
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-  ! == Use PETSc routines to initialise the matrix object
-  ! =====================================================
-
-    ! Matrix size
-    nrows           = mesh_dst%nV   ! to
-    ncols           = mesh_src%nV   ! from
-    nnz_per_row_max = 1
-
-    ! Initialise the matrix object
-    CALL MatCreate( PETSC_COMM_WORLD, M_nearest_neighbour, perr)
-
-    ! Set the matrix type to parallel (MPI) Aij
-    CALL MatSetType( M_nearest_neighbour, 'mpiaij', perr)
-
-    ! Set the size, let PETSc automatically determine parallelisation domains
-    CALL MatSetSizes( M_nearest_neighbour, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-
-    ! Not entirely sure what this one does, but apparently it's really important
-    CALL MatSetFromOptions( M_nearest_neighbour, perr)
-
-    ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( M_nearest_neighbour, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-
-    ! Get parallelisation domains ("ownership ranges")
-    CALL MatGetOwnershipRange( M_nearest_neighbour, istart, iend, perr)
-
-    ! For all mesh_dst vertices, find the mesh_src triangle containing them
-    vi_src = 1
-    DO vi_dst = istart+1, iend ! +1 because PETSc indexes from 0
-
-      p = mesh_dst%V( vi_dst,:)
-      CALL find_containing_vertex( mesh_src, p, vi_src)
-
-      ! Add to the matrix
-      CALL MatSetValues( M_nearest_neighbour, 1, vi_dst-1, 1, vi_src-1, 1._dp, INSERT_VALUES, perr)
-
-    END DO ! DO vi_dst = istart+1, iend ! +1 because PETSc indexes from 0
-    CALL sync
-
-    ! Assemble matrix and vectors, using the 2-step process:
-    !   MatAssemblyBegin(), MatAssemblyEnd()
-    ! Computations can be done while messages are in transition
-    ! by placing code between these two statements.
-
-    CALL MatAssemblyBegin( M_nearest_neighbour, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   M_nearest_neighbour, MAT_FINAL_ASSEMBLY, perr)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE calc_remapping_operators_mesh_mesh_nearest_neighbour
-  SUBROUTINE calc_remapping_operators_mesh_mesh_conservative( mesh_src, mesh_dst, M_cons_1st_order, M_cons_2nd_order)
-    ! Calculate the 1st- and 2nd-order conservative remapping operators from mesh_src to mesh_dst
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_src
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
-    TYPE(tMat),                          INTENT(INOUT) :: M_cons_1st_order, M_cons_2nd_order
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operators_mesh_mesh_conservative'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_map_from_mesh_to_mesh_2nd_order_conservative'
     TYPE(PetscErrorCode)                               :: perr
     LOGICAL                                            :: count_coincidences
     INTEGER                                            :: nnz_per_row_max
@@ -1596,15 +3299,28 @@ CONTAINS
     TYPE(tMat)                                         :: B_xdy_a_b  , B_mxydx_a_b  , B_xydy_a_b
     TYPE(tMat)                                         :: B_xdy_b_a_T, B_mxydx_b_a_T, B_xydy_b_a_T
     TYPE(tMat)                                         :: w0, w1x, w1y
-    INTEGER                                            :: istart, iend, n, k, ti
+    INTEGER                                            :: istart, iend, n, k, ti, vi
     INTEGER                                            :: ncols
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
     REAL(dp)                                           :: A_overlap_tot
-    TYPE(tMat)                                         :: M1, M2
+    TYPE(tMat)                                         :: M1, M2, M_cons_1st_order
+    INTEGER                                            :: n_rows_set_to_zero
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: rows_set_to_zero
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Safety
+    IF (map%is_used) CALL crash('this map is already in use!')
+
+  ! == Initialise map metadata
+  ! ==========================
+
+    map%is_used  = .TRUE.
+    map%name_src = mesh_src%name
+    map%name_dst = mesh_dst%name
+    map%method   = '2nd_order_conservative'
 
     ! Integrate around the Voronoi cells of the destination mesh through the triangles of the source mesh
     count_coincidences = .TRUE.
@@ -1694,7 +3410,7 @@ CONTAINS
     CALL MatMatMult( w0 , mesh_src%M_map_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M_cons_1st_order, perr)
 
     ! 2nd-order = 1st-order + w1x * ddx_a_b + w1y * ddy_a_b
-    CALL MatDuplicate( M_cons_1st_order, MAT_COPY_VALUES, M_cons_2nd_order, perr)
+    CALL MatDuplicate( M_cons_1st_order, MAT_COPY_VALUES, map%M, perr)
     CALL MatMatMult( w1x, mesh_src%M_ddx_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
     CALL MatMatMult( w1y, mesh_src%M_ddy_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
 
@@ -1702,18 +3418,68 @@ CONTAINS
     CALL MatDestroy( w1x           , perr)
     CALL MatDestroy( w1y           , perr)
 
-    CALL MatAXPY( M_cons_2nd_order, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
-    CALL MatAXPY( M_cons_2nd_order, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
+    CALL MatAXPY( map%M, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
+    CALL MatAXPY( map%M, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
 
-    CALL MatDestroy( M1, perr)
-    CALL MatDestroy( M2, perr)
+    ! 2nd-order conservative doesn't work all that well on the domain border,
+    ! but 1st-order seems to work just fine; replace rows for border vertices
+    ! with those from M_cons_1st_order
+
+    ! First set all rows for border vertices to zero
+
+    n_rows_set_to_zero = 0
+    CALL MatGetOwnershipRange( map%M, istart, iend, perr)
+    DO n = istart+1, iend ! +1 because PETSc indexes from 0
+      IF (mesh_dst%edge_index( n) > 0) THEN
+        n_rows_set_to_zero = n_rows_set_to_zero + 1
+      END IF
+    END DO
+
+    ALLOCATE( rows_set_to_zero( n_rows_set_to_zero))
+
+    n_rows_set_to_zero = 0
+    DO n = istart+1, iend ! +1 because PETSc indexes from 0
+      IF (mesh_dst%edge_index( n) > 0) THEN
+        n_rows_set_to_zero = n_rows_set_to_zero + 1
+        rows_set_to_zero( n_rows_set_to_zero) = n-1
+      END IF
+    END DO
+
+    CALL MatZeroRowsColumns( map%M, n_rows_set_to_zero, rows_set_to_zero, 0._dp, PETSC_NULL_VEC, PETSC_NULL_VEC, perr)
+
+    ! Then fill in the values from M_cons_1st_order
+    CALL MatGetOwnershipRange( M_cons_1st_order  , istart, iend, perr)
+    DO n = istart+1, iend ! +1 because PETSc indexes from 0
+      CALL MatGetRow( M_cons_1st_order, n-1, ncols, cols, vals, perr)
+      DO k = 1, ncols
+        CALL MatSetValues( map%M, 1, n-1, 1, cols( k), vals( k), INSERT_VALUES, perr)
+      END DO
+      CALL MatRestoreRow( M_cons_1st_order, n-1, ncols, cols, vals, perr)
+    END DO
+    CALL sync
+
+    CALL MatAssemblyBegin( map%M, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   map%M, MAT_FINAL_ASSEMBLY, perr)
+
+    ! Clean up after yourself
+    DEALLOCATE( cols   )
+    DEALLOCATE( vals   )
+    DEALLOCATE( w0_row )
+    DEALLOCATE( w1x_row)
+    DEALLOCATE( w1y_row)
+    CALL MatDestroy( M1              , perr)
+    CALL MatDestroy( M2              , perr)
+    CALL MatDestroy( M_cons_1st_order, perr)
 
     !IF (par%master) WRITE(0,*) 'calc_remapping_operators_mesh_mesh_conservative - done!'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE calc_remapping_operators_mesh_mesh_conservative
+  END SUBROUTINE create_map_from_mesh_to_mesh_2nd_order_conservative
+
+! == Routines used in creating remapping matrices
+! ===============================================
 
   ! Integrate around triangles/Voronoi cells through triangles/Voronoi cells
   SUBROUTINE integrate_triangles_through_Voronoi_cells( mesh_tri, mesh_Vor, B_xdy_b_a, B_mxydx_b_a, B_xydy_b_a, count_coincidences)
@@ -1832,6 +3598,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE integrate_triangles_through_Voronoi_cells
+
   SUBROUTINE integrate_Voronoi_cells_through_triangles( mesh_Vor, mesh_tri, B_xdy_a_b, B_mxydx_a_b, B_xydy_a_b, count_coincidences)
     ! Integrate around the grid cells of the grid through the triangles of the mesh
 
@@ -1850,8 +3617,11 @@ CONTAINS
     INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: B_xdy_a_b_CSR, B_mxydx_a_b_CSR, B_xydy_a_b_CSR
     TYPE(type_single_row_mapping_matrices)             :: single_row
-    INTEGER                                            :: vi, nVor, vori1, vori2, k, ti_hint
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
+    INTEGER                                            :: vi, vori1, vori2, k, ti_hint
+    REAL(dp), DIMENSION( mesh_Vor%nC_mem,2)            :: Vor
+    INTEGER,  DIMENSION( mesh_Vor%nC_mem  )            :: Vor_vi
+    INTEGER,  DIMENSION( mesh_Vor%nC_mem  )            :: Vor_ti
+    INTEGER                                            :: nVor
     REAL(dp), DIMENSION(2)                             :: p, q
 
 
@@ -1883,8 +3653,6 @@ CONTAINS
   ! == Trace all the line segments to fill the matrices
   ! ===================================================
 
-    ALLOCATE( Vor( mesh_Vor%nC_mem+2,2))
-
     ti_hint = 1
 
     DO vi = mesh_Vor%vi1, mesh_Vor%vi2 ! +1 because PETSc indexes from 0
@@ -1899,12 +3667,8 @@ CONTAINS
       single_row%LI_xydy      = 0
 
       ! Integrate over the complete Voronoi cell boundary
-      CALL find_Voronoi_cell_vertices( mesh_Vor, vi, Vor, nVor)
-      IF (mesh_Vor%edge_index( vi) > 0) THEN
-        Vor( nVor+1,:) = Vor( 1,:)
-        nVor = nVor + 1
-      END IF
-      DO vori1 = 1, nVor-1
+      CALL calc_Voronoi_cell( mesh_Vor, vi, 0._dp, Vor, Vor_vi, Vor_ti, nVor)
+      DO vori1 = 1, nVor
         vori2 = vori1 + 1
         IF (vori2 > nVor) vori2 = 1
         p = Vor( vori1,:)
@@ -1938,7 +3702,6 @@ CONTAINS
     CALL deallocate_matrix_CSR( B_xydy_a_b_CSR )
 
     ! Clean up after yourself
-    DEALLOCATE( Vor)
     DEALLOCATE( single_row%index_left )
     DEALLOCATE( single_row%LI_xdy     )
     DEALLOCATE( single_row%LI_mxydx   )
@@ -1997,6 +3760,7 @@ CONTAINS
     IF (single_row%n > single_row%n_max - 10) CALL extend_single_row_memory( single_row, 100)
 
   END SUBROUTINE add_integrals_to_single_row
+
   SUBROUTINE extend_single_row_memory( single_row, n_extra)
     ! Extend memory for a single row of the three line-integral matrices
 
@@ -2067,9 +3831,8 @@ CONTAINS
     INTEGER,                             INTENT(INOUT) :: ti_hint
 
     ! Local variables:
-    REAL(dp), DIMENSION(2)                             :: pp, qq, pa, pb, pc
+    REAL(dp), DIMENSION(2)                             :: pp, qq
     LOGICAL                                            :: is_valid_line
-    INTEGER                                            :: edge_index_pq
     LOGICAL                                            :: finished
     INTEGER                                            :: n_cycles
     INTEGER                                            :: ti_in, vi_on, aci_on
@@ -2077,7 +3840,6 @@ CONTAINS
     INTEGER                                            :: ti_left
     LOGICAL                                            :: coincides
     REAL(dp)                                           :: LI_xdy, LI_mxydx, LI_xydy
-    INTEGER                                            :: ti_p, ti_q, vi_p, vi_q, ti_next
 
     ! Crop the line [pq] so that it lies within the mesh domain
     CALL crop_line_to_domain( p, q, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, mesh%tol_dist, pp, qq, is_valid_line)
@@ -2087,226 +3849,64 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check whether [pq] lies on the domain border
-    edge_index_pq = 0
-    IF     (ABS( p(1) - mesh%xmin) < mesh%tol_dist .AND. ABS( q(1) - mesh%xmin) < mesh%tol_dist) THEN
-      ! pq lies on the western border
-      edge_index_pq = 7
-    ELSEIF (ABS( p(1) - mesh%xmax) < mesh%tol_dist .AND. ABS( q(1) - mesh%xmax) < mesh%tol_dist) THEN
-      ! pq lies on the eastern border
-      edge_index_pq = 3
-    ELSEIF (ABS( p(2) - mesh%ymin) < mesh%tol_dist .AND. ABS( q(2) - mesh%ymin) < mesh%tol_dist) THEN
-      ! pq lies on the southern border
-      edge_index_pq = 5
-    ELSEIF (ABS( p(2) - mesh%ymax) < mesh%tol_dist .AND. ABS( q(2) - mesh%ymax) < mesh%tol_dist) THEN
-      ! pq lies on the northern border
-      edge_index_pq = 1
-    END IF
+    ! Initialise the coincidence indicators for the point p, i.e. check IF p either...
+    !    - lies inside the Voronoi cell of vertex vi_in, ...
+    !    - lies on the circumcentre of triangle ti_on, or...
+    !    - lies on the shared Voronoi cell boundary represented by edge aci_on
+    CALL trace_line_tri_start( mesh, pp, ti_hint, ti_in, vi_on, aci_on)
 
-    IF (edge_index_pq == 0) THEN
-      ! [pq] lies in the mesh interior
+    ! Iteratively trace the line through the mesh
+    finished = .FALSE.
+    n_cycles = 0
+    DO WHILE (.NOT. finished)
 
-      ! Initialise the coincidence indicators for the point p, i.e. check IF p either...
-      !    - lies inside the Voronoi cell of vertex vi_in, ...
-      !    - lies on the circumcentre of triangle ti_on, or...
-      !    - lies on the shared Voronoi cell boundary represented by edge aci_on
-      CALL trace_line_tri_start( mesh, pp, ti_hint, ti_in, vi_on, aci_on)
-
-      ! Iteratively trace the line through the mesh
-      finished = .FALSE.
-      n_cycles = 0
-      DO WHILE (.NOT. finished)
-
-        ! Find the point p_next where [pq] crosses into the next Voronoi cell
-        IF     (ti_in  > 0) THEN
-          ! p lies inside triangle ti_in
-          CALL trace_line_tri_ti(  mesh, pp, qq, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
-        ELSEIF (vi_on  > 0) THEN
-          ! p lies on vertex vi_on
-          CALL trace_line_tri_vi(  mesh, pp, qq, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
-        ELSEIF (aci_on > 0) THEN
-          ! p lies on edge aci_on
-          CALL trace_line_tri_aci( mesh, pp, qq, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
-        END IF
-
-        ! Calculate the three line integrals
-        CALL line_integral_xdy(   pp, p_next, mesh%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, p_next, mesh%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, p_next, mesh%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        CALL add_integrals_to_single_row( single_row, ti_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-        ! Cycle the pointer
-        pp = p_next
-
-        ! Safety
-        n_cycles = n_cycles + 1
-        IF (n_cycles > mesh%nV) THEN
-          CALL crash('trace_line_tri - iterative tracer got stuck!')
-        END IF
-
-        ! Update ti_hint, for more efficiency
-        ti_hint = ti_left
-
-      END DO ! DO WHILE (.NOT. finished)
-
-    ELSE ! IF (edge_index_pq == 0) THEN
-      ! [pq] lies on the mesh domain border
-
-      ! Safety
-      IF (edge_index_pq == 1) THEN
-        ! North; q should be west of p
-        IF (qq(1) >= pp(1)) THEN
-          CALL crash('trace_line_tri - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 3) THEN
-        ! East; q should be north of p
-        IF (qq(2) <= pp(2)) THEN
-          CALL crash('trace_line_tri - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 5) THEN
-        ! South; q should be eat of p
-        IF (qq(1) <= pp(1)) THEN
-          CALL crash('trace_line_tri - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 7) THEN
-        ! West; q should be south of p
-        IF (qq(2) >= pp(2)) THEN
-          CALL crash('trace_line_tri - pq is not oriented counter-clockwise!')
-        END IF
+      ! Find the point p_next where [pq] crosses into the next Voronoi cell
+      IF     (ti_in  > 0) THEN
+        ! p lies inside triangle ti_in
+        CALL trace_line_tri_ti(  mesh, pp, qq, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
+      ELSEIF (vi_on  > 0) THEN
+        ! p lies on vertex vi_on
+        CALL trace_line_tri_vi(  mesh, pp, qq, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
+      ELSEIF (aci_on > 0) THEN
+        ! p lies on edge aci_on
+        CALL trace_line_tri_aci( mesh, pp, qq, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
       END IF
 
-      ! Find the triangles containing p and q
-      vi_p = mesh%Tri( ti_hint,1)
-      CALL find_containing_vertex( mesh, pp, vi_p)
-      vi_q = vi_p
-      CALL find_containing_vertex( mesh, qq, vi_q)
+      ! Calculate the three line integrals
+      CALL line_integral_xdy(   pp, p_next, mesh%tol_dist, LI_xdy  )
+      CALL line_integral_mxydx( pp, p_next, mesh%tol_dist, LI_mxydx)
+      CALL line_integral_xydy(  pp, p_next, mesh%tol_dist, LI_xydy )
+
+      ! Add them to the results structure
+      IF (NORM2( p_next - pp) > mesh%tol_dist) THEN
+        CALL add_integrals_to_single_row( single_row, ti_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
+      END IF
+
+      ! Cycle the pointer
+      pp = p_next
+
+      ! Safety
+      n_cycles = n_cycles + 1
+      IF (n_cycles > mesh%nV) THEN
+        CALL crash('trace_line_tri - iterative tracer got stuck!')
+      END IF
 
       ! Update ti_hint, for more efficiency
-      ti_hint = mesh%iTri( vi_q,1)
+      ti_hint = ti_left
 
-      IF (edge_index_pq == 1) THEN
-        ! Northern border
-        IF (p(1) > mesh%V( vi_p,1)) THEN
-          ! p lies east of vi_p; last iTriangle
-          ti_p = mesh%iTri( vi_p, mesh%niTri( vi_p))
-        ELSE
-          ! p lies west of vi_p; first iTriangle
-          ti_p = mesh%iTri( vi_p, 1)
-        END IF
-        IF (q(1) > mesh%V( vi_q,1)) THEN
-          ! q lies east of vi_q; last iTriangle
-          ti_q = mesh%iTri( vi_q, mesh%niTri( vi_q))
-        ELSE
-          ! q lies west of vi_q; first iTriangle
-          ti_q = mesh%iTri( vi_q, 1)
-        END IF
-      ELSEIF (edge_index_pq == 3) THEN
-        ! Eastern border
-        IF (p(2) < mesh%V( vi_p,2)) THEN
-          ! p lies south of vi_p; last iTriangle
-          ti_p = mesh%iTri( vi_p, mesh%niTri( vi_p))
-        ELSE
-          ! p lies north of vi_p; first iTriangle
-          ti_p = mesh%iTri( vi_p, 1)
-        END IF
-        IF (q(2) < mesh%V( vi_q,2)) THEN
-          ! q lies south of vi_q; last iTriangle
-          ti_q = mesh%iTri( vi_q, mesh%niTri( vi_q))
-        ELSE
-          ! q lies north of vi_q; first iTriangle
-          ti_q = mesh%iTri( vi_q, 1)
-        END IF
-      ELSEIF (edge_index_pq == 5) THEN
-        ! Southern border
-        IF (p(1) < mesh%V( vi_p,1)) THEN
-          ! p lies west of vi_p; last iTriangle
-          ti_p = mesh%iTri( vi_p, mesh%niTri( vi_p))
-        ELSE
-          ! p lies east of vi_p; first iTriangle
-          ti_p = mesh%iTri( vi_p, 1)
-        END IF
-        IF (q(1) < mesh%V( vi_q,1)) THEN
-          ! q lies west of vi_q; last iTriangle
-          ti_q = mesh%iTri( vi_q, mesh%niTri( vi_q))
-        ELSE
-          ! q lies east of vi_q; first iTriangle
-          ti_q = mesh%iTri( vi_q, 1)
-        END IF
-      ELSEIF (edge_index_pq == 7) THEN
-        ! Western border
-        IF (p(2) > mesh%V( vi_p,2)) THEN
-          ! p lies north of vi_p; last iTriangle
-          ti_p = mesh%iTri( vi_p, mesh%niTri( vi_p))
-        ELSE
-          ! p lies south of vi_p; first iTriangle
-          ti_p = mesh%iTri( vi_p, 1)
-        END IF
-        IF (q(2) > mesh%V( vi_q,2)) THEN
-          ! q lies north of vi_q; last iTriangle
-          ti_q = mesh%iTri( vi_q, mesh%niTri( vi_q))
-        ELSE
-          ! q lies south of vi_q; first iTriangle
-          ti_q = mesh%iTri( vi_q, 1)
-        END IF
-      END IF
-
-      ! Safety
-      pa = mesh%V( mesh%Tri( ti_p,1),:)
-      pb = mesh%V( mesh%Tri( ti_p,2),:)
-      pc = mesh%V( mesh%Tri( ti_p,3),:)
-      IF (.NOT. is_in_triangle( pa, pb, pc, pp)) THEN
-        CALL crash('trace_line_tri - border version, p is not inside ti_p!')
-      END IF
-
-      pa = mesh%V( mesh%Tri( ti_q,1),:)
-      pb = mesh%V( mesh%Tri( ti_q,2),:)
-      pc = mesh%V( mesh%Tri( ti_q,3),:)
-      IF (.NOT. is_in_triangle( pa, pb, pc, qq)) THEN
-        CALL crash('trace_line_tri - border version, p is not inside ti_q!')
-      END IF
-
-      ! Iteratively trace the line through the mesh
-      finished = .FALSE.
-      n_cycles = 0
-      DO WHILE (.NOT. finished)
-
-        ! Find the point p_next where [pq] crosses into the next triangle
-        CALL trace_line_tri_border( mesh, pp, qq, ti_p, ti_q, p_next, ti_next, coincides, finished)
-
-        ! Calculate the three line integrals
-        CALL line_integral_xdy(   pp, p_next, mesh%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, p_next, mesh%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, p_next, mesh%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        CALL add_integrals_to_single_row( single_row, ti_p, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-        ! Cycle the pointer
-        pp   = p_next
-        ti_p = ti_next
-
-        ! Safety
-        n_cycles = n_cycles + 1
-        IF (n_cycles > mesh%nV) THEN
-          CALL crash('trace_line_tri - iterative tracer (border version) got stuck!')
-        END IF
-
-      END DO ! DO WHILE (.NOT. finished)
-
-    END IF ! IF (edge_index_pq == 0) THEN
+    END DO ! DO WHILE (.NOT. finished)
 
   END SUBROUTINE trace_line_tri
+
   SUBROUTINE trace_line_tri_start( mesh, p, ti_hint, ti_in, vi_on, aci_on)
-    ! Initialise the coincidence indicators for the point p, i.e. check IF p either...
+    ! Initialise the coincidence indicators for the point p, i.e. check if p either...
     !    - lies inside triangle ti_in, ...
     !    - lies on vertex vi_on, or...
     !    - lies on edge aci_on
 
     IMPLICIT NONE
 
-    ! In/output variables
+    ! In/output variables:
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     REAL(dp), DIMENSION(2),              INTENT(IN)    :: p
     INTEGER,                             INTENT(INOUT) :: ti_hint
@@ -2336,7 +3936,7 @@ CONTAINS
     pb  = mesh%V( vib,:)
     pc  = mesh%V( vic,:)
 
-    ! Check IF p lies on any of the three vertices
+    ! Check if p lies on any of the three vertices
     IF     (NORM2( pa - p) < mesh%tol_dist) THEN
       ! p lies on via
       vi_on = via
@@ -2351,7 +3951,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF p lies on any of the three edges
+    ! Check if p lies on any of the three edges
     IF     (lies_on_line_segment( pa, pb, p, mesh%tol_dist)) THEN
       ! p lies on the edge connecting via and vib
       DO vvi = 1, mesh%nC( via)
@@ -2384,10 +3984,11 @@ CONTAINS
       END DO
     END IF
 
-    ! IF p lies not on the vertices or edges of the triangle, then it must lie inside of it
+    ! If p lies not on the vertices or edges of the triangle, then it must lie inside of it
     ti_in = ti_hint
 
   END SUBROUTINE trace_line_tri_start
+
   SUBROUTINE trace_line_tri_ti(  mesh, p, q, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
     ! Given the line [pq], where p lies inside triangle ti_in,
     ! find the point p_next where [pq] crosses into the next triangle.
@@ -2626,6 +4227,7 @@ CONTAINS
     CALL crash('trace_line_tri_ti - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_tri_ti
+
   SUBROUTINE trace_line_tri_vi(  mesh, p, q, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
     ! Given the line [pq], where p lies on vertex vi_on,
     ! find the point p_next where [pq] crosses into the next triangle.
@@ -2655,7 +4257,7 @@ CONTAINS
       CALL crash('trace_line_tri_vi - coincidence indicators dont make sense!')
     END IF
 
-    ! Check IF q lies on any of the edges originating in this vertex
+    ! Check if q lies on any of the edges originating in this vertex
     DO vvi = 1, mesh%nC( vi_on)
       vj  = mesh%C(    vi_on,vvi)
       aci = mesh%iAci( vi_on,vvi)
@@ -2678,7 +4280,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF q lies inside any of the triangles surrounding vi_on
+    ! Check if q lies inside any of the triangles surrounding vi_on
     DO vti = 1, mesh%niTri( vi_on)
       ti  = mesh%iTri( vi_on,vti)
       via = mesh%Tri( ti,1)
@@ -2703,7 +4305,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF [pq] passes through any of the neighbouring vertices
+    ! Check if [pq] passes through any of the neighbouring vertices
     DO vvi = 1, mesh%nC( vi_on)
       vj  = mesh%C(    vi_on,vvi)
       aci = mesh%iAci( vi_on,vvi)
@@ -2725,7 +4327,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF [pq] exits any of the adjacent triangles
+    ! Check if [pq] exits any of the adjacent triangles
     DO vti = 1, mesh%niTri( vi_on)
       ti  = mesh%iTri( vi_on,vti)
       DO n1 = 1, 3
@@ -2767,6 +4369,7 @@ CONTAINS
     CALL crash('trace_line_tri_vi - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_tri_vi
+
   SUBROUTINE trace_line_tri_aci( mesh, p, q, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
     ! Given the line [pq], where p lies on edge aci,
     ! find the point p_next where [pq] crosses into the next triangle.
@@ -2809,7 +4412,7 @@ CONTAINS
       CALL crash('trace_line_tri_aci - coincidence indicators dont make sense!')
     END IF
 
-    ! Check IF q lies on the same edge in the direction of via
+    ! Check if q lies on the same edge in the direction of via
     IF (lies_on_line_segment( p, pa, q, mesh%tol_dist)) THEN
       ! q lies on the same edge in the direction of via
       p_next    = q
@@ -2822,7 +4425,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies on the same edge in the direction of vib
+    ! Check if q lies on the same edge in the direction of vib
     IF (lies_on_line_segment( p, pb, q, mesh%tol_dist)) THEN
       ! q lies on the same edge in the direction of vib
       p_next    = q
@@ -2835,7 +4438,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies inside either of the two adjacent triangles
+    ! Check if q lies inside either of the two adjacent triangles
     IF (til > 0) THEN
       IF (is_in_triangle( pa, pb, pl, q)) THEN
         ! q lies inside triangle til
@@ -2863,7 +4466,7 @@ CONTAINS
       END IF
     END IF
 
-    ! Check IF [pq] passes through pa
+    ! Check if [pq] passes through pa
     IF (lies_on_line_segment( p, q, pa, mesh%tol_dist)) THEN
       ! [pq] passes through pa
       p_next    = pa
@@ -2876,7 +4479,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF [pq] passes through pb
+    ! Check if [pq] passes through pb
     IF (lies_on_line_segment( p, q, pb, mesh%tol_dist)) THEN
       ! [pq] passes through pb
       p_next    = pb
@@ -2889,7 +4492,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF [pq] passes through pl
+    ! Check if [pq] passes through pl
     IF (til > 0) THEN
       IF (lies_on_line_segment( p, q, pl, mesh%tol_dist)) THEN
         ! [pq] passes through pl
@@ -2904,7 +4507,7 @@ CONTAINS
       END IF
     END IF
 
-    ! Check IF [pq] passes through pr
+    ! Check if [pq] passes through pr
     IF (tir > 0) THEN
       IF (lies_on_line_segment( p, q, pr, mesh%tol_dist)) THEN
         ! [pq] passes through pr
@@ -2919,7 +4522,7 @@ CONTAINS
       END IF
     END IF
 
-    ! Check IF [pq] crosses edge [via,vil]
+    ! Check if [pq] crosses edge [via,vil]
     IF (til > 0) THEN
       CALL segment_intersection( p, q, pa, pl, llis, do_cross, mesh%tol_dist)
       IF (do_cross) THEN
@@ -2943,7 +4546,7 @@ CONTAINS
       END IF
     END IF
 
-    ! Check IF [pq] crosses edge [vil,vib]
+    ! Check if [pq] crosses edge [vil,vib]
     IF (til > 0) THEN
       CALL segment_intersection( p, q, pl, pb, llis, do_cross, mesh%tol_dist)
       IF (do_cross) THEN
@@ -2967,7 +4570,7 @@ CONTAINS
       END IF
     END IF
 
-    ! Check IF [pq] crosses edge [via,vir]
+    ! Check if [pq] crosses edge [via,vir]
     IF (tir > 0) THEN
       CALL segment_intersection( p, q, pa, pr, llis, do_cross, mesh%tol_dist)
       IF (do_cross) THEN
@@ -2991,7 +4594,7 @@ CONTAINS
       END IF
     END IF
 
-    ! Check IF [pq] crosses edge [vir,vib]
+    ! Check if [pq] crosses edge [vir,vib]
     IF (tir > 0) THEN
       CALL segment_intersection( p, q, pr, pb, llis, do_cross, mesh%tol_dist)
       IF (do_cross) THEN
@@ -3019,68 +4622,6 @@ CONTAINS
     CALL crash('trace_line_tri_aci - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_tri_aci
-  SUBROUTINE trace_line_tri_border( mesh, p, q, ti_p, ti_q, p_next, ti_next, coincides, finished)
-    ! Given the line [pq] that lies on the mesh domain border, where p lies inside
-    ! the triangle ti_p, find the point p_next where [pq] crosses into the next triangle.
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(2),              INTENT(IN)    :: p,q
-    INTEGER,                             INTENT(IN)    :: ti_p, ti_q
-    REAL(dp), DIMENSION(2),              INTENT(OUT)   :: p_next
-    INTEGER,                             INTENT(OUT)   :: ti_next
-    LOGICAL,                             INTENT(OUT)   :: coincides
-    LOGICAL,                             INTENT(OUT)   :: finished
-
-    ! Local variables:
-    INTEGER                                            :: via, vib, vic, vi_exit
-    REAL(dp), DIMENSION(2)                             :: pa, pb, pc
-
-    ! Check IF q lies inside the same triangle as p
-    IF (ti_q == ti_p) THEN
-      ! q lies inside the same triangle as p
-      p_next    = q
-      ti_next   = 0
-      coincides = .TRUE.
-      finished  = .TRUE.
-      RETURN
-    END IF
-
-    ! Find the triangle vertex lying on [pq]
-    via = mesh%Tri( ti_p,1)
-    vib = mesh%Tri( ti_p,2)
-    vic = mesh%Tri( ti_p,3)
-
-    pa  = mesh%V( via,:)
-    pb  = mesh%V( vib,:)
-    pc  = mesh%V( vic,:)
-
-    vi_exit = 0
-    IF     (lies_on_line_segment( p, q, pa, mesh%tol_dist) .AND. NORM2( p - pa) > mesh%tol_dist) THEN
-      ! [pq] exits triangle ti_p through vertex via
-      vi_exit = via
-    ELSEIF (lies_on_line_segment( p, q, pb, mesh%tol_dist) .AND. NORM2( p - pb) > mesh%tol_dist) THEN
-      ! [pq] exits triangle ti_p through vertex vib
-      vi_exit = vib
-    ELSEIF (lies_on_line_segment( p, q, pc, mesh%tol_dist) .AND. NORM2( p - pc) > mesh%tol_dist) THEN
-      ! [pq] exits triangle ti_p through vertex vic
-      vi_exit = vic
-    END IF
-
-    ! Safety
-    IF (vi_exit == 0) THEN
-      CALL crash('trace_line_tri_border - couldnt find vertex where [pq] exits triangle ti_p!')
-    END IF
-
-    ! Answer
-    p_next    = mesh%V( vi_exit,:)
-    ti_next   = mesh%iTri( vi_exit,1)
-    coincides = .TRUE.
-    finished  = .FALSE.
-
-  END SUBROUTINE trace_line_tri_border
 
   ! Line tracing algorithm through mesh Voronoi cells
   SUBROUTINE trace_line_Vor( mesh, p, q, single_row, count_coincidences, vi_hint)
@@ -3099,7 +4640,6 @@ CONTAINS
     ! Local variables:
     REAL(dp), DIMENSION(2)                             :: pp,qq
     LOGICAL                                            :: is_valid_line
-    INTEGER                                            :: edge_index_pq
     LOGICAL                                            :: finished
     INTEGER                                            :: n_cycles
     INTEGER                                            :: vi_in, ti_on, aci_on
@@ -3117,140 +4657,55 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check whether [pq] lies on the domain border
-    edge_index_pq = 0
-    IF     (ABS( p(1) - mesh%xmin) < mesh%tol_dist .AND. ABS( q(1) - mesh%xmin) < mesh%tol_dist) THEN
-      ! pq lies on the western border
-      edge_index_pq = 7
-    ELSEIF (ABS( p(1) - mesh%xmax) < mesh%tol_dist .AND. ABS( q(1) - mesh%xmax) < mesh%tol_dist) THEN
-      ! pq lies on the eastern border
-      edge_index_pq = 3
-    ELSEIF (ABS( p(2) - mesh%ymin) < mesh%tol_dist .AND. ABS( q(2) - mesh%ymin) < mesh%tol_dist) THEN
-      ! pq lies on the southern border
-      edge_index_pq = 5
-    ELSEIF (ABS( p(2) - mesh%ymax) < mesh%tol_dist .AND. ABS( q(2) - mesh%ymax) < mesh%tol_dist) THEN
-      ! pq lies on the northern border
-      edge_index_pq = 1
-    END IF
+    ! Initialise the coincidence indicators for the point p, i.e. check IF p either...
+    !    - lies inside the Voronoi cell of vertex vi_in, ...
+    !    - lies on the circumcentre of triangle ti_on, or...
+    !    - lies on the shared Voronoi cell boundary represented by edge aci_on
+    CALL trace_line_Vor_start( mesh, pp, vi_hint, vi_in, ti_on, aci_on)
 
-    IF (edge_index_pq == 0) THEN
-      ! [pq] lies in the mesh interior
+    ! Iteratively trace the line through the mesh
+    finished = .FALSE.
+    n_cycles = 0
+    DO WHILE (.NOT.finished)
 
-      ! Initialise the coincidence indicators for the point p, i.e. check IF p either...
-      !    - lies inside the Voronoi cell of vertex vi_in, ...
-      !    - lies on the circumcentre of triangle ti_on, or...
-      !    - lies on the shared Voronoi cell boundary represented by edge aci_on
-      CALL trace_line_Vor_start( mesh, pp, vi_hint, vi_in, ti_on, aci_on)
-
-      ! Iteratively trace the line through the mesh
-      finished = .FALSE.
-      n_cycles = 0
-      DO WHILE (.NOT.finished)
-
-        ! Find the point p_next where [pq] crosses into the next Voronoi cell
-        IF     (vi_in  > 0) THEN
-          ! p lies inside the Voronoi cell of vertex vi_in
-          CALL trace_line_Vor_vi(  mesh, pp, qq, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
-        ELSEIF (ti_on  > 0) THEN
-          ! p lies on the circumcentre of triangle ti_on
-          CALL trace_line_Vor_ti(  mesh, pp, qq, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
-        ELSEIF (aci_on > 0) THEN
-          ! p lies on the shared Voronoi cell boundary represented by edge aci_on
-          CALL trace_line_Vor_aci( mesh, pp, qq, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
-        END IF
-
-        ! Calculate the three line integrals
-        CALL line_integral_xdy(   pp, p_next, mesh%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, p_next, mesh%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, p_next, mesh%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        IF (NORM2( p_next - pp) > mesh%tol_dist) THEN
-          CALL add_integrals_to_single_row( single_row, vi_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-        END IF
-
-        ! Cycle the pointer
-        pp = p_next
-
-        ! Safety
-        n_cycles = n_cycles + 1
-        IF (n_cycles > mesh%nV) THEN
-          CALL crash('trace_line_Vor - iterative tracer got stuck!')
-        END IF
-
-        ! Update vi_hint, for more efficiency
-        vi_hint = vi_left
-
-      END DO ! DO WHILE (.NOT.finished)
-
-    ELSE ! IF (edge_index_pq == 0) THEN
-      ! [pq] lies on the mesh domain border
-
-      ! Safety
-      IF (edge_index_pq == 1) THEN
-        ! North; q should be west of p
-        IF (qq(1) >= pp(1)) THEN
-          CALL crash('trace_line_Vor - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 3) THEN
-        ! East; q should be north of p
-        IF (qq(2) <= pp(2)) THEN
-          CALL crash('trace_line_Vor - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 5) THEN
-        ! South; q should be eat of p
-        IF (qq(1) <= pp(1)) THEN
-          CALL crash('trace_line_Vor - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 7) THEN
-        ! West; q should be south of p
-        IF (qq(2) >= pp(2)) THEN
-          CALL crash('trace_line_Vor - pq is not oriented counter-clockwise!')
-        END IF
+      ! Find the point p_next where [pq] crosses into the next Voronoi cell
+      IF     (vi_in  > 0) THEN
+        ! p lies inside the Voronoi cell of vertex vi_in
+        CALL trace_line_Vor_vi(  mesh, pp, qq, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
+      ELSEIF (ti_on  > 0) THEN
+        ! p lies on the circumcentre of triangle ti_on
+        CALL trace_line_Vor_ti(  mesh, pp, qq, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
+      ELSEIF (aci_on > 0) THEN
+        ! p lies on the shared Voronoi cell boundary represented by edge aci_on
+        CALL trace_line_Vor_aci( mesh, pp, qq, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
       END IF
 
-      ! Find the Voronoi cells containing p and q
-      vi_p = vi_hint
-      CALL find_containing_vertex( mesh, pp, vi_p)
-      vi_q = vi_p
-      CALL find_containing_vertex( mesh, qq, vi_q)
+      ! Calculate the three line integrals
+      CALL line_integral_xdy(   pp, p_next, mesh%tol_dist, LI_xdy  )
+      CALL line_integral_mxydx( pp, p_next, mesh%tol_dist, LI_mxydx)
+      CALL line_integral_xydy(  pp, p_next, mesh%tol_dist, LI_xydy )
+
+      ! Add them to the results structure
+      IF (NORM2( p_next - pp) > mesh%tol_dist) THEN
+        CALL add_integrals_to_single_row( single_row, vi_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
+      END IF
+
+      ! Cycle the pointer
+      pp = p_next
+
+      ! Safety
+      n_cycles = n_cycles + 1
+      IF (n_cycles > mesh%nV) THEN
+        CALL crash('trace_line_Vor - iterative tracer got stuck!')
+      END IF
 
       ! Update vi_hint, for more efficiency
-      vi_hint = vi_q
+      vi_hint = vi_left
 
-      ! Iteratively trace the line through the mesh
-      finished = .FALSE.
-      n_cycles = 0
-      DO WHILE (.NOT.finished)
-
-        ! Find the point p_next where [pq] crosses into the next Voronoi cell
-        CALL trace_line_Vor_border( mesh, qq, vi_p, vi_q, p_next, vi_next, coincides, finished)
-
-        ! Calculate the three line integrals
-        CALL line_integral_xdy(   pp, p_next, mesh%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, p_next, mesh%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, p_next, mesh%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        IF (NORM2( p_next - pp) > mesh%tol_dist) THEN
-          CALL add_integrals_to_single_row( single_row, vi_p, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-        END IF
-
-        ! Cycle the pointer
-        pp   = p_next
-        vi_p = vi_next
-
-        ! Safety
-        n_cycles = n_cycles + 1
-        IF (n_cycles > mesh%nV) THEN
-          CALL crash('trace_line_Vor - iterative tracer (border version) got stuck!')
-        END IF
-
-      END DO ! DO WHILE (.NOT.finished)
-
-    END IF ! IF (edge_index_pq == 0) THEN
+    END DO ! DO WHILE (.NOT.finished)
 
   END SUBROUTINE trace_line_Vor
+
   SUBROUTINE trace_line_Vor_start( mesh, p, vi_hint, vi_in, ti_on, aci_on)
     ! Initialise the coincidence indicators for the point p, i.e. check if p either...
     !    - lies inside the Voronoi cell of vertex vi_in, ...
@@ -3279,7 +4734,7 @@ CONTAINS
     ! Find the vertex whose Voronoi cell contains p
     CALL find_containing_vertex( mesh, p, vi_hint)
 
-    ! Check IF p lies on any of the surrounding triangles' circumcentres
+    ! Check if p lies on any of the surrounding triangles' circumcentres
     DO vti = 1, mesh%niTri( vi_hint)
       ti = mesh%iTri( vi_hint,vti)
       IF (NORM2( mesh%Tricc( ti,:) - p) < mesh%tol_dist) THEN
@@ -3289,7 +4744,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF p lies on any of the shared Voronoi boundaries
+    ! Check if p lies on any of the shared Voronoi boundaries
     DO vvi = 1, mesh%nC( vi_hint)
       aci = mesh%iAci( vi_hint,vvi)
       CALL find_shared_Voronoi_boundary( mesh, aci, cc1, cc2)
@@ -3300,10 +4755,11 @@ CONTAINS
       END IF
     END DO
 
-    ! IF p lies not on the boundary of the Voronoi cell, then it must lie inside of it
+    ! If p lies not on the boundary of the Voronoi cell, then it must lie inside of it
     vi_in = vi_hint
 
   END SUBROUTINE trace_line_Vor_start
+
   SUBROUTINE trace_line_Vor_vi(  mesh, p, q, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
     ! Given the line [pq], where p lies inside the Voronoi cell of vertex vi_in,
     ! find the point p_next where [pq] crosses into the next Voronoi cell.
@@ -3322,16 +4778,21 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: finished
 
     ! Local variables:
-    INTEGER                                            :: vti, ti, vvi, aci
-    REAL(dp), DIMENSION(2)                             :: cc1, cc2, r, llis
+    INTEGER                                            :: vti, ti, vvi, aci, vori, vorj, ci, vj
+    REAL(dp), DIMENSION(2)                             :: cc1, cc2, r, llis, pa, pb
+    REAL(dp)                                           :: dx
     LOGICAL                                            :: do_cross
+    REAL(dp), DIMENSION( mesh%nC_mem,2)                :: Vor
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_vi
+    INTEGER,  DIMENSION( mesh%nC_mem  )                :: Vor_ti
+    INTEGER                                            :: nVor
 
     ! Safety
     IF (vi_in == 0 .OR. ti_on > 0 .OR. aci_on > 0 .OR. (.NOT. is_in_Voronoi_cell( mesh, p, vi_in))) THEN
       CALL crash('trace_line_Vor_vi - coincidence indicators dont make sense!')
     END IF
 
-    ! Check IF q lies inside the same Voronoi cell
+    ! Check if q lies inside the same Voronoi cell
     IF (is_in_Voronoi_cell( mesh, q, vi_in)) THEN
       ! q lies inside the same Voronoi cell
       p_next    = q
@@ -3344,11 +4805,17 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies on any of the surrounding triangles' circumcentres
-    DO vti = 1, mesh%niTri( vi_in)
-      ti = mesh%iTri( vi_in,vti)
-      IF (NORM2( mesh%Tricc( ti,:) - q) < mesh%tol_dist) THEN
-        ! q lies on this triangle's circumcentre
+    ! Check if q lies on the boundary of this Voronoi cell
+    dx = ((mesh%xmax - mesh%xmin) + (mesh%ymax - mesh%ymin)) / 200
+    CALL calc_Voronoi_cell( mesh, vi_in, dx, Vor, Vor_vi, Vor_ti, nVor)
+    DO vori = 1, nVor
+      vorj = vori + 1
+      IF (vorj == nVor + 1) vorj = 1
+      ! The two endpoints of this section of the Voronoi cell boundary
+      pa = Vor( vori,:)
+      pb = Vor( vorj,:)
+      IF (NORM2( q - pa) < mesh%tol_dist .OR. lies_on_line_segment( pa, pb, q, mesh%tol_dist)) THEN
+        ! q lies on the boundary of the same Voronoi cell
         p_next    = q
         vi_left   = vi_in
         vi_in     = 0
@@ -3360,24 +4827,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF q lies on the Voronoi boundary
-    DO vvi = 1, mesh%nC( vi_in)
-      aci = mesh%iAci( vi_in,vvi)
-      CALL find_shared_Voronoi_boundary( mesh, aci, cc1, cc2)
-      IF (lies_on_line_segment( cc1, cc2, q, mesh%tol_dist)) THEN
-        ! q lies on this shared Voronoi boundary
-        p_next    = q
-        vi_left   = vi_in
-        vi_in     = 0
-        ti_on     = 0
-        aci_on    = 0
-        coincides = .FALSE.
-        finished  = .TRUE.
-        RETURN
-      END IF
-    END DO
-
-    ! Check IF [pq] passes through any of the surrounding triangles' circumcentres
+    ! Check if [pq] passes through any of the surrounding triangles' circumcentres
     DO vti = 1, mesh%niTri( vi_in)
       ti = mesh%iTri( vi_in,vti)
       r  = mesh%Tricc( ti,:)
@@ -3394,13 +4844,29 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF [pq] passes through any of the shared Voronoi boundaries
-    DO vvi = 1, mesh%nC( vi_in)
-      aci = mesh%iAci( vi_in,vvi)
-      CALL find_shared_Voronoi_boundary( mesh, aci, cc1, cc2)
-      CALL segment_intersection( p, q, cc1, cc2, llis, do_cross, mesh%tol_dist)
+    ! Check if [pq] passes through any of the shared Voronoi boundaries
+    DO vori = 1, nVor
+      vorj = vori + 1
+      IF (vorj == nVor + 1) vorj = 1
+      ! The two endpoints of this section of the Voronoi cell boundary
+      pa = Vor( vori,:)
+      pb = Vor( vorj,:)
+      ! The other vertex sharing this Voronoi cell boundary
+      vj = Vor_vi( vori)
+      ! The edge representing this shared Voronoi cell boundary
+      aci = 0
+      DO ci = 1, mesh%nC( vi_in)
+        IF (mesh%C( vi_in,ci) == vj) THEN
+          aci = mesh%iAci( vi_in,ci)
+          EXIT
+        END IF
+      END DO
+      ! Safety
+      IF (aci == 0) CALL crash('couldnt find edge between vi and vj!')
+
+      CALL segment_intersection( p, q, pa, pb, llis, do_cross, mesh%tol_dist)
       IF (do_cross) THEN
-        ! [pq] passes through this shared Voronoi boundary
+        ! [pq] passes into the Voronoi cell of vj
         p_next    = llis
         vi_left   = vi_in
         vi_in     = 0
@@ -3416,6 +4882,7 @@ CONTAINS
     CALL crash('trace_line_Vor_vi - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_Vor_vi
+
   SUBROUTINE trace_line_Vor_ti(  mesh, p, q, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
     ! Given the line [pq], where p lies on the circumcentre of triangle ti_on,
     ! find the point p_next where [pq] crosses into the next Voronoi cell.
@@ -3477,13 +4944,13 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF q lies on the Voronoi cell boundary separating via from vib
+    ! Check if q lies on the Voronoi cell boundary separating via from vib
     CALL find_shared_Voronoi_boundary( mesh, acab, cc1, cc2)
     IF (lies_on_line_segment( cc1, cc2, q, mesh%tol_dist) .OR. &
         NORM2( cc1 - q) < mesh%tol_dist .OR. &
         NORM2( cc2 - q) < mesh%tol_dist) THEN
       ! q lies on the Voronoi cell boundary separating via from vib
-      IF      (mesh%Aci( acab,5) == ti_on) THEN
+      IF (mesh%Aci( acab,5) == ti_on) THEN
         vi_left = mesh%Aci( acab,2)
       ELSE
         vi_left = mesh%Aci( acab,1)
@@ -3497,7 +4964,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies on the Voronoi cell boundary separating vib from vic
+    ! Check if q lies on the Voronoi cell boundary separating vib from vic
     CALL find_shared_Voronoi_boundary( mesh, acbc, cc1, cc2)
     IF (lies_on_line_segment( cc1, cc2, q, mesh%tol_dist) .OR. &
         NORM2( cc1 - q) < mesh%tol_dist .OR. &
@@ -3517,7 +4984,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies on the Voronoi cell boundary separating vic from via
+    ! Check if q lies on the Voronoi cell boundary separating vic from via
     CALL find_shared_Voronoi_boundary( mesh, acca, cc1, cc2)
     IF (lies_on_line_segment( cc1, cc2, q, mesh%tol_dist) .OR. &
         NORM2( cc1 - q) < mesh%tol_dist .OR. &
@@ -3537,7 +5004,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies inside any of the three adjacent Voronoi cells
+    ! Check if q lies inside any of the three adjacent Voronoi cells
     IF (is_in_Voronoi_cell( mesh, q, via)) THEN
       ! q lies inside the Voronoi cell of via
       p_next    = q
@@ -3572,7 +5039,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF [pq] passes through the circumcentre of any of the three neighbouring triangles
+    ! Check if [pq] passes through the circumcentre of any of the three neighbouring triangles
     tj = mesh%TriC( ti_on,1)
     IF (tj > 0) THEN
       cc = mesh%Tricc( tj,:)
@@ -3621,7 +5088,7 @@ CONTAINS
       END IF
     END IF
 
-    ! Check IF [pq] crosses the boundary of the Voronoi cell of via
+    ! Check if [pq] crosses the boundary of the Voronoi cell of via
     DO vvi = 1, mesh%nC( via)
       vj = mesh%C( via,vvi)
       IF (vj == vib .OR. vj == vic) CYCLE
@@ -3641,7 +5108,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF [pq] crosses the boundary of the Voronoi cell of vib
+    ! Check if [pq] crosses the boundary of the Voronoi cell of vib
     DO vvi = 1, mesh%nC( vib)
       vj = mesh%C( vib,vvi)
       IF (vj == via .OR. vj == vic) CYCLE
@@ -3661,7 +5128,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF [pq] crosses the boundary of the Voronoi cell of vic
+    ! Check if [pq] crosses the boundary of the Voronoi cell of vic
     DO vvi = 1, mesh%nC( vic)
       vj = mesh%C( vic,vvi)
       IF (vj == via .OR. vj == vib) CYCLE
@@ -3685,6 +5152,7 @@ CONTAINS
     CALL crash('trace_line_Vor_ti - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_Vor_ti
+
   SUBROUTINE trace_line_Vor_aci( mesh, p, q, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
     ! Given the line [pq], where p lies on the shared Voronoi boundary represented by edge aci_on,
     ! find the point p_next where [pq] crosses into the next Voronoi cell.
@@ -3707,7 +5175,7 @@ CONTAINS
     REAL(dp), DIMENSION(2)                             :: cc1, cc2, ccl, ccr, llis
     LOGICAL                                            :: do_cross
 
-    ! Find the endpoints of this shared Voronoi boundary
+    ! Find the END IFpoints of this shared Voronoi boundary
     CALL find_shared_Voronoi_boundary( mesh, aci_on, cc1, cc2)
 
     ! Safety
@@ -3737,7 +5205,7 @@ CONTAINS
       ccr = mesh%Tricc( tir,:)
     END IF
 
-    ! Check IF q coincides with ccl
+    ! Check if q coincides with ccl
     IF (NORM2( ccl - q) < mesh%tol_dist) THEN
       ! q coincides with ccl
       p_next    = q
@@ -3750,7 +5218,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q coincides with ccr
+    ! Check if q coincides with ccr
     IF (NORM2( ccr - q) < mesh%tol_dist) THEN
       ! q coincides with ccr
       p_next    = q
@@ -3763,7 +5231,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies inside the Voronoi cell of via
+    ! Check if q lies inside the Voronoi cell of via
     IF (is_in_Voronoi_cell( mesh, q, via)) THEN
       ! q lies inside the Voronoi cell of via
       p_next    = q
@@ -3776,7 +5244,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies inside the Voronoi cell of vib
+    ! Check if q lies inside the Voronoi cell of vib
     IF (is_in_Voronoi_cell( mesh, q, vib)) THEN
       ! q lies inside the Voronoi cell of vib
       p_next    = q
@@ -3789,7 +5257,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF q lies on the circumcentre of any of the triangles surrounding via
+    ! Check if q lies on the circumcentre of any of the triangles surrounding via
     DO vti = 1, mesh%niTri( via)
       ti = mesh%iTri( via,vti)
       IF (NORM2( mesh%Tricc( ti,:) - q) < mesh%tol_dist) THEN
@@ -3805,7 +5273,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF q lies on the circumcentre of any of the triangles surrounding vib
+    ! Check if q lies on the circumcentre of any of the triangles surrounding vib
     DO vti = 1, mesh%niTri( vib)
       ti = mesh%iTri( vib,vti)
       IF (NORM2( mesh%Tricc( ti,:) - q) < mesh%tol_dist) THEN
@@ -3821,7 +5289,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF q lies on boundary of the Voronoi cell of via
+    ! Check if q lies on boundary of the Voronoi cell of via
     DO vvi = 1, mesh%nC( via)
       aci = mesh%iAci( via,vvi)
       CALL find_shared_Voronoi_boundary( mesh, aci, cc1, cc2)
@@ -3838,7 +5306,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF q lies on boundary of the Voronoi cell of vib
+    ! Check if q lies on boundary of the Voronoi cell of vib
     DO vvi = 1, mesh%nC( vib)
       aci = mesh%iAci( vib,vvi)
       CALL find_shared_Voronoi_boundary( mesh, aci, cc1, cc2)
@@ -3855,7 +5323,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF [pq] passes through either of this boundary's endpoints
+    ! Check if [pq] passes through either of this boundary's endpoints
     IF (lies_on_line_segment( p, q, ccl, mesh%tol_dist)) THEN
       ! [pq] passes through ccl
       p_next    = ccl
@@ -3879,7 +5347,7 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check IF pq crosses the boundary of the Voronoi cell of via
+    ! Check if pq crosses the boundary of the Voronoi cell of via
     DO vvi = 1, mesh%nC( via)
       aci = mesh%iAci( via,vvi)
       IF (aci == aci_on) CYCLE
@@ -3898,7 +5366,7 @@ CONTAINS
       END IF
     END DO
 
-    ! Check IF pq crosses the boundary of the Voronoi cell of vib
+    ! Check if pq crosses the boundary of the Voronoi cell of vib
     DO vvi = 1, mesh%nC( vib)
       aci = mesh%iAci( vib,vvi)
       IF (aci == aci_on) CYCLE
@@ -3918,41 +5386,9 @@ CONTAINS
     END DO
 
     ! This point should not be reachable!
-    CALL crash('trace_line_Vor_aci - reached the unreachable end of the subroutine!')
+    CALL crash('trace_line_Vor_aci - reached the unreachable END IF of the subroutine!')
 
   END SUBROUTINE trace_line_Vor_aci
-  SUBROUTINE trace_line_Vor_border( mesh, q, vi_p, vi_q, p_next, vi_next, coincides, finished)
-    ! Given the line [pq] that lies on the mesh domain border, where p lies inside
-    ! the Voronoi cell of vertex vi_p, find the point p_next where [pq] crosses into the next Voronoi cell.
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(2),              INTENT(IN)    :: q
-    INTEGER,                             INTENT(IN)    :: vi_p, vi_q
-    REAL(dp), DIMENSION(2),              INTENT(OUT)   :: p_next
-    INTEGER,                             INTENT(OUT)   :: vi_next
-    LOGICAL,                             INTENT(OUT)   :: coincides
-    LOGICAL,                             INTENT(OUT)   :: finished
-
-    ! Check if q lies inside the same Voronoi cell as p
-    IF (vi_q == vi_p) THEN
-      ! q lies inside the same Voronoi cell as p
-      p_next    = q
-      vi_next   = 0
-      coincides = .TRUE.
-      finished  = .TRUE.
-      RETURN
-    END IF
-
-    ! Find the next Voronoi cell
-    vi_next   = mesh%C( vi_p,1)
-    p_next    = (mesh%V( vi_p,:) + mesh%V( vi_next,:)) / 2._dp
-    coincides = .TRUE.
-    finished  = .FALSE.
-
-  END SUBROUTINE trace_line_Vor_border
 
   ! Line tracing algorithm through square grid cells
   SUBROUTINE trace_line_grid( grid, p, q, single_row, count_coincidences)
@@ -3971,7 +5407,6 @@ CONTAINS
     REAL(dp)                                           :: xmin, xmax, ymin, ymax
     REAL(dp), DIMENSION(2)                             :: pp,qq
     LOGICAL                                            :: is_valid_line
-    INTEGER                                            :: edge_index_pq
     LOGICAL                                            :: finished
     INTEGER                                            :: n_cycles
     INTEGER,  DIMENSION(2)                             :: aij_in, bij_on, cxij_on, cyij_on
@@ -3979,13 +5414,12 @@ CONTAINS
     INTEGER                                            :: n_left
     LOGICAL                                            :: coincides
     REAL(dp)                                           :: LI_xdy, LI_mxydx, LI_xydy
-    INTEGER                                            :: i_p, j_p, i_q, j_q
 
     ! Crop the line [pq] so that it lies within the domain
-    xmin = grid%xmin - grid%dx / 2
-    xmax = grid%xmax + grid%dx / 2
-    ymin = grid%ymin - grid%dx / 2
-    ymax = grid%ymax + grid%dx / 2
+    xmin = grid%xmin - grid%dx / 2._dp
+    xmax = grid%xmax + grid%dx / 2._dp
+    ymin = grid%ymin - grid%dx / 2._dp
+    ymax = grid%ymax + grid%dx / 2._dp
     CALL crop_line_to_domain( p, q, xmin, xmax, ymin, ymax, grid%tol_dist, pp, qq, is_valid_line)
 
     IF (.NOT. is_valid_line) THEN
@@ -3993,290 +5427,55 @@ CONTAINS
       RETURN
     END IF
 
-    ! Check whether [pq] lies on the domain border
-    edge_index_pq = 0
-    IF     (ABS( p(1) - xmin) < grid%tol_dist .AND. ABS( q(1) - xmin) < grid%tol_dist) THEN
-      ! pq lies on the western border
-      edge_index_pq = 7
-    ELSEIF (ABS( p(1) - xmax) < grid%tol_dist .AND. ABS( q(1) - xmax) < grid%tol_dist) THEN
-      ! pq lies on the eastern border
-      edge_index_pq = 3
-    ELSEIF (ABS( p(2) - ymin) < grid%tol_dist .AND. ABS( q(2) - ymin) < grid%tol_dist) THEN
-      ! pq lies on the southern border
-      edge_index_pq = 5
-    ELSEIF (ABS( p(2) - ymax) < grid%tol_dist .AND. ABS( q(2) - ymax) < grid%tol_dist) THEN
-      ! pq lies on the northern border
-      edge_index_pq = 1
-    END IF
+    ! Initialise the coincidence indicators for the point p, i.e. check IF p either...
+    !    - lies inside grid cell aij_in, ...
+    !    - lies on the b-grid point bij_on, or...
+    !    - lies on the edge cij_on
+    CALL trace_line_grid_start( grid, pp, aij_in, bij_on, cxij_on, cyij_on)
 
-    IF (edge_index_pq == 0) THEN
-      ! [pq] lies in the domain interior
+    ! Iteratively trace the line through the mesh
+    finished = .FALSE.
+    n_cycles = 0
+    DO WHILE (.NOT. finished)
 
-      ! Initialise the coincidence indicators for the point p, i.e. check IF p either...
-      !    - lies inside grid cell aij_in, ...
-      !    - lies on the b-grid point bij_on, or...
-      !    - lies on the edge cij_on
-      CALL trace_line_grid_start( grid, pp, aij_in, bij_on, cxij_on, cyij_on)
-
-      ! Iteratively trace the line through the mesh
-      finished = .FALSE.
-      n_cycles = 0
-      DO WHILE (.NOT. finished)
-
-        ! Find the point p_next where [pq] crosses into the next Voronoi cell
-        IF     (aij_in(  1) > 0) THEN
-          ! p lies inside a-grid cell aij_in
-          CALL trace_line_grid_a(  grid, pp, qq, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
-        ELSEIF (bij_on(  1) > 0) THEN
-          ! p lies on b-grid point bij_on
-          CALL trace_line_grid_b(  grid, pp, qq, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
-        ELSEIF (cxij_on( 1) > 0) THEN
-          ! p lies on cx-grid edge cxij_on
-          CALL trace_line_grid_cx( grid, pp, qq, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
-        ELSEIF (cyij_on( 1) > 0) THEN
-          ! p lies on cy-grid edge cyij_on
-          CALL trace_line_grid_cy( grid, pp, qq, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
-        END IF
-
-        ! Calculate the three line integrals
-        CALL line_integral_xdy(   pp, p_next, grid%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, p_next, grid%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, p_next, grid%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-        ! Cycle the pointer
-        pp = p_next
-
-        ! Safety
-        n_cycles = n_cycles + 1
-        IF (n_cycles > grid%n) THEN
-          CALL crash('trace_line_grid - iterative tracer got stuck!')
-        END IF
-
-      END DO ! DO WHILE (.NOT. finished)
-
-    ELSE ! IF (edge_index_pq == 0) THEN
-      ! [pq] lies on the mesh domain border
-
-      ! Safety
-      IF (edge_index_pq == 1) THEN
-        ! North; q should be west of p
-        IF (qq(1) >= pp(1)) THEN
-          CALL crash('trace_line_grid - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 3) THEN
-        ! East; q should be north of p
-        IF (qq(2) <= pp(2)) THEN
-          CALL crash('trace_line_grid - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 5) THEN
-        ! South; q should be eat of p
-        IF (qq(1) <= pp(1)) THEN
-          CALL crash('trace_line_grid - pq is not oriented counter-clockwise!')
-        END IF
-      ELSEIF (edge_index_pq == 7) THEN
-        ! West; q should be south of p
-        IF (qq(2) >= pp(2)) THEN
-          CALL crash('trace_line_grid - pq is not oriented counter-clockwise!')
-        END IF
+      ! Find the point p_next where [pq] crosses into the next Voronoi cell
+      IF     (aij_in(  1) > 0) THEN
+        ! p lies inside a-grid cell aij_in
+        CALL trace_line_grid_a(  grid, pp, qq, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
+      ELSEIF (bij_on(  1) > 0) THEN
+        ! p lies on b-grid point bij_on
+        CALL trace_line_grid_b(  grid, pp, qq, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
+      ELSEIF (cxij_on( 1) > 0) THEN
+        ! p lies on cx-grid edge cxij_on
+        CALL trace_line_grid_cx( grid, pp, qq, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
+      ELSEIF (cyij_on( 1) > 0) THEN
+        ! p lies on cy-grid edge cyij_on
+        CALL trace_line_grid_cy( grid, pp, qq, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
       END IF
 
-      ! Find the grid cells containing p and q
-      IF (edge_index_pq == 1) THEN
-        ! [pq] lies on the northern boundary
+      ! Calculate the three line integrals
+      CALL line_integral_xdy(   pp, p_next, grid%tol_dist, LI_xdy  )
+      CALL line_integral_mxydx( pp, p_next, grid%tol_dist, LI_mxydx)
+      CALL line_integral_xydy(  pp, p_next, grid%tol_dist, LI_xydy )
 
-        ! Find the grid cells containing p and q
-        i_p = 1 + FLOOR( (pp(1) - xmin + grid%dx / 2._dp) / grid%dx)
-        i_q = 1 + FLOOR( (qq(1) - xmin + grid%dx / 2._dp) / grid%dx)
-        j_p = grid%ny
-        j_q = grid%ny
-
-        ! Iteratively trace the line through the mesh
-        n_cycles = 0
-        DO WHILE (i_p > i_q)
-
-          ! Find the point where [pq] crosses into the next grid cell (very easy on a square grid, hurray!)
-          p_next    = [grid%x( i_p) - grid%dx / 2._dp, ymax + grid%dx / 2._dp]
-          n_left    = grid%ij2n( i_p, j_p)
-          coincides = .TRUE.
-
-          ! Calculate the three line integrals
-          CALL line_integral_xdy(   pp, p_next, grid%tol_dist, LI_xdy  )
-          CALL line_integral_mxydx( pp, p_next, grid%tol_dist, LI_mxydx)
-          CALL line_integral_xydy(  pp, p_next, grid%tol_dist, LI_xydy )
-
-          ! Add them to the results structure
-          CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-          ! Cycle the pointer
-          pp  = p_next
-          i_p = i_p - 1
-
-          ! Safety
-          n_cycles = n_cycles + 1
-          IF (n_cycles > grid%nx) THEN
-            CALL crash('trace_line_grid - iterative tracer (north border version) got stuck!')
-          END IF
-
-        END DO ! DO WHILE (i_p > i_q)
-
-        ! Add the last section (inside the grid cell containing q)
-        CALL line_integral_xdy(   pp, qq, grid%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, qq, grid%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, qq, grid%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        n_left = grid%ij2n( i_q, j_q)
+      ! Add them to the results structure
+      IF (NORM2( p_next - pp) > grid%tol_dist) THEN
         CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
+      END IF
 
-      ELSEIF (edge_index_pq == 3) THEN
-        ! [pq] lies on the eastern boundary
+      ! Cycle the pointer
+      pp = p_next
 
-        ! Find the grid cells containing p and q
-        j_p = 1 + FLOOR( (pp(2) - ymin + grid%dx / 2._dp) / grid%dx)
-        j_q = 1 + FLOOR( (qq(2) - ymin + grid%dx / 2._dp) / grid%dx)
-        i_p = grid%nx
-        i_q = grid%nx
+      ! Safety
+      n_cycles = n_cycles + 1
+      IF (n_cycles > grid%n) THEN
+        CALL crash('trace_line_grid - iterative tracer got stuck!')
+      END IF
 
-        ! Iteratively trace the line through the mesh
-        n_cycles = 0
-        DO WHILE (j_p < j_q)
-
-          ! Find the point where [pq] crosses into the next grid cell (very easy on a square grid, hurray!)
-          p_next    = [xmax + grid%dx / 2._dp, grid%y( j_p) + grid%dx / 2._dp]
-          n_left    = grid%ij2n( i_p, j_p)
-          coincides = .TRUE.
-
-          ! Calculate the three line integrals
-          CALL line_integral_xdy(   pp, p_next, grid%tol_dist, LI_xdy  )
-          CALL line_integral_mxydx( pp, p_next, grid%tol_dist, LI_mxydx)
-          CALL line_integral_xydy(  pp, p_next, grid%tol_dist, LI_xydy )
-
-          ! Add them to the results structure
-          CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-          ! Cycle the pointer
-          pp  = p_next
-          j_p = j_p + 1
-
-          ! Safety
-          n_cycles = n_cycles + 1
-          IF (n_cycles > grid%nx) THEN
-            CALL crash('trace_line_grid - iterative tracer (east border version) got stuck!')
-          END IF
-
-        END DO ! DO WHILE (j_p < j_q)
-
-        ! Add the last section (inside the grid cell containing q)
-        CALL line_integral_xdy(   pp, qq, grid%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, qq, grid%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, qq, grid%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        n_left = grid%ij2n( i_q, j_q)
-        CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-      ELSEIF (edge_index_pq == 5) THEN
-        ! [pq] lies on the southern boundary
-
-        ! Find the grid cells containing p and q
-        i_p = 1 + FLOOR( (pp(1) - xmin + grid%dx / 2._dp) / grid%dx)
-        i_q = 1 + FLOOR( (qq(1) - xmin + grid%dx / 2._dp) / grid%dx)
-        j_p = 1
-        j_q = 1
-
-        ! Iteratively trace the line through the mesh
-        n_cycles = 0
-        DO WHILE (i_p < i_q)
-
-          ! Find the point where [pq] crosses into the next grid cell (very easy on a square grid, hurray!)
-          p_next    = [grid%x( i_p) + grid%dx / 2._dp, ymin - grid%dx / 2._dp]
-          n_left    = grid%ij2n( i_p, j_p)
-          coincides = .TRUE.
-
-          ! Calculate the three line integrals
-          CALL line_integral_xdy(   pp, p_next, grid%tol_dist, LI_xdy  )
-          CALL line_integral_mxydx( pp, p_next, grid%tol_dist, LI_mxydx)
-          CALL line_integral_xydy(  pp, p_next, grid%tol_dist, LI_xydy )
-
-          ! Add them to the results structure
-          CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-          ! Cycle the pointer
-          pp  = p_next
-          i_p = i_p + 1
-
-          ! Safety
-          n_cycles = n_cycles + 1
-          IF (n_cycles > grid%nx) THEN
-            CALL crash('trace_line_grid - iterative tracer (south border version) got stuck!')
-          END IF
-
-        END DO ! DO WHILE (i_p < i_q)
-
-        ! Add the last section (inside the grid cell containing q)
-        CALL line_integral_xdy(   pp, qq, grid%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, qq, grid%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, qq, grid%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        n_left = grid%ij2n( i_q, j_q)
-        CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-      ELSEIF (edge_index_pq == 7) THEN
-        ! [pq] lies on the western boundary
-
-        ! Find the grid cells containing p and q
-        j_p = 1 + FLOOR( (pp(2) - ymin + grid%dx / 2._dp) / grid%dx)
-        j_q = 1 + FLOOR( (qq(2) - ymin + grid%dx / 2._dp) / grid%dx)
-        i_p = 1
-        i_q = 1
-
-        ! Iteratively trace the line through the mesh
-        n_cycles = 0
-        DO WHILE (j_p > j_q)
-
-          ! Find the point where [pq] crosses into the next grid cell (very easy on a square grid, hurray!)
-          p_next    = [xmin - grid%dx / 2._dp, grid%y( j_p) - grid%dx / 2._dp]
-          n_left    = grid%ij2n( i_p, j_p)
-          coincides = .TRUE.
-
-          ! Calculate the three line integrals
-          CALL line_integral_xdy(   pp, p_next, grid%tol_dist, LI_xdy  )
-          CALL line_integral_mxydx( pp, p_next, grid%tol_dist, LI_mxydx)
-          CALL line_integral_xydy(  pp, p_next, grid%tol_dist, LI_xydy )
-
-          ! Add them to the results structure
-          CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-          ! Cycle the pointer
-          pp  = p_next
-          j_p = j_p - 1
-
-          ! Safety
-          n_cycles = n_cycles + 1
-          IF (n_cycles > grid%nx) THEN
-            CALL crash('trace_line_grid - iterative tracer (west border version) got stuck!')
-          END IF
-
-        END DO ! DO WHILE (j_p > j_q)
-
-        ! Add the last section (inside the grid cell containing q)
-        CALL line_integral_xdy(   pp, qq, grid%tol_dist, LI_xdy  )
-        CALL line_integral_mxydx( pp, qq, grid%tol_dist, LI_mxydx)
-        CALL line_integral_xydy(  pp, qq, grid%tol_dist, LI_xydy )
-
-        ! Add them to the results structure
-        n_left = grid%ij2n( i_q, j_q)
-        CALL add_integrals_to_single_row( single_row, n_left, LI_xdy, LI_mxydx, LI_xydy, coincides, count_coincidences)
-
-      END IF ! IF (edge_index_pq == 1) THEN
-
-    END IF ! IF (edge_index_pq == 0) THEN
+    END DO ! DO WHILE (.NOT. finished)
 
   END SUBROUTINE trace_line_grid
+
   SUBROUTINE trace_line_grid_start( grid, p,    aij_in, bij_on, cxij_on, cyij_on)
     ! Initialise the coincidence indicators for the point p, i.e. check IF p either...
     !    - lies inside grid cell aij_in, ...
@@ -4352,6 +5551,7 @@ CONTAINS
     aij_in = [i,j]
 
   END SUBROUTINE trace_line_grid_start
+
   SUBROUTINE trace_line_grid_a(     grid, p, q, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
     ! Given the line [pq], where p lies inside grid cell aij_in,
     ! find the point p_next where [pq] crosses into the next grid cell.
@@ -4528,6 +5728,7 @@ CONTAINS
     CALL crash('trace_line_grid_a - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_grid_a
+
   SUBROUTINE trace_line_grid_b(     grid, p, q, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
     ! Given the line [pq], where p lies on b-grid point bij_on
     ! find the point p_next where [pq] crosses into the next grid cell.
@@ -4875,6 +6076,7 @@ CONTAINS
     CALL crash('trace_line_grid_b - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_grid_b
+
   SUBROUTINE trace_line_grid_cx(    grid, p, q, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
     ! Given the line [pq], where p lies on cx-grid edge cxij_on
     ! find the point p_next where [pq] crosses into the next grid cell.
@@ -5158,6 +6360,7 @@ CONTAINS
     CALL crash('trace_line_grid_cx - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_grid_cx
+
   SUBROUTINE trace_line_grid_cy(    grid, p, q, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
     ! Given the line [pq], where p lies on cy-grid edge cyij_on
     ! find the point p_next where [pq] crosses into the next grid cell.
@@ -5441,515 +6644,5 @@ CONTAINS
     CALL crash('trace_line_grid_cy - reached the unreachable end of the subroutine!')
 
   END SUBROUTINE trace_line_grid_cy
-
-  SUBROUTINE crop_line_to_domain( p, q, xmin, xmax, ymin, ymax, tol_dist, pp, qq, is_valid_line)
-    ! Crop the line [pq] so that it lies within the specified domain;
-    ! if [pq] doesn't pass through the domain at all, return is_valid_line = .FALSE.
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    REAL(dp), DIMENSION(2),              INTENT(IN)    :: p, q
-    REAL(dp),                            INTENT(IN)    :: xmin, xmax, ymin, ymax, tol_dist
-    REAL(dp), DIMENSION(2),              INTENT(OUT)   :: pp, qq
-    LOGICAL,                             INTENT(OUT)   :: is_valid_line
-
-    ! Local variables:
-    REAL(dp), DIMENSION(2)                             :: sw, se, nw, ne, llis
-    INTEGER                                            :: edge_index_p, edge_index_q
-    LOGICAL                                            :: do_cross
-
-    pp = p
-    qq = q
-    is_valid_line = .TRUE.
-
-    sw = [xmin,ymin]
-    se = [xmax,ymin]
-    nw = [xmin,ymax]
-    ne = [xmax,ymax]
-
-    ! Determine in which quadrants p and q lie
-    ! (same as with edge_index; 1-8 clockwise starting north, 0 means inside
-
-    IF     (pp(1) >= xmin .AND. pp(1) <= xmax .AND. pp(2) > ymax) THEN
-      ! North
-      edge_index_p = 1
-    ELSEIF (pp(1) > xmax .AND. pp(2) > ymax) THEN
-      ! Northeast
-      edge_index_p = 2
-    ELSEIF (pp(1) > xmax .AND. pp(2) >= ymin .AND. pp(2) <= ymax) THEN
-      ! East
-      edge_index_p = 3
-    ELSEIF (pp(1) > xmax .AND. pp(2) < ymin) THEN
-      ! Southeast
-      edge_index_p = 4
-    ELSEIF (pp(1) >= xmin .AND. pp(1) <= xmax .AND. pp(2) < ymin) THEN
-      ! South
-      edge_index_p = 5
-    ELSEIF (pp(1) < xmin .AND. pp(2) < ymin) THEN
-      ! Southwest
-      edge_index_p = 6
-    ELSEIF (pp(1) < xmin .AND. pp(2) >= ymin .AND. pp(2) <= ymax) THEN
-      ! West
-      edge_index_p = 7
-    ELSEIF (pp(1) < xmin .AND. pp(2) > ymax) THEN
-      ! Northwest
-      edge_index_p = 8
-    ELSE
-      ! Inside the mesh domain
-      edge_index_p = 0
-    END IF
-
-    IF     (qq(1) >= xmin .AND. qq(1) <= xmax .AND. qq(2) > ymax) THEN
-      ! North
-      edge_index_q = 1
-    ELSEIF (qq(1) > xmax .AND. qq(2) > ymax) THEN
-      ! Northeast
-      edge_index_q = 2
-    ELSEIF (qq(1) > xmax .AND. qq(2) >= ymin .AND. qq(2) <= ymax) THEN
-      ! East
-      edge_index_q = 3
-    ELSEIF (qq(1) > xmax .AND. qq(2) < ymin) THEN
-      ! Southeast
-      edge_index_q = 4
-    ELSEIF (qq(1) >= xmin .AND. qq(1) <= xmax .AND. qq(2) < ymin) THEN
-      ! South
-      edge_index_q = 5
-    ELSEIF (qq(1) < xmin .AND. qq(2) < ymin) THEN
-      ! Southwest
-      edge_index_q = 6
-    ELSEIF (qq(1) < xmin .AND. qq(2) >= ymin .AND. qq(2) <= ymax) THEN
-      ! West
-      edge_index_q = 7
-    ELSEIF (qq(1) < xmin .AND. qq(2) > ymax) THEN
-      ! Northwest
-      edge_index_q = 8
-    ELSE
-      ! Inside the mesh domain
-      edge_index_q = 0
-    END IF
-
-    IF (edge_index_p == 0 .AND. edge_index_q == 0) THEN
-      ! Both p and q lie inside the mesh domain
-      RETURN
-    END IF
-
-    IF (edge_index_p == 0 .AND. edge_index_q > 0) THEN
-      ! p lies inside the mesh domain, q lies outside
-
-      ! Check IF [pq] passes through any of the four corners
-      IF     (lies_on_line_segment( pp, qq, sw, tol_dist)) THEN
-        ! [pq] passes through the southwest corner of the mesh
-        qq = sw
-        RETURN
-      ELSEIF (lies_on_line_segment( pp, qq, se, tol_dist)) THEN
-        ! [pq] passes through the southeast corner of the mesh
-        qq = se
-        RETURN
-      ELSEIF (lies_on_line_segment( pp, qq, nw, tol_dist)) THEN
-        ! [pq] passes through the northwest corner of the mesh
-        qq = nw
-        RETURN
-      ELSEIF (lies_on_line_segment( pp, qq, ne, tol_dist)) THEN
-        ! [pq] passes through the northeast corner of the mesh
-        qq = ne
-        RETURN
-      END IF
-
-      ! Check IF [pq] crosses any of the four borders
-
-      ! South
-      CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
-      IF (do_cross) THEN
-        ! [pq] crosses the southern border
-        qq = llis
-        RETURN
-      END IF
-
-      ! West
-      CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
-      IF (do_cross) THEN
-        ! [pq] crosses the western border
-        qq = llis
-        RETURN
-      END IF
-
-      ! North
-      CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
-      IF (do_cross) THEN
-        ! [pq] crosses the northern border
-        qq = llis
-        RETURN
-      END IF
-
-      ! East
-      CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
-      IF (do_cross) THEN
-        ! [pq] crosses the eastern border
-        qq = llis
-        RETURN
-      END IF
-
-      ! This point should be unreachable
-      CALL crash('crop_line_to_mesh_domain - reached the unreachable point (p inside, q outside)!')
-
-    END IF ! IF (edge_index_p == 0 .AND. edge_index_q > 0)
-
-    IF (edge_index_q == 0 .AND. edge_index_p > 0) THEN
-      ! q lies inside the mesh domain, p lies outside
-
-      ! Check IF [pq] passes through any of the four corners
-      IF     (lies_on_line_segment( pp, qq, sw, tol_dist)) THEN
-        ! [pq] passes through the southwest corner of the mesh
-        pp = sw
-        RETURN
-      ELSEIF (lies_on_line_segment( pp, qq, se, tol_dist)) THEN
-        ! [pq] passes through the southeast corner of the mesh
-        pp = se
-        RETURN
-      ELSEIF (lies_on_line_segment( pp, qq, nw, tol_dist)) THEN
-        ! [pq] passes through the northwest corner of the mesh
-        pp = nw
-        RETURN
-      ELSEIF (lies_on_line_segment( pp, qq, ne, tol_dist)) THEN
-        ! [pq] passes through the northeast corner of the mesh
-        pp = ne
-        RETURN
-      END IF
-
-      ! Check IF [pq] crosses any of the four borders
-
-      ! South
-      CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
-      IF (do_cross) THEN
-        ! [pq] crosses the southern border
-        pp = llis
-        RETURN
-      END IF
-
-      ! West
-      CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
-      IF (do_cross) THEN
-        ! [pq] crosses the western border
-        pp = llis
-        RETURN
-      END IF
-
-      ! North
-      CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
-      IF (do_cross) THEN
-        ! [pq] crosses the northern border
-        pp = llis
-        RETURN
-      END IF
-
-      ! East
-      CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
-      IF (do_cross) THEN
-        ! [pq] crosses the eastern border
-        pp = llis
-        RETURN
-      END IF
-
-      ! This point should be unreachable
-      CALL crash('crop_line_to_mesh_domain - reached the unreachable point (q inside, p outside)!')
-
-    END IF ! IF (edge_index_q == 0 .AND. edge_index_p > 0)
-
-    ! Both p and q lie outside the mesh domain
-
-    IF     (pp(1) < xmin .AND. qq(1) < xmin) THEN
-      ! Both p and q lie west of the western mesh border; [pq] cannot pass through the mesh domain
-      is_valid_line = .FALSE.
-      RETURN
-    ELSEIF (pp(1) > xmax .AND. qq(1) > xmax) THEN
-      ! Both p and q lie east of the eastern mesh border; [pq] cannot pass through the mesh domain
-      is_valid_line = .FALSE.
-      RETURN
-    ELSEIF (pp(2) < ymin .AND. qq(2) < ymin) THEN
-      ! Both p and q lie south of the southern mesh border; [pq] cannot pass through the mesh domain
-      is_valid_line = .FALSE.
-      RETURN
-    ELSEIF (pp(2) > ymax .AND. qq(2) > ymax) THEN
-      ! Both p and q lie north of the northern mesh border; [pq] cannot pass through the mesh domain
-      is_valid_line = .FALSE.
-      RETURN
-    END IF
-
-    IF (edge_index_p == 1) THEN
-      ! p lies in the northern quadrant
-
-      IF (edge_index_q == 3) THEN
-        ! q lies in the eastern quadrant; check IF [pq] cuts through the northeast corner
-
-        IF (cross2( (ne - qq), (pp - qq)) > 0) THEN
-          ! [pq] cuts through the northeast corner
-          CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
-          END IF
-          pp = llis
-          CALL segment_intersection( pp, qq, ne, se, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect ne-se, but it doesnt!')
-          END IF
-          qq = llis
-          RETURN
-        ELSE
-          ! [pq] does not pass through the mesh domain
-          is_valid_line = .FALSE.
-          RETURN
-        END IF
-
-      ELSEIF (edge_index_q == 7) THEN
-        ! q lies in the western quadrant; check IF [pq] cuts through the northwest corner
-
-        IF (cross2( (pp - qq), (ne - qq)) > 0) THEN
-          ! [pq] cuts through the northeast corner
-          CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
-          END IF
-          pp = llis
-          CALL segment_intersection( pp, qq, nw, sw, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-sw, but it doesnt!')
-          END IF
-          qq = llis
-          RETURN
-        ELSE
-          ! [pq] does not pass through the mesh domain
-          is_valid_line = .FALSE.
-          RETURN
-        END IF
-
-      ELSE
-        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
-      END IF
-
-    ELSEIF (edge_index_p == 3) THEN
-      ! p lies in the eastern quadrant
-
-      IF (edge_index_q == 1) THEN
-        ! q lies in the northern quadrant; check IF [pq] cuts through the northeast corner
-
-        IF (cross2( (ne - pp), (qq - pp)) > 0) THEN
-          ! [pq] cuts through the northeast corner
-          CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
-          END IF
-          qq = llis
-          CALL segment_intersection( pp, qq, ne, se, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect ne-se, but it doesnt!')
-          END IF
-          pp = llis
-          RETURN
-        ELSE
-          ! [pq] does not pass through the mesh domain
-          is_valid_line = .FALSE.
-          RETURN
-        END IF
-
-      ELSEIF (edge_index_q == 5) THEN
-        ! q lies in the southern quadrant; check IF [pq] cuts through the southeast corner
-
-        IF (cross2( (se - qq), (pp - qq)) > 0) THEN
-          ! [pq] cuts through the southeast corner
-          CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect se-ne, but it doesnt!')
-          END IF
-          pp = llis
-          CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
-          END IF
-          qq = llis
-          RETURN
-        ELSE
-          ! [pq] does not pass through the mesh domain
-          is_valid_line = .FALSE.
-          RETURN
-        END IF
-
-      ELSE
-        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
-      END IF
-
-    ELSEIF (edge_index_p == 5) THEN
-      ! p lies in the southern quadrant
-
-      IF (edge_index_q == 3) THEN
-        ! q lies in the eastern quadrant; check IF [pq] cuts through the southeast corner
-
-        IF (cross2( (se - pp), (qq - pp)) > 0) THEN
-          ! [pq] cuts through the southwest corner
-          CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
-          END IF
-          pp = llis
-          CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect se-ne, but it doesnt!')
-          END IF
-          qq = llis
-          RETURN
-        ELSE
-          ! [pq] does not pass through the mesh domain
-          is_valid_line = .FALSE.
-          RETURN
-        END IF
-
-      ELSEIF (edge_index_q == 7) THEN
-        ! q lies in the western quadrant; check IF [pq] cuts through the southwest corner
-
-        IF (cross2( (qq - pp), (sw - pp)) > 0) THEN
-          ! [pq] cuts through the southwest corner
-          CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
-          END IF
-          pp = llis
-          CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
-          END IF
-          qq = llis
-          RETURN
-        ELSE
-          ! [pq] does not pass through the mesh domain
-          is_valid_line = .FALSE.
-          RETURN
-        END IF
-
-      ELSE
-        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
-      END IF
-
-    ELSEIF (edge_index_p == 7) THEN
-      ! p lies in the western quadrant
-
-      IF (edge_index_q == 5) THEN
-        ! q lies in the southern quadrant; check IF [pq] cuts through the southwest corner
-
-        IF (cross2( (pp - qq), (sw - qq)) > 0) THEN
-          ! [pq] cuts through the southwest corner
-          CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
-          END IF
-          qq = llis
-          CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
-          END IF
-          pp = llis
-          RETURN
-        ELSE
-          ! [pq] does not pass through the mesh domain
-          is_valid_line = .FALSE.
-          RETURN
-        END IF
-
-      ELSEIF (edge_index_q == 1) THEN
-        ! q lies in the northern quadrant; check IF [pq] cuts through the northwest corner
-
-        IF (cross2( (qq - pp), (nw - pp)) > 0) THEN
-          ! [pq] cuts through the northwest corner
-          CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
-          END IF
-          pp = llis
-          CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
-          IF (.NOT. do_cross) THEN
-            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
-          END IF
-          qq = llis
-          RETURN
-        ELSE
-          ! [pq] does not pass through the mesh domain
-          is_valid_line = .FALSE.
-          RETURN
-        END IF
-
-      ELSE
-        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
-      END IF
-
-    END IF ! IF (edge_index_p == 1)
-
-    ! This point should be unreachable
-    CALL crash('crop_line_to_mesh_domain - reached the unreachable end of the subroutine!')
-
-  END SUBROUTINE crop_line_to_domain
-
-! == Clean up after yourself
-  SUBROUTINE deallocate_remapping_operators_mesh2grid( grid)
-    ! Deallocate the remapping operators between the mesh and the square grid
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_grid),                     INTENT(INOUT) :: grid
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_operators_mesh2grid'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL MatDestroy( grid%M_map_mesh2grid, perr)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE deallocate_remapping_operators_mesh2grid
-  SUBROUTINE deallocate_remapping_operators_grid2mesh( grid)
-    ! Deallocate the remapping operators between the mesh and the square grid
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_grid),                     INTENT(INOUT) :: grid
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_operators_grid2mesh'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL MatDestroy( grid%M_map_grid2mesh, perr)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE deallocate_remapping_operators_grid2mesh
-  SUBROUTINE deallocate_remapping_operators_mesh_mesh( map)
-    ! Deallocate the remapping operators between two meshes
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_remapping_mesh_mesh),      INTENT(INOUT) :: map
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_operators_mesh_mesh'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL MatDestroy( map%M_trilin           , perr)
-    CALL MatDestroy( map%M_nearest_neighbour, perr)
-    CALL MatDestroy( map%M_cons_1st_order   , perr)
-    CALL MatDestroy( map%M_cons_2nd_order   , perr)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE deallocate_remapping_operators_mesh_mesh
 
 END MODULE mesh_mapping_module

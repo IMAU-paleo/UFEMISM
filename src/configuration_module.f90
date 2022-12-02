@@ -199,25 +199,12 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: ISMIP_output_experiment_code_config         = 'test'                           ! Code for the experiment name in the ISMIP output file names
     CHARACTER(LEN=256)  :: ISMIP_output_basetime_config                = 'YYYY-MM-DD'                     ! Basetime for the ISMIP output files (e.g. '1900-01-01')
 
-  ! == The scaled vertical coordinate zeta, used mainly in thermodynamics
-  ! =====================================================================
+  ! == The scaled vertical coordinate zeta
+  ! ======================================
 
-    INTEGER                        :: nz_config   = 15
-    REAL(dp), DIMENSION(210), SAVE :: zeta_config = &
-   (/0.00_dp, 0.10_dp, 0.20_dp, 0.30_dp, 0.40_dp, 0.50_dp, 0.60_dp, 0.70_dp, 0.80_dp, 0.90_dp, 0.925_dp, 0.95_dp, 0.975_dp, 0.99_dp, 1.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
-     0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp  /)
+    CHARACTER(LEN=256)  :: choice_zeta_grid_config                     = 'regular'                        ! The type of vertical grid to use; can be "regular", "irregular_log", "old_15_layer_zeta"
+    INTEGER             :: nz_config                                   = 12                               ! The number of vertical layers to use
+    REAL(dp)            :: zeta_irregular_log_R_config                 = 0.95_dp                          ! Ratio between subsequent dzeta when choice_zeta_grid = 'irregular_log'
 
   ! == Reference geometries (initial, present-day, and GIA equilibrium)
   ! ===================================================================
@@ -336,12 +323,13 @@ MODULE configuration_module
   ! == Ice dynamics - velocity
   ! ==========================
 
-    CHARACTER(LEN=256)  :: choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
+    CHARACTER(LEN=256)  :: choice_stress_balance_approximation_config  = 'DIVA'                           ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
     REAL(dp)            :: n_flow_config                               = 3.0_dp                           ! Exponent in Glen's flow law
     REAL(dp)            :: m_enh_sheet_config                          = 1.0_dp                           ! Ice flow enhancement factor for grounded ice
     REAL(dp)            :: m_enh_shelf_config                          = 1.0_dp                           ! Ice flow enhancement factor for floating ice
     CHARACTER(LEN=256)  :: choice_ice_margin_config                    = 'infinite_slab'                  ! Choice of ice margin boundary conditions: "BC", "infinite_slab"
     LOGICAL             :: include_SSADIVA_crossterms_config           = .TRUE.                           ! Whether or not to include the "cross-terms" of the SSA/DIVA
+    CHARACTER(LEN=256)  :: choice_hybrid_SIASSA_scheme_config          = 'add'                            ! Choice of scheme for combining SIA and SSA velocities in the hybrid approach
     LOGICAL             :: do_GL_subgrid_friction_config               = .TRUE.                           ! Whether or not to scale basal friction with the sub-grid grounded fraction (needed to get proper GL migration; only turn this off for showing the effect on the MISMIP_mod results!)
     LOGICAL             :: do_smooth_geometry_config                   = .FALSE.                          ! Whether or not to smooth the model geometry (bedrock + initial ice thickness)
     REAL(dp)            :: r_smooth_geometry_config                    = 0.5_dp                           ! Geometry smoothing radius (in number of grid cells)
@@ -363,11 +351,8 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: DIVA_boundary_BC_v_south_config             = 'infinite'
     CHARACTER(LEN=256)  :: DIVA_boundary_BC_v_north_config             = 'infinite'
     CHARACTER(LEN=256)  :: DIVA_choice_matrix_solver_config            = 'PETSc'                          ! Choice of matrix solver for the ice velocity equations: "SOR", "PETSc"
-    INTEGER             :: DIVA_SOR_nit_config                         = 10000                            ! DIVA SOR   solver - maximum number of iterations
-    REAL(dp)            :: DIVA_SOR_tol_config                         = 2.5_dp                           ! DIVA SOR   solver - stop criterion, absolute difference
-    REAL(dp)            :: DIVA_SOR_omega_config                       = 1.3_dp                           ! DIVA SOR   solver - over-relaxation parameter
-    REAL(dp)            :: DIVA_PETSc_rtol_config                      = 0.01_dp                          ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    REAL(dp)            :: DIVA_PETSc_abstol_config                    = 2.5_dp                           ! DIVA PETSc solver - stop criterion, absolute difference
+    REAL(dp)            :: DIVA_PETSc_rtol_config                      = 1E-2_dp                          ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    REAL(dp)            :: DIVA_PETSc_abstol_config                    = 1.0_dp                           ! DIVA PETSc solver - stop criterion, absolute difference
 
   ! == Ice dynamics - time integration
   ! ==================================
@@ -988,11 +973,13 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: ISMIP_output_experiment_code
     CHARACTER(LEN=256)                  :: ISMIP_output_basetime
 
-    ! Scaled vertical coordinate zeta
-    ! ===============================
+    ! == The scaled vertical coordinate zeta
+    ! ======================================
 
-    INTEGER                             :: nz       ! Number of grid points in vertical direction for thermodynamics in ice sheet
-    REAL(dp), DIMENSION(:), ALLOCATABLE :: zeta
+    CHARACTER(LEN=256)                  :: choice_zeta_grid
+    INTEGER                             :: nz
+    REAL(dp)                            :: zeta_irregular_log_R
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: zeta, zeta_stag
 
     ! Reference geometries (initial, present-day, and GIA equilibrium)
     ! ================================================================
@@ -1093,12 +1080,13 @@ MODULE configuration_module
     ! Ice dynamics - velocity
     ! =======================
 
-    CHARACTER(LEN=256)                  :: choice_ice_dynamics
+    CHARACTER(LEN=256)                  :: choice_stress_balance_approximation
     REAL(dp)                            :: n_flow
     REAL(dp)                            :: m_enh_sheet
     REAL(dp)                            :: m_enh_shelf
     CHARACTER(LEN=256)                  :: choice_ice_margin
     LOGICAL                             :: include_SSADIVA_crossterms
+    CHARACTER(LEN=256)                  :: choice_hybrid_SIASSA_scheme
     LOGICAL                             :: do_GL_subgrid_friction
     LOGICAL                             :: do_smooth_geometry
     REAL(dp)                            :: r_smooth_geometry
@@ -1120,9 +1108,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: DIVA_boundary_BC_v_south
     CHARACTER(LEN=256)                  :: DIVA_boundary_BC_v_north
     CHARACTER(LEN=256)                  :: DIVA_choice_matrix_solver
-    INTEGER                             :: DIVA_SOR_nit
-    REAL(dp)                            :: DIVA_SOR_tol
-    REAL(dp)                            :: DIVA_SOR_omega
     REAL(dp)                            :: DIVA_PETSc_rtol
     REAL(dp)                            :: DIVA_PETSc_abstol
 
@@ -1931,8 +1916,9 @@ CONTAINS
                      xmax_ANT_config,                                 &
                      ymin_ANT_config,                                 &
                      ymax_ANT_config,                                 &
+                     choice_zeta_grid_config,                         &
                      nz_config,                                       &
-                     zeta_config,                                     &
+                     zeta_irregular_log_R_config,                     &
                      refgeo_Hi_min_config,                            &
                      remove_Lake_Vostok_config,                       &
                      choice_refgeo_init_NAM_config,                   &
@@ -1994,12 +1980,13 @@ CONTAINS
                      CO2_inverse_averaging_window_config,             &
                      inverse_d18O_to_CO2_scaling_config,              &
                      inverse_d18O_to_CO2_initial_CO2_config,          &
-                     choice_ice_dynamics_config,                      &
+                     choice_stress_balance_approximation_config,      &
                      n_flow_config,                                   &
                      m_enh_sheet_config,                              &
                      m_enh_shelf_config,                              &
                      choice_ice_margin_config,                        &
                      include_SSADIVA_crossterms_config,               &
+                     choice_hybrid_SIASSA_scheme_config,              &
                      do_GL_subgrid_friction_config,                   &
                      do_smooth_geometry_config,                       &
                      r_smooth_geometry_config,                        &
@@ -2019,9 +2006,6 @@ CONTAINS
                      DIVA_boundary_BC_v_south_config,                 &
                      DIVA_boundary_BC_v_north_config,                 &
                      DIVA_choice_matrix_solver_config,                &
-                     DIVA_SOR_nit_config,                             &
-                     DIVA_SOR_tol_config,                             &
-                     DIVA_SOR_omega_config,                           &
                      DIVA_PETSc_rtol_config,                          &
                      DIVA_PETSc_abstol_config,                        &
                      choice_timestepping_config,                      &
@@ -2722,12 +2706,12 @@ CONTAINS
     C%ISMIP_output_experiment_code             = ISMIP_output_experiment_code_config
     C%ISMIP_output_basetime                    = ISMIP_output_basetime_config
 
-    ! Scaled vertical coordinate zeta
+    ! The scaled vertical coordinate zeta
     ! ===============================
 
-    C%nz     = nz_config
-    ALLOCATE( C%zeta( C%nz))
-    C%zeta   = zeta_config( 1:C%nz)
+    C%choice_zeta_grid                         = choice_zeta_grid_config
+    C%nz                                       = nz_config
+    C%zeta_irregular_log_R                     = zeta_irregular_log_R_config
 
     ! Reference geometries (initial, present-day, and GIA equilibrium)
     ! ================================================================
@@ -2826,12 +2810,13 @@ CONTAINS
     ! Ice dynamics - velocity
     ! =======================
 
-    C%choice_ice_dynamics                      = choice_ice_dynamics_config
+    C%choice_stress_balance_approximation      = choice_stress_balance_approximation_config
     C%n_flow                                   = n_flow_config
     C%m_enh_sheet                              = m_enh_sheet_config
     C%m_enh_shelf                              = m_enh_shelf_config
     C%choice_ice_margin                        = choice_ice_margin_config
     C%include_SSADIVA_crossterms               = include_SSADIVA_crossterms_config
+    C%choice_hybrid_SIASSA_scheme              = choice_hybrid_SIASSA_scheme_config
     C%do_GL_subgrid_friction                   = do_GL_subgrid_friction_config
     C%do_smooth_geometry                       = do_smooth_geometry_config
     C%r_smooth_geometry                        = r_smooth_geometry_config
@@ -2853,9 +2838,6 @@ CONTAINS
     C%DIVA_boundary_BC_v_south                 = DIVA_boundary_BC_v_south_config
     C%DIVA_boundary_BC_v_north                 = DIVA_boundary_BC_v_north_config
     C%DIVA_choice_matrix_solver                = DIVA_choice_matrix_solver_config
-    C%DIVA_SOR_nit                             = DIVA_SOR_nit_config
-    C%DIVA_SOR_tol                             = DIVA_SOR_tol_config
-    C%DIVA_SOR_omega                           = DIVA_SOR_omega_config
     C%DIVA_PETSc_rtol                          = DIVA_PETSc_rtol_config
     C%DIVA_PETSc_abstol                        = DIVA_PETSc_abstol_config
 

@@ -391,31 +391,36 @@ CONTAINS
     CALL deallocate_shared( mesh%wiAci)
     CALL deallocate_shared( mesh%wedge_index_Ac)
 
-    CALL MatDestroy( mesh%M_map_a_b             , perr)
-    CALL MatDestroy( mesh%M_map_a_c             , perr)
-    CALL MatDestroy( mesh%M_map_b_a             , perr)
-    CALL MatDestroy( mesh%M_map_b_c             , perr)
-    CALL MatDestroy( mesh%M_map_c_a             , perr)
-    CALL MatDestroy( mesh%M_map_c_b             , perr)
+    ! Distributed shared memory for FloodFill maps and stacks
+    CALL deallocate_shared( mesh%wEMap)
+    CALL deallocate_shared( mesh%wEStack1)
+    CALL deallocate_shared( mesh%wEStack2)
 
     CALL MatDestroy( mesh%M_ddx_a_a             , perr)
-    CALL MatDestroy( mesh%M_ddx_a_b             , perr)
-    CALL MatDestroy( mesh%M_ddx_a_c             , perr)
-    CALL MatDestroy( mesh%M_ddx_b_a             , perr)
-    CALL MatDestroy( mesh%M_ddx_b_b             , perr)
-    CALL MatDestroy( mesh%M_ddx_b_c             , perr)
-    CALL MatDestroy( mesh%M_ddx_c_a             , perr)
-    CALL MatDestroy( mesh%M_ddx_c_b             , perr)
-    CALL MatDestroy( mesh%M_ddx_c_c             , perr)
-
     CALL MatDestroy( mesh%M_ddy_a_a             , perr)
+    CALL MatDestroy( mesh%M_map_a_b             , perr)
+    CALL MatDestroy( mesh%M_ddx_a_b             , perr)
     CALL MatDestroy( mesh%M_ddy_a_b             , perr)
+    CALL MatDestroy( mesh%M_map_a_c             , perr)
+    CALL MatDestroy( mesh%M_ddx_a_c             , perr)
     CALL MatDestroy( mesh%M_ddy_a_c             , perr)
+
+    CALL MatDestroy( mesh%M_map_b_a             , perr)
+    CALL MatDestroy( mesh%M_ddx_b_a             , perr)
     CALL MatDestroy( mesh%M_ddy_b_a             , perr)
+    CALL MatDestroy( mesh%M_ddx_b_b             , perr)
     CALL MatDestroy( mesh%M_ddy_b_b             , perr)
+    CALL MatDestroy( mesh%M_map_b_c             , perr)
+    CALL MatDestroy( mesh%M_ddx_b_c             , perr)
     CALL MatDestroy( mesh%M_ddy_b_c             , perr)
+
+    CALL MatDestroy( mesh%M_map_c_a             , perr)
+    CALL MatDestroy( mesh%M_ddx_c_a             , perr)
     CALL MatDestroy( mesh%M_ddy_c_a             , perr)
+    CALL MatDestroy( mesh%M_map_c_b             , perr)
+    CALL MatDestroy( mesh%M_ddx_c_b             , perr)
     CALL MatDestroy( mesh%M_ddy_c_b             , perr)
+    CALL MatDestroy( mesh%M_ddx_c_c             , perr)
     CALL MatDestroy( mesh%M_ddy_c_c             , perr)
 
     CALL MatDestroy( mesh%M2_ddx_b_b            , perr)
@@ -423,19 +428,6 @@ CONTAINS
     CALL MatDestroy( mesh%M2_d2dx2_b_b          , perr)
     CALL MatDestroy( mesh%M2_d2dxdy_b_b         , perr)
     CALL MatDestroy( mesh%M2_d2dy2_b_b          , perr)
-
-    CALL deallocate_matrix_CSR( mesh%M2_ddx_b_b_CSR    )
-    CALL deallocate_matrix_CSR( mesh%M2_ddy_b_b_CSR    )
-    CALL deallocate_matrix_CSR( mesh%M2_d2dx2_b_b_CSR  )
-    CALL deallocate_matrix_CSR( mesh%M2_d2dxdy_b_b_CSR )
-    CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b_CSR  )
-
-    CALL MatDestroy( mesh%M_Neumann_BC_b        , perr)
-    CALL deallocate_matrix_CSR( mesh%M_Neumann_BC_b_CSR)
-
-    CALL deallocate_shared( mesh%wnV_transect)
-    CALL deallocate_shared( mesh%wvi_transect)
-    CALL deallocate_shared( mesh%ww_transect )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

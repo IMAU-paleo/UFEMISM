@@ -41,7 +41,7 @@ MODULE mesh_creation_module
                                              crop_mesh_primary, crop_submesh_primary, allocate_mesh_secondary, &
                                              deallocate_submesh_primary, move_data_from_submesh_to_mesh, share_submesh_access
   USE mesh_Delaunay_module,            ONLY: split_triangle, split_segment, flip_triangle_pairs, move_vertex
-  USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
+  USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh_basic
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
 
   IMPLICIT NONE
@@ -1747,6 +1747,8 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_final_mesh_from_merged_submesh'
     INTEGER                                       :: nV, nTri
+    CHARACTER(LEN=8)                              :: date_str
+    CHARACTER(LEN=10)                             :: time_str
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1784,193 +1786,26 @@ CONTAINS
     CALL find_triangle_areas(                 mesh)
     CALL find_connection_widths(              mesh)
     CALL make_Ac_mesh(                        mesh)    ! Adds  5 MPI windows
-    CALL calc_matrix_operators_mesh(          mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
+    CALL calc_matrix_operators_mesh_basic(    mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
     CALL determine_mesh_resolution(           mesh)
     IF (par%master) CALL find_POI_xy_coordinates( mesh)
     CALL sync
     CALL find_POI_vertices_and_weights(       mesh)
     CALL find_Voronoi_cell_geometric_centres( mesh)
-    CALL create_transect(                     mesh)
 
     CALL check_mesh( mesh)
+
+    ! Give the mesh a nice name
+    IF (par%master) THEN
+      CALL date_and_time( DATE = date_str, TIME = time_str)
+      mesh%name = 'model_mesh_' // date_str // '_' // time_str
+    END IF
+    CALL MPI_BCAST( mesh%name, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 58)
 
   END SUBROUTINE create_final_mesh_from_merged_submesh
-
-  ! ===== Create the list of vertex indices and weights used in making transects =====
-  ! ==================================================================================
-
-  SUBROUTINE create_transect( mesh)
-    ! Create a transect along the x-axis, through the centre of the model domain.
-    ! Useful for benchmark experiments, not so much for realistic simulations.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_transect'
-    REAL(dp), DIMENSION(2)                        :: p_start, p_end
-    INTEGER                                       :: vi_cur, vj_cur, ti_cur, vi_next, vj_next, ti_next, vi_end, vj_end, ti_end, ti
-    INTEGER                                       :: nV_transect
-    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE       :: vi_transect
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE       :: w_transect
-    INTEGER                                       :: n, n1
-    REAL(dp), DIMENSION(2)                        :: pi_next, pj_next, llis
-    LOGICAL                                       :: do_cross
-    INTEGER                                       :: iti, n2, n3
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Allocate temporary memory for the list of transect vertex pairs
-    ! (since we don't know in advance how many there will be)
-    nV_transect = CEILING( 2._dp * (mesh%xmax - mesh%xmin) / mesh%resolution_min)
-    ALLOCATE( vi_transect( nV_transect,2))
-    ALLOCATE( w_transect(  nV_transect,2))
-    nV_transect = 0
-    vi_transect = 0
-
-    ! Done only by the Master
-    IF (par%master) THEN
-
-      ! The start and end points of the transect
-      p_start = [mesh%xmin, (mesh%ymin + mesh%ymax) / 2._dp]
-      p_end   = [mesh%xmax, (mesh%ymin + mesh%ymax) / 2._dp]
-
-      ! Find the pair of vertices on whose connection p_start lies, and the
-      ! triangle whose side is made up by that connection
-      vi_cur = 0
-      vj_cur = 1
-      DO WHILE (mesh%V( vj_cur,2) < p_start(2))
-        vi_cur = vj_cur
-        vj_cur = mesh%C( vi_cur, mesh%nC( vi_cur))
-      END DO
-      ti_cur = mesh%iTri( vi_cur, mesh%niTri( vi_cur))
-
-      ! Exception for Greenland: sometimes the process domain border can intersect with the transect,
-      ! so that it overlaps with lines everywhere. In this case, move it slightly.
-      IF     (p_start(2) == mesh%V( vi_cur,2)) THEN
-        p_start(2) = p_start(2) + 100._dp
-        p_end(  2) = p_end(  2) + 100._dp
-      ELSEIF (p_start(2) == mesh%V( vj_cur,2)) THEN
-        p_start(2) = p_start(2) - 100._dp
-        p_end(  2) = p_end(  2) - 100._dp
-      END IF
-
-      ! List this as the first pair of transect vertices
-      nV_transect = 1
-      vi_transect( 1,:) = [vi_cur,vj_cur]
-      w_transect(1,:) = [NORM2( mesh%V( vj_cur,:) - p_start), NORM2( mesh%V( vi_cur,:) - p_start)] / NORM2( mesh%V( vj_cur,:) - mesh%V( vi_cur,:))
-
-      ! Find the pair of vertices on whose connection p_end lies, and the
-      ! triangle whose side is made up by that connection
-      vi_end = 0
-      vj_end = 2
-      DO WHILE (mesh%V( vj_end,2) < p_end(2))
-        vi_end = vj_end
-        vj_end = mesh%C( vi_end, 1)
-      END DO
-      ti_end = mesh%iTri( vi_end, 1)
-
-      ! Trace the transect through the mesh
-      DO WHILE (ti_cur /= ti_end)
-
-        ! Find out where the transect exits the current triangle
-        ti_next = 0
-        DO n = 1, 3
-
-          n1 = n + 1
-          IF (n1==4) n1 = 1
-
-          vi_next = mesh%Tri( ti_cur,n)
-          vj_next = mesh%Tri( ti_cur,n1)
-
-          IF ((vi_next == vi_cur .AND. vj_next == vj_cur) .OR. (vi_next == vj_cur .AND. vj_next == vi_cur)) CYCLE
-
-          pi_next = mesh%V( vi_next,:)
-          pj_next = mesh%V( vj_next,:)
-
-          CALL segment_intersection( p_start, p_end, pi_next, pj_next, llis, do_cross, mesh%tol_dist)
-
-          IF (do_cross) THEN
-            ! Find the next triangle
-            DO iti = 1, mesh%niTri( vi_next)
-              ti = mesh%iTri( vi_next, iti)
-              DO n2 = 1, 3
-                n3 = n2 + 1
-                IF (n3 == 4) n3 = 1
-                IF (((mesh%Tri( ti,n2) == vj_next .AND. mesh%Tri( ti,n3) == vi_next) .OR. &
-                     (mesh%Tri( ti,n2) == vi_next .AND. mesh%Tri( ti,n3) == vj_next)) .AND. &
-                    ti /= ti_cur) THEN
-                  ti_next = ti
-                  EXIT
-                END IF
-              END DO
-            END DO ! DO iti = 1, mesh%niTri( vi_next)
-
-            EXIT
-          END IF ! IF (do_cross) THEN
-
-        END DO ! DO n = 1, 3
-
-        ! Check if we managed to find the crossing
-        IF (ti_next == 0) THEN
-
-          CALL write_mesh_to_text_file( mesh, 'mesh_during_transect_comp.txt')
-
-          IF (C%choice_refgeo_init_NAM == 'realistic' .OR. &
-              C%choice_refgeo_init_EAS == 'realistic' .OR. &
-              C%choice_refgeo_init_GRL == 'realistic' .OR. &
-              C%choice_refgeo_init_ANT == 'realistic') THEN
-            CALL warning('couldnt find next triangle along transect. Check out output mesh .txt file!')
-          ELSE
-            CALL crash('couldnt find next triangle along transect. Check out output mesh .txt file!')
-          END IF
-
-        END IF
-
-        ! Add this new vertex pair to the list
-        nV_transect = nV_transect + 1
-        vi_transect( nV_transect,:) = [vi_next, vj_next]
-        w_transect(  nV_transect,:) = [NORM2( mesh%V( vj_next,:) - llis), NORM2( mesh%V( vi_next,:) - llis)] / NORM2( mesh%V( vj_next,:) - mesh%V( vi_next,:))
-
-        ! Cycle the vertex pairs
-        vi_cur = vi_next
-        vj_cur = vj_next
-        ti_cur = ti_next
-
-      END DO ! DO WHILE (ti_cur /= ti_end)
-
-      ! Add the final pair of vertices to the transect
-      nV_transect = nV_transect + 1
-      vi_transect( nV_transect,:) = [vi_end, vj_end]
-      w_transect(  nV_transect,:) = [NORM2( mesh%V( vj_end,:) - p_end), NORM2( mesh%V( vi_end,:) - p_end)] / NORM2( mesh%V( vj_end,:) - mesh%V( vi_end,:))
-
-    END IF ! IF (par%master) THEN
-    CALL sync
-
-    ! Allocate shared memory, copy list of transect vertex pairs
-    CALl allocate_shared_int_0D( mesh%nV_transect, mesh%wnV_transect)
-    IF (par%master) mesh%nV_transect = nV_transect
-    CALL sync
-    CALL allocate_shared_int_2D( mesh%nV_transect, 2, mesh%vi_transect, mesh%wvi_transect)
-    CALL allocate_shared_dp_2D(  mesh%nV_transect, 2, mesh%w_transect,  mesh%ww_transect )
-    IF (par%master) mesh%vi_transect = vi_transect( 1:mesh%nV_transect,:)
-    IF (par%master) mesh%w_transect  = w_transect(  1:mesh%nV_transect,:)
-    CALL sync
-
-    ! Clean up after yourself
-    DEALLOCATE( vi_transect)
-    DEALLOCATE( w_transect)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 3)
-
-  END SUBROUTINE create_transect
 
   ! ===== Initialise a five-vertex dummy mesh =====
   ! ===============================================

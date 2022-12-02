@@ -24,16 +24,19 @@ MODULE basal_conditions_and_sliding_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_1D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
+                                             checksum_dp_1D, checksum_dp_2D, checksum_dp_3D, &
                                              SSA_Schoof2006_analytical_solution, extrapolate_Gaussian_floodfill_mesh
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file, create_BIV_bed_roughness_file_mesh, &
-                                             create_BIV_bed_roughness_file_grid, inquire_BIV_target_velocity, &
-                                             read_BIV_target_velocity, get_grid_from_file
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
-                                             type_reference_geometry, type_grid, type_restart_data
+  USE netcdf_debug_module,             ONLY: debug
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_reference_geometry, type_grid, type_restart_data
   USE data_types_netcdf_module,        ONLY: type_netcdf_BIV_target_velocity
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, smooth_Gaussian_2D, calc_remapping_operator_grid2mesh, &
-                                             deallocate_remapping_operators_grid2mesh, map_grid2mesh_2D
+  USE mesh_mapping_module,             ONLY: smooth_Gaussian_2D, map_from_xy_grid_to_mesh_2D, remap_field_dp_2D
   USE mesh_help_functions_module,      ONLY: mesh_bilinear_dp, find_containing_vertex
+  USE netcdf_basic_module,             ONLY: open_existing_netcdf_file_for_reading, close_netcdf_file
+  USE netcdf_input_module,             ONLY: read_field_from_xy_file_2D
+  USE netcdf_output_module,            ONLY: create_new_netcdf_file_for_writing, setup_mesh_in_netcdf_file, setup_xy_grid_in_netcdf_file, &
+                                             add_field_mesh_int_2D, add_field_grid_int_2D, write_to_field_multiple_options_mesh_dp_2D, &
+                                             write_to_field_multiple_options_grid_dp_2D
+  USE mesh_operators_module,           ONLY: map_b_to_a_2D, map_a_to_b_2D
 
   IMPLICIT NONE
 
@@ -68,13 +71,14 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_basal_conditions
+
   SUBROUTINE initialise_basal_conditions( mesh, ice, restart)
     ! Allocation and initialisation
 
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_restart_data),             INTENT(IN)    :: restart
 
@@ -145,6 +149,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_basal_hydrology
+
   SUBROUTINE initialise_basal_hydrology( mesh, ice)
     ! Allocation and initialisation
 
@@ -205,6 +210,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_pore_water_pressure_saturated
+
   SUBROUTINE calc_pore_water_pressure_Martin2011( mesh, ice)
     ! Calculate the pore water pressure
     !
@@ -989,69 +995,82 @@ CONTAINS
 ! ===== Sliding laws =====
 ! ========================
 
-  SUBROUTINE calc_sliding_law( mesh, ice, u_a, v_a, beta_a)
-    ! Calculate the sliding term beta in the SSA/DIVA using the specified sliding law
+  SUBROUTINE calc_basal_friction_coefficient( mesh, ice, u_b, v_b)
+    ! Calculate the basal friction coefficient betab using the specified sliding law
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law'
+    REAL(dp), DIMENSION(:    ), POINTER                :: u_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: v_a
+    INTEGER                                            :: wu_a, wv_a
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV, u_a    , wu_a    )
+    CALL allocate_shared_dp_1D( mesh%nV, v_a    , wv_a    )
+
+    ! Map velocities to the a-grid
+    CALL map_b_to_a_2D( mesh, u_b, u_a)
+    CALL map_b_to_a_2D( mesh, v_b, v_a)
+
     IF     (C%choice_sliding_law == 'no_sliding') THEN
       ! No sliding allowed (choice of beta is trivial)
-      beta_a( mesh%vi1:mesh%vi2) = 0._dp
+      ice%beta_b_a( mesh%vi1:mesh%vi2) = 0._dp
       CALL sync
     ELSEIF (C%choice_sliding_law == 'idealised') THEN
       ! Sliding laws for some idealised experiments
-      CALL calc_sliding_law_idealised(           mesh, ice, u_a, v_a, beta_a)
+      CALL calc_sliding_law_idealised(           mesh, ice, u_a, v_a)
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Weertman-type ("power law") sliding law
-      CALL calc_sliding_law_Weertman(            mesh, ice, u_a, v_a, beta_a)
+      CALL calc_sliding_law_Weertman(            mesh, ice, u_a, v_a)
     ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
       ! Coulomb-type sliding law
-      CALL calc_sliding_law_Coulomb(             mesh, ice, u_a, v_a, beta_a)
+      CALL calc_sliding_law_Coulomb(             mesh, ice, u_a, v_a)
     ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
       ! Regularised Coulomb-type sliding law
-      CALL calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
+      CALL calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a)
     ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Tsai et al. (2015)
-      CALL calc_sliding_law_Tsai2015(            mesh, ice, u_a, v_a, beta_a)
+      CALL calc_sliding_law_Tsai2015(            mesh, ice, u_a, v_a)
     ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation according to Schoof (2005)
-      CALL calc_sliding_law_Schoof2005(          mesh, ice, u_a, v_a, beta_a)
+      CALL calc_sliding_law_Schoof2005(          mesh, ice, u_a, v_a)
     ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
-      CALL calc_sliding_law_ZoetIverson(         mesh, ice, u_a, v_a, beta_a)
+      CALL calc_sliding_law_ZoetIverson(         mesh, ice, u_a, v_a)
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
 
+    ! Clean up after yourself
+    CALL deallocate_shared( wu_a    )
+    CALL deallocate_shared( wv_a    )
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE calc_sliding_law
+  END SUBROUTINE calc_basal_friction_coefficient
 
-  SUBROUTINE calc_sliding_law_Weertman( mesh, ice, u_a, v_a, beta_a)
+  SUBROUTINE calc_sliding_law_Weertman( mesh, ice, u_a, v_a)
     ! Weertman-type ("power law") sliding law
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Weertman'
@@ -1068,29 +1087,29 @@ CONTAINS
       uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
 
       ! Asay-Davis et al. (2016), Eq. 6
-      beta_a( vi) = ice%beta_sq_a( vi) * uabs ** (1._dp / C%slid_Weertman_m - 1._dp)
+      ice%beta_b_a( vi) = ice%beta_sq_a( vi) * uabs ** (1._dp / C%slid_Weertman_m - 1._dp)
 
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Weertman
-  SUBROUTINE calc_sliding_law_Coulomb( mesh, ice, u_a, v_a, beta_a)
+
+  SUBROUTINE calc_sliding_law_Coulomb( mesh, ice, u_a, v_a)
     ! Coulomb-type sliding law
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Coulomb'
@@ -1112,29 +1131,29 @@ CONTAINS
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
       uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
 
-      beta_a( vi) = ice%tauc_a( vi) / uabs
+      ice%beta_b_a( vi) = ice%tauc_a( vi) / uabs
 
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Coulomb
-  SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
+
+  SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a)
     ! Regularised Coulomb-type sliding law
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Coulomb_regularised'
@@ -1156,21 +1175,22 @@ CONTAINS
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
       uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
 
-      beta_a( vi) = ice%tauc_a( vi) * uabs ** (C%slid_Coulomb_reg_q_plastic - 1._dp) / (C%slid_Coulomb_reg_u_threshold ** C%slid_Coulomb_reg_q_plastic)
+      ice%beta_b_a( vi) = ice%tauc_a( vi) * uabs ** (C%slid_Coulomb_reg_q_plastic - 1._dp) / (C%slid_Coulomb_reg_u_threshold ** C%slid_Coulomb_reg_q_plastic)
 
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Coulomb_regularised
-  SUBROUTINE calc_sliding_law_Tsai2015(  mesh, ice, u_a, v_a, beta_a)
+
+  SUBROUTINE calc_sliding_law_Tsai2015(  mesh, ice, u_a, v_a)
     ! Modified power-law relation according to Tsai et al. (2015)
-    ! (implementation based on equations provided by Asay-Dvis et al., 2016)
+    ! (implementation based on equations provided by Asay-Davis et al., 2016)
     !
     ! Asay-Dvis et al.: Experimental design for three interrelated marine ice sheet and ocean model
     ! intercomparison projects: MISMIP v. 3 (MISMIP+), ISOMIP v. 2 (ISOMIP+) and MISOMIP v. 1 (MISOMIP1),
@@ -1183,10 +1203,9 @@ CONTAINS
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Tsai2015'
@@ -1203,21 +1222,22 @@ CONTAINS
       uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
 
       ! Asay-Dvis et al. (2016), Eq. 7
-      beta_a( vi) = MIN( ice%alpha_sq_a( vi) * ice%Neff_a( vi), ice%beta_sq_a( vi) * uabs ** (1._dp / C%slid_Weertman_m)) * uabs**(-1._dp)
+      ice%beta_b_a( vi) = MIN( ice%alpha_sq_a( vi) * ice%Neff_a( vi), ice%beta_sq_a( vi) * uabs ** (1._dp / C%slid_Weertman_m)) * uabs**(-1._dp)
 
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Tsai2015
-  SUBROUTINE calc_sliding_law_Schoof2005(  mesh, ice, u_a, v_a, beta_a)
+
+  SUBROUTINE calc_sliding_law_Schoof2005(  mesh, ice, u_a, v_a)
     ! Modified power-law relation according to Tsai et al. (2015)
-    ! (implementation based on equations provided by Asay-Dvis et al., 2016)
+    ! (implementation based on equations provided by Asay-Davis et al., 2016)
     !
     ! Asay-Dvis et al.: Experimental design for three interrelated marine ice sheet and ocean model
     ! intercomparison projects: MISMIP v. 3 (MISMIP+), ISOMIP v. 2 (ISOMIP+) and MISOMIP v. 1 (MISOMIP1),
@@ -1229,10 +1249,9 @@ CONTAINS
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Schoof2005'
@@ -1249,30 +1268,30 @@ CONTAINS
       uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
 
       ! Asay-Dvis et al. (2016), Eq. 11
-      beta_a( vi) = ((ice%beta_sq_a( vi) * uabs**(1._dp / C%slid_Weertman_m) * ice%alpha_sq_a( vi) * ice%Neff_a( vi)) / &
+      ice%beta_b_a( vi) = ((ice%beta_sq_a( vi) * uabs**(1._dp / C%slid_Weertman_m) * ice%alpha_sq_a( vi) * ice%Neff_a( vi)) / &
         ((ice%beta_sq_a( vi)**C%slid_Weertman_m * uabs + (ice%alpha_sq_a( vi) * ice%Neff_a( vi))**C%slid_Weertman_m)**(1._dp / C%slid_Weertman_m))) * uabs**(-1._dp)
 
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Schoof2005
-  SUBROUTINE calc_sliding_law_ZoetIverson( mesh, ice, u_a, v_a, beta_a)
+
+  SUBROUTINE calc_sliding_law_ZoetIverson( mesh, ice, u_a, v_a)
     ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_ZoetIverson'
@@ -1295,30 +1314,29 @@ CONTAINS
       uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
 
       ! Zoet & Iverson (2020), Eq. (3) (divided by u to give beta = tau_b / u)
-      beta_a( vi) = ice%tauc_a( vi) * (uabs**(1._dp / C%slid_ZI_p - 1._dp)) * ((uabs + C%slid_ZI_ut)**(-1._dp / C%slid_ZI_p))
+      ice%beta_b_a( vi) = ice%tauc_a( vi) * (uabs**(1._dp / C%slid_ZI_p - 1._dp)) * ((uabs + C%slid_ZI_ut)**(-1._dp / C%slid_ZI_p))
 
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_ZoetIverson
 
-  SUBROUTINE calc_sliding_law_idealised(  mesh, ice, u_a, v_a, beta_a)
+  SUBROUTINE calc_sliding_law_idealised(  mesh, ice, u_a, v_a)
     ! Sliding laws for some idealised experiments
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised'
@@ -1334,12 +1352,12 @@ CONTAINS
     IF     (C%choice_idealised_sliding_law == 'ISMIP_HOM_C') THEN
       ! ISMIP-HOM experiment C
 
-      CALL calc_sliding_law_idealised_ISMIP_HOM_C( mesh, beta_a)
+      CALL calc_sliding_law_idealised_ISMIP_HOM_C( mesh, ice)
 
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP_HOM_D') THEN
       ! ISMIP-HOM experiment D
 
-      CALL calc_sliding_law_idealised_ISMIP_HOM_D( mesh, beta_a)
+      CALL calc_sliding_law_idealised_ISMIP_HOM_D( mesh, ice)
 
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP_HOM_E') THEN
       ! ISMIP-HOM experiment E
@@ -1349,7 +1367,7 @@ CONTAINS
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP_HOM_F') THEN
       ! ISMIP-HOM experiment F
 
-      CALL calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_a)
+      CALL calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice)
 
     ELSE
       CALL crash('unknown choice_idealised_sliding_law "' // TRIM( C%choice_idealised_sliding_law) // '"!')
@@ -1359,7 +1377,8 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_idealised
-  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C( mesh, beta_a)
+
+  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C( mesh, ice)
     ! Sliding laws for some idealised experiments
     !
     ! ISMIP-HOM experiment C
@@ -1368,7 +1387,7 @@ CONTAINS
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised_ISMIP_HOM_C'
@@ -1381,18 +1400,19 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
       x = mesh%V( vi,1)
       y = mesh%V( vi,2)
-      beta_a( vi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%ISMIP_HOM_L) * SIN( 2._dp * pi * y / C%ISMIP_HOM_L)
+      ice%beta_b_a( vi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%ISMIP_HOM_L) * SIN( 2._dp * pi * y / C%ISMIP_HOM_L)
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C
-  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D( mesh, beta_a)
+
+  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D( mesh, ice)
     ! Sliding laws for some idealised experiments
     !
     ! ISMIP-HOM experiment D
@@ -1401,7 +1421,7 @@ CONTAINS
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised_ISMIP_HOM_D'
@@ -1413,18 +1433,19 @@ CONTAINS
 
     DO vi = mesh%vi1, mesh%vi2
       x = mesh%V( vi,1)
-      beta_a( vi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%ISMIP_HOM_L)
+      ice%beta_b_a( vi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%ISMIP_HOM_L)
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D
-  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_a)
+
+  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice)
     ! Sliding laws for some idealised experiments
     !
     ! ISMIP-HOM experiment F
@@ -1433,8 +1454,7 @@ CONTAINS
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised_ISMIP_HOM_F'
@@ -1444,12 +1464,12 @@ CONTAINS
     CALL init_routine( routine_name)
 
     DO vi = mesh%vi1, mesh%vi2
-      beta_a( vi) = (ice%A_flow_vav_a( vi) * 1000._dp)**(-1._dp)
+      ice%beta_b_a( vi) = (ice%A_flow_vav_a( vi) * 1000._dp)**(-1._dp)
     END DO
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    CALL check_for_NaN_dp_1D( ice%beta_b_a, 'beta_b_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1459,15 +1479,14 @@ CONTAINS
 ! ===== Remapping =====
 ! =====================
 
-  SUBROUTINE remap_basal_conditions( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_basal_conditions( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -1477,16 +1496,17 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Basal hydrology
-    CALL remap_basal_hydrology( mesh_old, mesh_new, map, ice)
+    CALL remap_basal_hydrology( mesh_old, mesh_new, ice)
 
     ! Bed roughness
-    CALL remap_bed_roughness( mesh_old, mesh_new, map, ice)
+    CALL remap_bed_roughness( mesh_old, mesh_new, ice)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_basal_conditions
-  SUBROUTINE remap_basal_hydrology( mesh_old, mesh_new, map, ice)
+
+  SUBROUTINE remap_basal_hydrology( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
@@ -1494,7 +1514,6 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -1507,7 +1526,6 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%int_dummy
 
     ! Allocate shared memory
     IF     (C%choice_basal_hydrology == 'saturated') THEN
@@ -1526,15 +1544,15 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_basal_hydrology
-  SUBROUTINE remap_bed_roughness( mesh_old, mesh_new, map, ice)
+
+  SUBROUTINE remap_bed_roughness( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -1547,7 +1565,6 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%int_dummy
 
     ! == Reallocate/Remap shared memory
     ! =================================
@@ -1561,9 +1578,9 @@ CONTAINS
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Power-law sliding law
       IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
         IF (C%do_BIVgeo) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
+          CALL remap_field_dp_2D( mesh_old, mesh_new, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
         END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
@@ -1573,10 +1590,10 @@ CONTAINS
             C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation
       IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
         IF (C%do_BIVgeo) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
+          CALL remap_field_dp_2D( mesh_old, mesh_new, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
         END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
@@ -1588,10 +1605,10 @@ CONTAINS
             C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Yield-stress sliding law
       IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
         IF (C%do_BIVgeo) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'cons_2nd_order')
+          CALL remap_field_dp_2D( mesh_old, mesh_new, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'cons_2nd_order')
         END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
@@ -2220,18 +2237,48 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_inverted_bed_roughness_to_file'
+    CHARACTER(LEN=256)                                 :: filename_mesh, filename_grid
+    INTEGER                                            :: i
+    INTEGER                                            :: ncid_mesh, ncid_grid
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL create_BIV_bed_roughness_file_mesh( mesh,       ice)
-    CALL create_BIV_bed_roughness_file_grid( mesh, grid, ice)
+    ! File names
+    filename_mesh = TRIM( C%BIVgeo_filename_output)
+    filename_grid = TRIM( C%BIVgeo_filename_output)
+    i = INDEX( filename_grid,'.nc')
+    filename_grid = filename_grid( 1:i-1) // '_grid.nc'
+
+    ! Create files
+    CALL create_new_netcdf_file_for_writing( filename_mesh, ncid_mesh)
+    CALL create_new_netcdf_file_for_writing( filename_grid, ncid_grid)
+
+    ! Set up mesh and grid
+    CALL setup_mesh_in_netcdf_file(    filename_mesh, ncid_mesh, mesh)
+    CALL setup_xy_grid_in_netcdf_file( filename_grid, ncid_grid, grid)
+
+    ! Add variables and write data
+    IF     (C%choice_sliding_law == 'Weertman') THEN
+      ! Add variables
+      CALL add_field_mesh_int_2D( filename_mesh, ncid_mesh, 'beta_sq', long_name = 'beta_sq', units = 'Pa m^−1/3 yr^1/3')
+      CALL add_field_grid_int_2D( filename_grid, ncid_grid, 'beta_sq', long_name = 'beta_sq', units = 'Pa m^−1/3 yr^1/3')
+      ! Write data
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename_mesh, ncid_mesh,              'beta_sq', ice%beta_sq_a)
+      CALL write_to_field_multiple_options_grid_dp_2D( filename_grid, ncid_grid, mesh, 'ANT', 'beta_sq', ice%beta_sq_a)
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
+
+    ! Close the files
+    CALL close_netcdf_file( ncid_mesh)
+    CALL close_netcdf_file( ncid_grid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2244,7 +2291,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -2274,18 +2321,19 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_basal_inversion
+
   SUBROUTINE initialise_basal_inversion_target_velocity( mesh, ice)
     ! Initialise the target velocity fields used in a velocity-based basal inversion routine
 
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_basal_inversion_target_velocity'
-    TYPE(type_netcdf_BIV_target_velocity)              :: netcdf
+    CHARACTER(LEN=256)                                 :: filename
     TYPE(type_grid)                                    :: grid_raw
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  u_surf_raw,  v_surf_raw,  uabs_surf_raw
     INTEGER                                            :: wu_surf_raw, wv_surf_raw, wuabs_surf_raw
@@ -2298,31 +2346,16 @@ CONTAINS
     ! Determine filename
     IF     (C%choice_BIVgeo_method == 'CISM+' .OR. &
             C%choice_BIVgeo_method == 'Berends2022') THEN
-      netcdf%filename = C%BIVgeo_target_velocity_filename
+      filename = C%BIVgeo_target_velocity_filename
     ELSE
       CALL crash('unknown choice_BIVgeo_method "' // TRIM(C%choice_BIVgeo_method) // '"!')
     END IF
 
-    IF (par%master) WRITE(0,*) '  Initialising basal inversion target velocity from file ', TRIM( netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) '  Initialising basal inversion target velocity from file ', TRIM( filename), '...'
 
-    ! Set up the grid for this input file
-    CALL get_grid_from_file( netcdf%filename, grid_raw)
-
-    ! Calculate the mapping operator between this grid and the mesh
-    CALL calc_remapping_operator_grid2mesh( grid_raw, mesh)
-
-    ! Inquire if all the required fields are present in the specified NetCDF file
-    CALL inquire_BIV_target_velocity( netcdf)
-    CALL sync
-
-    ! Allocate memory for raw data
-    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, u_surf_raw   , wu_surf_raw   )
-    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, v_surf_raw   , wv_surf_raw   )
-    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, uabs_surf_raw, wuabs_surf_raw)
-
-    ! Read data from input file
-    CALL read_BIV_target_velocity( netcdf, u_surf_raw, v_surf_raw)
-    CALL sync
+    ! Read x and y velocities from the NetCDF file
+    CALL read_field_from_xy_file_2D( filename, 'u_surf', 'ANT', grid_raw, u_surf_raw, wu_surf_raw)
+    CALL read_field_from_xy_file_2D( filename, 'v_surf', 'ANT', grid_raw, v_surf_raw, wv_surf_raw)
 
     ! NOTE: do not check for NaNs in the target velocity field. The Rignot 2011 Antarctica velocity product
     !       has a lot of missing data points, indicated by NaN values. This is acceptable, the basal inversion
@@ -2356,8 +2389,8 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, ice%BIV_uabs_surf_target, ice%wBIV_uabs_surf_target)
 
-    ! Map (transposed) raw data to the model mesh
-    CALL map_grid2mesh_2D( grid_raw, mesh, uabs_surf_raw, ice%BIV_uabs_surf_target)
+    ! Map raw data to the model mesh
+    CALL map_from_xy_grid_to_mesh_2D( grid_raw, mesh, uabs_surf_raw, ice%BIV_uabs_surf_target)
 
     ! Deallocate raw data
     CALL deallocate_shared( grid_raw%wnx  )
@@ -2365,7 +2398,6 @@ CONTAINS
     CALL deallocate_shared( grid_raw%wdx  )
     CALL deallocate_shared( grid_raw%wx   )
     CALL deallocate_shared( grid_raw%wy   )
-    CALL deallocate_remapping_operators_grid2mesh( grid_raw)
     CALL deallocate_shared( wu_surf_raw   )
     CALL deallocate_shared( wv_surf_raw   )
     CALL deallocate_shared( wuabs_surf_raw)

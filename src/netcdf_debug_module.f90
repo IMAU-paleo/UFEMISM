@@ -11,8 +11,8 @@ MODULE netcdf_debug_module
 !
 ! Example: say we want to see what's going on with the field ice%Hi_a:
 !
-! debug%dp_2D_a_01 = ice%Hi_a
-! CALL write_to_debug_file
+!   debug%dp_2D_a_01 = ice%Hi_a
+!   CALL write_to_debug_file
 !
 ! And voila, there you go.
 ! NOTE: write_to_debug_file, like all NetCDF routines, is shared; if called
@@ -21,7 +21,7 @@ MODULE netcdf_debug_module
 ! The debug structure is a global variable of this module; in order to
 ! be able to access it from other modules, import it from this module:
 !
-! USE netcdf_debug_module, ONLY: debug, write_to_debug_file
+!   USE netcdf_debug_module, ONLY: debug, write_to_debug_file
 !
 ! The fact that the different model regions have different meshes, and
 ! therefore need different output files, is already taken care of;
@@ -70,6 +70,7 @@ MODULE netcdf_debug_module
                                              type_grid
   USE netcdf,                          ONLY: NF90_INT, NF90_DOUBLE
   USE netcdf_basic_module,             ONLY: create_new_netcdf_file_for_writing, create_dimension, create_variable, &
+                                             open_existing_netcdf_file_for_writing, close_netcdf_file, &
                                              write_var_int_1D, write_var_dp_1D, &
                                              write_var_int_2D, write_var_dp_2D, &
                                              write_var_int_3D, write_var_dp_3D
@@ -118,94 +119,100 @@ CONTAINS
       RETURN
     END IF
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_writing( debug%filename, ncid)
+
     ! Write data
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_01', debug%int_2D_a_01)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_02', debug%int_2D_a_02)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_03', debug%int_2D_a_03)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_04', debug%int_2D_a_04)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_05', debug%int_2D_a_05)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_06', debug%int_2D_a_06)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_07', debug%int_2D_a_07)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_08', debug%int_2D_a_08)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_09', debug%int_2D_a_09)
-    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, 'int_2D_a_10', debug%int_2D_a_10)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_01', debug%int_2D_a_01)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_02', debug%int_2D_a_02)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_03', debug%int_2D_a_03)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_04', debug%int_2D_a_04)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_05', debug%int_2D_a_05)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_06', debug%int_2D_a_06)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_07', debug%int_2D_a_07)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_08', debug%int_2D_a_08)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_09', debug%int_2D_a_09)
+    CALL write_to_field_multiple_options_mesh_int_2D_notime( debug%filename, ncid, 'int_2D_a_10', debug%int_2D_a_10)
 
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_01', debug%int_2D_b_01)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_02', debug%int_2D_b_02)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_03', debug%int_2D_b_03)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_04', debug%int_2D_b_04)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_05', debug%int_2D_b_05)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_06', debug%int_2D_b_06)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_07', debug%int_2D_b_07)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_08', debug%int_2D_b_08)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_09', debug%int_2D_b_09)
-    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, 'int_2D_b_10', debug%int_2D_b_10)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_01', debug%int_2D_b_01)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_02', debug%int_2D_b_02)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_03', debug%int_2D_b_03)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_04', debug%int_2D_b_04)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_05', debug%int_2D_b_05)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_06', debug%int_2D_b_06)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_07', debug%int_2D_b_07)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_08', debug%int_2D_b_08)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_09', debug%int_2D_b_09)
+    CALL write_to_field_multiple_options_mesh_int_2D_b_notime( debug%filename, ncid, 'int_2D_b_10', debug%int_2D_b_10)
 
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_01', debug%int_2D_c_01)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_02', debug%int_2D_c_02)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_03', debug%int_2D_c_03)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_04', debug%int_2D_c_04)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_05', debug%int_2D_c_05)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_06', debug%int_2D_c_06)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_07', debug%int_2D_c_07)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_08', debug%int_2D_c_08)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_09', debug%int_2D_c_09)
-    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, 'int_2D_c_10', debug%int_2D_c_10)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_01', debug%int_2D_c_01)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_02', debug%int_2D_c_02)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_03', debug%int_2D_c_03)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_04', debug%int_2D_c_04)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_05', debug%int_2D_c_05)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_06', debug%int_2D_c_06)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_07', debug%int_2D_c_07)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_08', debug%int_2D_c_08)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_09', debug%int_2D_c_09)
+    CALL write_to_field_multiple_options_mesh_int_2D_c_notime( debug%filename, ncid, 'int_2D_c_10', debug%int_2D_c_10)
 
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_01', debug%dp_2D_a_01)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_02', debug%dp_2D_a_02)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_03', debug%dp_2D_a_03)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_04', debug%dp_2D_a_04)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_05', debug%dp_2D_a_05)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_06', debug%dp_2D_a_06)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_07', debug%dp_2D_a_07)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_08', debug%dp_2D_a_08)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_09', debug%dp_2D_a_09)
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, 'dp_2D_a_10', debug%dp_2D_a_10)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_01', debug%dp_2D_a_01)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_02', debug%dp_2D_a_02)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_03', debug%dp_2D_a_03)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_04', debug%dp_2D_a_04)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_05', debug%dp_2D_a_05)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_06', debug%dp_2D_a_06)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_07', debug%dp_2D_a_07)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_08', debug%dp_2D_a_08)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_09', debug%dp_2D_a_09)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( debug%filename, ncid, 'dp_2D_a_10', debug%dp_2D_a_10)
 
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_01', debug%dp_2D_b_01)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_02', debug%dp_2D_b_02)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_03', debug%dp_2D_b_03)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_04', debug%dp_2D_b_04)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_05', debug%dp_2D_b_05)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_06', debug%dp_2D_b_06)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_07', debug%dp_2D_b_07)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_08', debug%dp_2D_b_08)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_09', debug%dp_2D_b_09)
-    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, 'dp_2D_b_10', debug%dp_2D_b_10)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_01', debug%dp_2D_b_01)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_02', debug%dp_2D_b_02)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_03', debug%dp_2D_b_03)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_04', debug%dp_2D_b_04)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_05', debug%dp_2D_b_05)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_06', debug%dp_2D_b_06)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_07', debug%dp_2D_b_07)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_08', debug%dp_2D_b_08)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_09', debug%dp_2D_b_09)
+    CALL write_to_field_multiple_options_mesh_dp_2D_b_notime( debug%filename, ncid, 'dp_2D_b_10', debug%dp_2D_b_10)
 
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_01', debug%dp_2D_c_01)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_02', debug%dp_2D_c_02)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_03', debug%dp_2D_c_03)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_04', debug%dp_2D_c_04)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_05', debug%dp_2D_c_05)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_06', debug%dp_2D_c_06)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_07', debug%dp_2D_c_07)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_08', debug%dp_2D_c_08)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_09', debug%dp_2D_c_09)
-    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, 'dp_2D_c_10', debug%dp_2D_c_10)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_01', debug%dp_2D_c_01)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_02', debug%dp_2D_c_02)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_03', debug%dp_2D_c_03)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_04', debug%dp_2D_c_04)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_05', debug%dp_2D_c_05)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_06', debug%dp_2D_c_06)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_07', debug%dp_2D_c_07)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_08', debug%dp_2D_c_08)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_09', debug%dp_2D_c_09)
+    CALL write_to_field_multiple_options_mesh_dp_2D_c_notime( debug%filename, ncid, 'dp_2D_c_10', debug%dp_2D_c_10)
 
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_01', debug%dp_2D_monthly_a_01)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_02', debug%dp_2D_monthly_a_02)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_03', debug%dp_2D_monthly_a_03)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_04', debug%dp_2D_monthly_a_04)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_05', debug%dp_2D_monthly_a_05)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_06', debug%dp_2D_monthly_a_06)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_07', debug%dp_2D_monthly_a_07)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_08', debug%dp_2D_monthly_a_08)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_09', debug%dp_2D_monthly_a_09)
-    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, 'dp_2D_monthly_a_10', debug%dp_2D_monthly_a_10)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_01', debug%dp_2D_monthly_a_01)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_02', debug%dp_2D_monthly_a_02)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_03', debug%dp_2D_monthly_a_03)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_04', debug%dp_2D_monthly_a_04)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_05', debug%dp_2D_monthly_a_05)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_06', debug%dp_2D_monthly_a_06)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_07', debug%dp_2D_monthly_a_07)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_08', debug%dp_2D_monthly_a_08)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_09', debug%dp_2D_monthly_a_09)
+    CALL write_to_field_multiple_options_mesh_dp_2D_monthly_notime( debug%filename, ncid, 'dp_2D_monthly_a_10', debug%dp_2D_monthly_a_10)
 
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_01', debug%dp_3D_a_01)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_02', debug%dp_3D_a_02)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_03', debug%dp_3D_a_03)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_04', debug%dp_3D_a_04)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_05', debug%dp_3D_a_05)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_06', debug%dp_3D_a_06)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_07', debug%dp_3D_a_07)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_08', debug%dp_3D_a_08)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_09', debug%dp_3D_a_09)
-    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, 'dp_3D_a_10', debug%dp_3D_a_10)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_01', debug%dp_3D_a_01)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_02', debug%dp_3D_a_02)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_03', debug%dp_3D_a_03)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_04', debug%dp_3D_a_04)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_05', debug%dp_3D_a_05)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_06', debug%dp_3D_a_06)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_07', debug%dp_3D_a_07)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_08', debug%dp_3D_a_08)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_09', debug%dp_3D_a_09)
+    CALL write_to_field_multiple_options_mesh_dp_3D_notime( debug%filename, ncid, 'dp_3D_a_10', debug%dp_3D_a_10)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -225,6 +232,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_debug_file'
     CHARACTER(LEN=256)                                 :: filename
     LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -233,6 +241,8 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
+
+    IF (par%master) WRITE(0,*) '  Creating new debug file based on new mesh...'
 
     ! Determine NetCDF debug file name for this model region
     filename = 'debug_NAM.nc'
@@ -249,103 +259,106 @@ CONTAINS
     CALL sync
 
     ! Create a new NetCDF file
-    CALL create_new_netcdf_file_for_writing( filename)
+    CALL create_new_netcdf_file_for_writing( filename, ncid)
 
     ! Set up the mesh in this file
-    CALL setup_mesh_in_netcdf_file( filename, region%mesh)
+    CALL setup_mesh_in_netcdf_file( filename, ncid, region%mesh)
 
     ! Add zeta and month dimensions
-    CALL add_zeta_dimension_to_file(  filename)
-    CALL add_month_dimension_to_file( filename)
+    CALL add_zeta_dimension_to_file(  filename, ncid)
+    CALL add_month_dimension_to_file( filename, ncid)
 
     ! Add field variables
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_01')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_02')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_03')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_04')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_05')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_06')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_07')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_08')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_09')
-    CALL add_field_mesh_int_2D_notime( filename, 'int_2D_a_10')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_01')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_02')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_03')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_04')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_05')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_06')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_07')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_08')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_09')
+    CALL add_field_mesh_int_2D_notime( filename, ncid, 'int_2D_a_10')
 
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_01')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_02')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_03')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_04')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_05')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_06')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_07')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_08')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_09')
-    CALL add_field_mesh_int_2D_b_notime( filename, 'int_2D_b_10')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_01')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_02')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_03')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_04')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_05')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_06')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_07')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_08')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_09')
+    CALL add_field_mesh_int_2D_b_notime( filename, ncid, 'int_2D_b_10')
 
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_01')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_02')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_03')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_04')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_05')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_06')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_07')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_08')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_09')
-    CALL add_field_mesh_int_2D_c_notime( filename, 'int_2D_c_10')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_01')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_02')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_03')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_04')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_05')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_06')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_07')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_08')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_09')
+    CALL add_field_mesh_int_2D_c_notime( filename, ncid, 'int_2D_c_10')
 
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_01')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_02')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_03')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_04')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_05')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_06')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_07')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_08')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_09')
-    CALL add_field_mesh_dp_2D_notime( filename, 'dp_2D_a_10')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_01')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_02')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_03')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_04')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_05')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_06')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_07')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_08')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_09')
+    CALL add_field_mesh_dp_2D_notime( filename, ncid, 'dp_2D_a_10')
 
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_01')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_02')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_03')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_04')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_05')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_06')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_07')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_08')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_09')
-    CALL add_field_mesh_dp_2D_b_notime( filename, 'dp_2D_b_10')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_01')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_02')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_03')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_04')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_05')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_06')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_07')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_08')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_09')
+    CALL add_field_mesh_dp_2D_b_notime( filename, ncid, 'dp_2D_b_10')
 
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_01')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_02')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_03')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_04')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_05')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_06')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_07')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_08')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_09')
-    CALL add_field_mesh_dp_2D_c_notime( filename, 'dp_2D_c_10')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_01')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_02')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_03')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_04')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_05')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_06')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_07')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_08')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_09')
+    CALL add_field_mesh_dp_2D_c_notime( filename, ncid, 'dp_2D_c_10')
 
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_01')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_02')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_03')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_04')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_05')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_06')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_07')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_08')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_09')
-    CALL add_field_mesh_dp_2D_monthly_notime( filename, 'dp_2D_monthly_a_10')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_01')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_02')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_03')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_04')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_05')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_06')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_07')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_08')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_09')
+    CALL add_field_mesh_dp_2D_monthly_notime( filename, ncid, 'dp_2D_monthly_a_10')
 
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_01')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_02')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_03')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_04')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_05')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_06')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_07')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_08')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_09')
-    CALL add_field_mesh_dp_3D_notime( filename, 'dp_3D_a_10')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_01')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_02')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_03')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_04')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_05')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_06')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_07')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_08')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_09')
+    CALL add_field_mesh_dp_3D_notime( filename, ncid, 'dp_3D_a_10')
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1138,6 +1151,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_int_1D'
     CHARACTER(LEN=256)                                 :: filename
     LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_n1
     INTEGER                                            :: id_var
 
@@ -1157,16 +1171,19 @@ CONTAINS
     CALL sync
 
     ! Create a new NetCDF file
-    CALL create_new_netcdf_file_for_writing( filename)
+    CALL create_new_netcdf_file_for_writing( filename, ncid)
 
     ! Create dimensions
-    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, ncid, 'n1', SIZE( d,1), id_dim_n1)
 
     ! Create variable
-    CALL create_variable( filename, field_name, NF90_INT, (/ id_dim_n1 /), id_var)
+    CALL create_variable( filename, ncid, field_name, NF90_INT, (/ id_dim_n1 /), id_var)
 
     ! Write data
-    CALL write_var_int_1D(  filename, id_var, d)
+    CALL write_var_int_1D(  filename, ncid, id_var, d)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1186,6 +1203,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_int_2D'
     CHARACTER(LEN=256)                                 :: filename
     LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_n1, id_dim_n2
     INTEGER                                            :: id_var
 
@@ -1205,17 +1223,20 @@ CONTAINS
     CALL sync
 
     ! Create a new NetCDF file
-    CALL create_new_netcdf_file_for_writing( filename)
+    CALL create_new_netcdf_file_for_writing( filename, ncid)
 
     ! Create dimensions
-    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
-    CALL create_dimension( filename, 'n2', SIZE( d,2), id_dim_n2)
+    CALL create_dimension( filename, ncid, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, ncid, 'n2', SIZE( d,2), id_dim_n2)
 
     ! Create variable
-    CALL create_variable( filename, field_name, NF90_INT, (/ id_dim_n1, id_dim_n2 /), id_var)
+    CALL create_variable( filename, ncid, field_name, NF90_INT, (/ id_dim_n1, id_dim_n2 /), id_var)
 
     ! Write data
-    CALL write_var_int_2D(  filename, id_var, d)
+    CALL write_var_int_2D(  filename, ncid, id_var, d)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1234,6 +1255,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_int_3D'
     CHARACTER(LEN=256)                                 :: filename
+    INTEGER                                            :: ncid
     LOGICAL                                            :: file_exists
     INTEGER                                            :: id_dim_n1, id_dim_n2, id_dim_n3
     INTEGER                                            :: id_var
@@ -1254,18 +1276,21 @@ CONTAINS
     CALL sync
 
     ! Create a new NetCDF file
-    CALL create_new_netcdf_file_for_writing( filename)
+    CALL create_new_netcdf_file_for_writing( filename, ncid)
 
     ! Create dimensions
-    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
-    CALL create_dimension( filename, 'n2', SIZE( d,2), id_dim_n2)
-    CALL create_dimension( filename, 'n3', SIZE( d,3), id_dim_n3)
+    CALL create_dimension( filename, ncid, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, ncid, 'n2', SIZE( d,2), id_dim_n2)
+    CALL create_dimension( filename, ncid, 'n3', SIZE( d,3), id_dim_n3)
 
     ! Create variable
-    CALL create_variable( filename, field_name, NF90_INT, (/ id_dim_n1, id_dim_n2, id_dim_n3 /), id_var)
+    CALL create_variable( filename, ncid, field_name, NF90_INT, (/ id_dim_n1, id_dim_n2, id_dim_n3 /), id_var)
 
     ! Write data
-    CALL write_var_int_3D(  filename, id_var, d)
+    CALL write_var_int_3D(  filename, ncid, id_var, d)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1284,6 +1309,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_dp_1D'
     CHARACTER(LEN=256)                                 :: filename
+    INTEGER                                            :: ncid
     LOGICAL                                            :: file_exists
     INTEGER                                            :: id_dim_n1
     INTEGER                                            :: id_var
@@ -1304,16 +1330,19 @@ CONTAINS
     CALL sync
 
     ! Create a new NetCDF file
-    CALL create_new_netcdf_file_for_writing( filename)
+    CALL create_new_netcdf_file_for_writing( filename, ncid)
 
     ! Create dimensions
-    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, ncid, 'n1', SIZE( d,1), id_dim_n1)
 
     ! Create variable
-    CALL create_variable( filename, field_name, NF90_DOUBLE, (/ id_dim_n1 /), id_var)
+    CALL create_variable( filename, ncid, field_name, NF90_DOUBLE, (/ id_dim_n1 /), id_var)
 
     ! Write data
-    CALL write_var_dp_1D(  filename, id_var, d)
+    CALL write_var_dp_1D(  filename, ncid, id_var, d)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1332,6 +1361,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_dp_2D'
     CHARACTER(LEN=256)                                 :: filename
+    INTEGER                                            :: ncid
     LOGICAL                                            :: file_exists
     INTEGER                                            :: id_dim_n1, id_dim_n2
     INTEGER                                            :: id_var
@@ -1352,17 +1382,20 @@ CONTAINS
     CALL sync
 
     ! Create a new NetCDF file
-    CALL create_new_netcdf_file_for_writing( filename)
+    CALL create_new_netcdf_file_for_writing( filename, ncid)
 
     ! Create dimensions
-    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
-    CALL create_dimension( filename, 'n2', SIZE( d,2), id_dim_n2)
+    CALL create_dimension( filename, ncid, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, ncid, 'n2', SIZE( d,2), id_dim_n2)
 
     ! Create variable
-    CALL create_variable( filename, field_name, NF90_DOUBLE, (/ id_dim_n1, id_dim_n2 /), id_var)
+    CALL create_variable( filename, ncid, field_name, NF90_DOUBLE, (/ id_dim_n1, id_dim_n2 /), id_var)
 
     ! Write data
-    CALL write_var_dp_2D(  filename, id_var, d)
+    CALL write_var_dp_2D(  filename, ncid, id_var, d)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1382,6 +1415,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_dp_3D'
     CHARACTER(LEN=256)                                 :: filename
     LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_n1, id_dim_n2, id_dim_n3
     INTEGER                                            :: id_var
 
@@ -1401,18 +1435,21 @@ CONTAINS
     CALL sync
 
     ! Create a new NetCDF file
-    CALL create_new_netcdf_file_for_writing( filename)
+    CALL create_new_netcdf_file_for_writing( filename, ncid)
 
     ! Create dimensions
-    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
-    CALL create_dimension( filename, 'n2', SIZE( d,2), id_dim_n2)
-    CALL create_dimension( filename, 'n3', SIZE( d,3), id_dim_n3)
+    CALL create_dimension( filename, ncid, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, ncid, 'n2', SIZE( d,2), id_dim_n2)
+    CALL create_dimension( filename, ncid, 'n3', SIZE( d,3), id_dim_n3)
 
     ! Create variable
-    CALL create_variable( filename, field_name, NF90_DOUBLE, (/ id_dim_n1, id_dim_n2, id_dim_n3 /), id_var)
+    CALL create_variable( filename, ncid, field_name, NF90_DOUBLE, (/ id_dim_n1, id_dim_n2, id_dim_n3 /), id_var)
 
     ! Write data
-    CALL write_var_dp_3D(  filename, id_var, d)
+    CALL write_var_dp_3D(  filename, ncid, id_var, d)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1463,6 +1500,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_CSR_matrix_to_NetCDF'
+    CHARACTER(LEN=256)                                 :: filename_applied
     LOGICAL                                            :: file_exists
     INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_m, id_dim_mp1, id_dim_n, id_dim_nnz
@@ -1471,24 +1509,30 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Append output directory to filename
+    filename_applied = TRIM( C%output_dir) // TRIM( filename) // '.nc'
+
     ! Create a new NetCDF file
-    CALL create_new_netcdf_file_for_writing( filename)
+    CALL create_new_netcdf_file_for_writing( filename_applied, ncid)
 
     ! Create dimensions
-    CALL create_dimension( filename, 'm'     , A_CSR%m  , id_dim_m  )
-    CALL create_dimension( filename, 'mplus1', A_CSR%m+1, id_dim_mp1)
-    CALL create_dimension( filename, 'n'     , A_CSR%n  , id_dim_n  )
-    CALL create_dimension( filename, 'nnz'   , A_CSR%nnz, id_dim_nnz)
+    CALL create_dimension( filename_applied, ncid, 'm'     , A_CSR%m  , id_dim_m  )
+    CALL create_dimension( filename_applied, ncid, 'mplus1', A_CSR%m+1, id_dim_mp1)
+    CALL create_dimension( filename_applied, ncid, 'n'     , A_CSR%n  , id_dim_n  )
+    CALL create_dimension( filename_applied, ncid, 'nnz'   , A_CSR%nnz, id_dim_nnz)
 
     ! Create variables
-    CALL create_variable( filename, 'ptr'  , NF90_INT   , [id_dim_mp1], id_var_ptr  )
-    CALL create_variable( filename, 'index', NF90_INT   , [id_dim_nnz], id_var_index)
-    CALL create_variable( filename, 'val'  , NF90_DOUBLE, [id_dim_nnz], id_var_val  )
+    CALL create_variable( filename_applied, ncid, 'ptr'  , NF90_INT   , [id_dim_mp1], id_var_ptr  )
+    CALL create_variable( filename_applied, ncid, 'index', NF90_INT   , [id_dim_nnz], id_var_index)
+    CALL create_variable( filename_applied, ncid, 'val'  , NF90_DOUBLE, [id_dim_nnz], id_var_val  )
 
     ! Write data
-    CALL write_var_int_1D( filename, id_var_ptr  , A_CSR%ptr  )
-    CALL write_var_int_1D( filename, id_var_index, A_CSR%index)
-    CALL write_var_dp_1D(  filename, id_var_val  , A_CSR%val  )
+    CALL write_var_int_1D( filename_applied, ncid, id_var_ptr  , A_CSR%ptr  )
+    CALL write_var_int_1D( filename_applied, ncid, id_var_index, A_CSR%index( 1:A_CSR%nnz))
+    CALL write_var_dp_1D(  filename_applied, ncid, id_var_val  , A_CSR%val(   1:A_CSR%nnz))
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

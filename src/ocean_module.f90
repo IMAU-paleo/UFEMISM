@@ -10,25 +10,22 @@ MODULE ocean_module
                                              allocate_shared_int_2D, allocate_shared_dp_2D, &
                                              allocate_shared_int_3D, allocate_shared_dp_3D, &
                                              reallocate_shared_dp_2D, deallocate_shared, partition_list
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_grid, type_model_region, type_ice_model, &
                                              type_ocean_matrix_global, type_ocean_snapshot_global, &
                                              type_ocean_matrix_regional, type_ocean_snapshot_regional, &
-                                             type_highres_ocean_data, type_climate_matrix_regional, &
-                                             type_remapping_mesh_mesh
-  USE netcdf_module,                   ONLY: inquire_PD_obs_global_ocean_file, read_PD_obs_global_ocean_file, &
-                                             inquire_GCM_global_ocean_file, read_GCM_global_ocean_file, &
-                                             inquire_hires_geometry_file, read_hires_geometry_file, &
-                                             inquire_extrapolated_ocean_file, read_extrapolated_ocean_file, &
-                                             create_extrapolated_ocean_file
+                                             type_highres_ocean_data, type_climate_matrix_regional
+  USE netcdf_input_module,             ONLY: read_field_from_lonlat_file_2D, read_field_from_lonlat_file_3D_ocean, &
+                                             read_field_from_xy_file_2D, read_field_from_xy_file_3D_ocean
   USE forcing_module,                  ONLY: forcing, update_CO2_at_model_time
   USE utilities_module,                ONLY: remap_cons_2nd_order_1D, inverse_oblique_sg_projection, &
-                                             map_glob_to_grid_3D, surface_elevation, &
+                                             map_glob_to_grid_3D, surface_elevation, deallocate_grid, deallocate_grid_lonlat, &
                                              extrapolate_Gaussian_floodfill
-  USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_3D, &
-                                             calc_remapping_operator_mesh2grid, map_mesh2grid_2D, &
-                                             deallocate_remapping_operators_mesh2grid, &
-                                             deallocate_remapping_operators_grid2mesh, &
+  USE mesh_mapping_module,             ONLY: map_from_xy_grid_to_mesh_3D_ocean, map_from_mesh_to_xy_grid_2D, &
                                              smooth_Gaussian_2D, remap_field_dp_3D
+  USE netcdf_output_module,            ONLY: create_new_netcdf_file_for_writing, setup_xy_grid_in_netcdf_file, add_z_ocean_dimension_to_file, &
+                                             add_field_grid_dp_3D_ocean_notime
+  USE netcdf_basic_module,             ONLY: close_netcdf_file, inquire_var_multiple_options, write_var_dp_3D
 
   IMPLICIT NONE
 
@@ -43,7 +40,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TyPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_ocean_matrix_regional),    INTENT(INOUT) :: ocean_matrix
@@ -87,6 +84,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model
+
   SUBROUTINE initialise_ocean_model_regional( region, ocean_matrix_global)
     ! Initialise the regional ocean model
 
@@ -136,6 +134,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected=37)
 
   END SUBROUTINE initialise_ocean_model_regional
+
   SUBROUTINE initialise_ocean_model_global( ocean_matrix)
     ! Initialise the global ocean model
 
@@ -225,6 +224,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised
+
   SUBROUTINE run_ocean_model_idealised_MISMIPplus_COLD( mesh, ocean)
     ! Run the regional ocean model
     !
@@ -274,6 +274,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised_MISMIPplus_COLD
+
   SUBROUTINE run_ocean_model_idealised_MISMIPplus_WARM( mesh, ocean)
     ! Run the regional ocean model
     !
@@ -323,6 +324,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised_MISMIPplus_WARM
+
   SUBROUTINE run_ocean_model_idealised_MISOMIP1( mesh, ocean, time)
     ! Run the regional ocean model
     !
@@ -377,6 +379,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised_MISOMIP1
+
   SUBROUTINE run_ocean_model_idealised_Reese2018_ANT( mesh, ice, ocean, region_name)
     ! Run the regional ocean model
     !
@@ -618,7 +621,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ocean_matrix_regional),    INTENT(INOUT) :: ocean_matrix
     TYPE(type_climate_matrix_regional),  INTENT(IN)    :: climate_matrix
@@ -793,37 +796,22 @@ CONTAINS
     PD_obs%name            = name
     PD_obs%netcdf%filename = C%filename_PD_obs_ocean
 
-    ! Inquire if all required variables are present in the NetCDF file, and read the grid size.
-    CALL allocate_shared_int_0D( PD_obs%nlon,         PD_obs%wnlon        )
-    CALL allocate_shared_int_0D( PD_obs%nlat,         PD_obs%wnlat        )
-    CALL allocate_shared_int_0D( PD_obs%nz_ocean_raw, PD_obs%wnz_ocean_raw)
-    IF (par%master) CALL inquire_PD_obs_global_ocean_file( PD_obs)
-    CALL sync
-
-    ! Allocate memory
-    CALL allocate_shared_dp_1D( PD_obs%nlon,                                   PD_obs%lon,         PD_obs%wlon        )
-    CALL allocate_shared_dp_1D(              PD_obs%nlat,                      PD_obs%lat,         PD_obs%wlat        )
-    CALL allocate_shared_dp_1D(                           PD_obs%nz_ocean_raw, PD_obs%z_ocean_raw, PD_obs%wz_ocean_raw)
-
-    CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, PD_obs%nz_ocean_raw, PD_obs%T_ocean_raw, PD_obs%wT_ocean_raw)
-    CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, PD_obs%nz_ocean_Raw, PD_obs%S_ocean_raw, PD_obs%wS_ocean_raw)
-
-    ! Read data from the NetCDF file
-    IF (par%master) WRITE(0,*) '   Reading PD observed ocean data from file ', TRIM(PD_obs%netcdf%filename), '...'
-    IF (par%master) CALL read_PD_obs_global_ocean_file( PD_obs)
-    CALL sync
-
-    ! Determine process domains
-    CALL partition_list( PD_obs%nlon, par%i, par%n, PD_obs%i1, PD_obs%i2)
+    ! Read global ocean data
+    IF (par%master) WRITE(0,*) '   Reading PD observed ocean data from file ', TRIM( PD_obs%netcdf%filename), '...'
+    CALL read_field_from_lonlat_file_3D_ocean( PD_obs%netcdf%filename, TRIM( C%name_ocean_temperature), 'ANT', PD_obs%grid, PD_obs%T_ocean_raw, PD_obs%wT_ocean_raw, &
+      PD_obs%nz_ocean_raw, PD_obs%z_ocean_raw, PD_obs%wz_ocean_raw)
+    CALL deallocate_shared( PD_obs%wz_ocean_raw)
+    CALL deallocate_grid_lonlat( PD_obs%grid)
+    CALL read_field_from_lonlat_file_3D_ocean( PD_obs%netcdf%filename, TRIM( C%name_ocean_salinity   ), 'ANT', PD_obs%grid, PD_obs%S_ocean_raw, PD_obs%wS_ocean_raw, &
+      PD_obs%nz_ocean_raw, PD_obs%z_ocean_raw, PD_obs%wz_ocean_raw)
 
     ! Map the data to the desired vertical grid
     CALL map_global_ocean_data_to_UFEMISM_vertical_grid( PD_obs)
 
     ! Deallocate raw ocean data
-    CALL deallocate_shared( PD_obs%wnz_ocean_raw)
-    CALL deallocate_shared( PD_obs%wz_ocean_raw )
-    CALL deallocate_shared( PD_obs%wT_ocean_raw )
-    CALL deallocate_shared( PD_obs%wS_ocean_raw )
+    CALL deallocate_shared( PD_obs%wz_ocean_raw)
+    CALL deallocate_shared( PD_obs%wT_ocean_raw)
+    CALL deallocate_shared( PD_obs%wS_ocean_raw)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=6)
@@ -862,36 +850,22 @@ CONTAINS
     snapshot%CO2        = CO2
     snapshot%orbit_time = orbit_time
 
-    ! Inquire if all required variables are present in the NetCDF file, and read the grid size.
-    CALL allocate_shared_int_0D( snapshot%nlon,         snapshot%wnlon        )
-    CALL allocate_shared_int_0D( snapshot%nlat,         snapshot%wnlat        )
-    CALL allocate_shared_int_0D( snapshot%nz_ocean_raw, snapshot%wnz_ocean_raw)
-    IF (par%master) CALL inquire_GCM_global_ocean_file( snapshot)
-    CALL sync
-
-    ! Allocate memory
-    CALL allocate_shared_dp_1D( snapshot%nlon,                                       snapshot%lon,         snapshot%wlon        )
-    CALL allocate_shared_dp_1D(                snapshot%nlat,                        snapshot%lat,         snapshot%wlat        )
-    CALL allocate_shared_dp_1D(                               snapshot%nz_ocean_raw, snapshot%z_ocean_raw, snapshot%wz_ocean_raw)
-    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, snapshot%nz_ocean_raw, snapshot%T_ocean_raw, snapshot%wT_ocean_raw)
-    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, snapshot%nz_ocean_raw, snapshot%S_ocean_raw, snapshot%wS_ocean_raw)
-
-    ! Read data from the NetCDF file
-    IF (par%master) WRITE(0,*) '   Reading GCM ocean snapshot ', TRIM(snapshot%name), ' from file ', TRIM(snapshot%netcdf%filename), '...'
-    IF (par%master) CALL read_GCM_global_ocean_file( snapshot)
-    CALL sync
-
-    ! Determine process domains
-    CALL partition_list( snapshot%nlon, par%i, par%n, snapshot%i1, snapshot%i2)
+    ! Read global ocean data
+    IF (par%master) WRITE(0,*) '   Reading PD observed ocean data from file ', TRIM( snapshot%netcdf%filename), '...'
+    CALL read_field_from_lonlat_file_3D_ocean( snapshot%netcdf%filename, TRIM( C%name_ocean_temperature), 'ANT', snapshot%grid, snapshot%T_ocean_raw, snapshot%wT_ocean_raw, &
+      snapshot%nz_ocean_raw, snapshot%z_ocean_raw, snapshot%wz_ocean_raw)
+    CALL deallocate_shared( snapshot%wz_ocean_raw)
+    CALL deallocate_grid_lonlat( snapshot%grid)
+    CALL read_field_from_lonlat_file_3D_ocean( snapshot%netcdf%filename, TRIM( C%name_ocean_salinity   ), 'ANT', snapshot%grid, snapshot%S_ocean_raw, snapshot%wS_ocean_raw, &
+      snapshot%nz_ocean_raw, snapshot%z_ocean_raw, snapshot%wz_ocean_raw)
 
     ! Map the data to the desired vertical grid
     CALL map_global_ocean_data_to_UFEMISM_vertical_grid( snapshot)
 
     ! Deallocate raw ocean data
-    CALL deallocate_shared( snapshot%wnz_ocean_raw)
-    CALL deallocate_shared( snapshot%wz_ocean_raw )
-    CALL deallocate_shared( snapshot%wT_ocean_raw )
-    CALL deallocate_shared( snapshot%wS_ocean_raw )
+    CALL deallocate_shared( snapshot%wz_ocean_raw)
+    CALL deallocate_shared( snapshot%wT_ocean_raw)
+    CALL deallocate_shared( snapshot%wS_ocean_raw)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=11)
@@ -1056,15 +1030,15 @@ CONTAINS
     NaN = SQRT( NaN)
 
     ! Allocate shared memory for the global 3-D ocean temperature and salinity
-    CALL allocate_shared_dp_3D( ocean_glob%nlon, ocean_glob%nlat, C%nz_ocean, ocean_glob%T_ocean, ocean_glob%wT_ocean)
-    CALL allocate_shared_dp_3D( ocean_glob%nlon, ocean_glob%nlat, C%nz_ocean, ocean_glob%S_ocean, ocean_glob%wS_ocean)
+    CALL allocate_shared_dp_3D( ocean_glob%grid%nlon, ocean_glob%grid%nlat, C%nz_ocean, ocean_glob%T_ocean, ocean_glob%wT_ocean)
+    CALL allocate_shared_dp_3D( ocean_glob%grid%nlon, ocean_glob%grid%nlat, C%nz_ocean, ocean_glob%S_ocean, ocean_glob%wS_ocean)
 
     ! Use "masked" 2-nd order conservative 1-D remapping
     ALLOCATE( z_mask_old( ocean_glob%nz_ocean_raw))
     ALLOCATE( z_mask_new( C%nz_ocean             ))
 
-    DO i = ocean_glob%i1, ocean_glob%i2
-    DO j = 1, ocean_glob%nlat
+    DO i = ocean_glob%grid%i1, ocean_glob%grid%i2
+    DO j = 1, ocean_glob%grid%nlat
 
       ! Determine local depth of the ocean floor, fill in both data masks
       IF (ocean_glob%T_ocean_raw( i,j,ocean_glob%nz_ocean_raw) == ocean_glob%T_ocean_raw( i,j,ocean_glob%nz_ocean_raw)) THEN
@@ -1136,6 +1110,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_ocean_vertical_grid
+
   SUBROUTINE initialise_ocean_vertical_grid_regular
     ! Set up the vertical grid used for ocean data - regular grid
 
@@ -1220,63 +1195,13 @@ CONTAINS
 
     IF (par%master) WRITE(0,*) '    Mapping high-resolution extrapolated ocean data unto the ice-model mesh...'
 
-    ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( hires%grid%tol_dist, hires%grid%wtol_dist)
-    IF (par%master) hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
-
-    ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                               hires%grid%n,    hires%grid%wn)
-    IF (par%master) hires%grid%n  = hires%grid%nx * hires%grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( hires%grid%nx, hires%grid%ny, hires%grid%ij2n, hires%grid%wij2n)
-    CALL allocate_shared_int_2D( hires%grid%n , 2            , hires%grid%n2ij, hires%grid%wn2ij)
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, hires%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, hires%grid%ny
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = hires%grid%ny, 1, -1
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
-
-    ! Map high-resolution ocean data to UFEMISM's mesh
-    CALL calc_remapping_operator_grid2mesh( hires%grid, region%mesh)
-    CALL map_grid2mesh_3D( hires%grid, region%mesh, hires%T_ocean, ocean_reg%T_ocean_ext)
-    CALL map_grid2mesh_3D( hires%grid, region%mesh, hires%S_ocean, ocean_reg%S_ocean_ext)
-    CALL deallocate_remapping_operators_mesh2grid( hires%grid)
+    CALL map_from_xy_grid_to_mesh_3D_ocean( hires%grid, region%mesh, hires%T_ocean, ocean_reg%T_ocean_ext)
+    CALL map_from_xy_grid_to_mesh_3D_ocean( hires%grid, region%mesh, hires%S_ocean, ocean_reg%S_ocean_ext)
 
     ! Clean up after yourself
-    CALL deallocate_shared( hires%grid%wnx             )
-    CALL deallocate_shared( hires%grid%wny             )
-    CALL deallocate_shared( hires%grid%wx              )
-    CALL deallocate_shared( hires%grid%wy              )
-    CALL deallocate_shared( hires%grid%wxmin           )
-    CALL deallocate_shared( hires%grid%wxmax           )
-    CALL deallocate_shared( hires%grid%wymin           )
-    CALL deallocate_shared( hires%grid%wymax           )
-    CALL deallocate_shared( hires%grid%wdx             )
-    CALL deallocate_shared( hires%grid%wlambda_M       )
-    CALL deallocate_shared( hires%grid%wphi_M          )
-    CALL deallocate_shared( hires%grid%wbeta_stereo   )
-    CALL deallocate_shared( hires%grid%wlat            )
-    CALL deallocate_shared( hires%grid%wlon            )
-    CALL deallocate_shared( hires%grid%wtol_dist       )
-    CALL deallocate_shared( hires%grid%wn              )
-    CALL deallocate_shared( hires%grid%wij2n           )
-    CALL deallocate_shared( hires%grid%wn2ij           )
-    CALL deallocate_shared( hires%wT_ocean             )
-    CALL deallocate_shared( hires%wS_ocean             )
+    CALL deallocate_grid(   hires%grid    )
+    CALL deallocate_shared( hires%wT_ocean)
+    CALL deallocate_shared( hires%wS_ocean)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1295,68 +1220,26 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_hires_ocean_data_from_file'
-    INTEGER                                            :: i,j
+    INTEGER                                            :: nz_ocean_raw, k
+    REAL(dp), DIMENSION(:    ), POINTER                :: z_ocean_raw
+    INTEGER                                            :: wz_ocean_raw
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Check if the NetCDF file has all the required dimensions and variables
-    CALL allocate_shared_int_0D( hires%grid%nx,  hires%grid%wnx)
-    CALL allocate_shared_int_0D( hires%grid%ny,  hires%grid%wny)
-    IF (par%master) THEN
-      hires%netcdf%filename = TRIM( hires_foldername)//'/extrapolated_ocean_data.nc'
-      CALL inquire_extrapolated_ocean_file( hires)
-    END IF
-    CALL sync
+    IF (par%master) WRITE(0,*) '    Reading high-resolution extrapolated ocean data from file "', TRIM( hires%netcdf%filename), '"...'
+    hires%netcdf%filename = TRIM( hires_foldername) // '/extrapolated_ocean_data.nc'
 
-    ! Allocate shared memory for x,y and the actual data
-    CALL allocate_shared_dp_1D( hires%grid%nx,                hires%grid%x,  hires%grid%wx )
-    CALL allocate_shared_dp_1D(                hires%grid%ny, hires%grid%y,  hires%grid%wy )
-    CALL allocate_shared_dp_3D( hires%grid%nx, hires%grid%ny, C%nz_ocean, hires%T_ocean, hires%wT_ocean)
-    CALL allocate_shared_dp_3D( hires%grid%nx, hires%grid%ny, C%nz_ocean, hires%S_ocean, hires%wS_ocean)
+    ! Read data
+    CALL read_field_from_xy_file_3D_ocean( hires%netcdf%filename, TRIM( C%name_ocean_temperature), 'ANT', hires%grid, hires%T_ocean, hires%wT_ocean, nz_ocean_raw, z_ocean_raw, wz_ocean_raw)
+    CALL deallocate_grid( hires%grid)
+    CALL read_field_from_xy_file_3D_ocean( hires%netcdf%filename, TRIM( C%name_ocean_salinity   ), 'ANT', hires%grid, hires%S_ocean, hires%wS_ocean, nz_ocean_raw, z_ocean_raw, wz_ocean_raw)
 
-    ! Read the data from the NetCDF file
-    IF (par%master) THEN
-      WRITE(0,*) '    Reading high-resolution extrapolated ocean data from file "', TRIM( hires%netcdf%filename), '"...'
-      CALL read_extrapolated_ocean_file( hires)
-    END IF
-    CALL sync
-
-    ! Allocate shared memory for other grid parameters
-    CALL allocate_shared_dp_0D(  hires%grid%dx,           hires%grid%wdx          )
-    CALL allocate_shared_dp_0D(  hires%grid%xmin,         hires%grid%wxmin        )
-    CALL allocate_shared_dp_0D(  hires%grid%xmax,         hires%grid%wxmax        )
-    CALL allocate_shared_dp_0D(  hires%grid%ymin,         hires%grid%wymin        )
-    CALL allocate_shared_dp_0D(  hires%grid%ymax,         hires%grid%wymax        )
-    CALL allocate_shared_dp_0D(  hires%grid%lambda_M,     hires%grid%wlambda_M    )
-    CALL allocate_shared_dp_0D(  hires%grid%phi_M,        hires%grid%wphi_M       )
-    CALL allocate_shared_dp_0D(  hires%grid%beta_stereo, hires%grid%wbeta_stereo)
-
-    ! Polar stereographic projection parameters and resolution
-    IF (par%master) THEN
-      ! Projection parameters are of course identical to those used for this ice model region
-      hires%grid%lambda_M     = mesh%lambda_M
-      hires%grid%phi_M        = mesh%phi_M
-      hires%grid%beta_stereo = mesh%beta_stereo
-      ! But the resolution is different
-      hires%grid%dx           = hires%grid%x( 2) - hires%grid%x( 1)
-    END IF
-    CALL sync
-
-    ! Assign range to each processor
-    CALL partition_list( hires%grid%nx, par%i, par%n, hires%grid%i1, hires%grid%i2)
-    CALL partition_list( hires%grid%ny, par%i, par%n, hires%grid%j1, hires%grid%j2)
-
-    ! Lat,lon coordinates
-    CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%grid%lat, hires%grid%wlat)
-    CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%grid%lon, hires%grid%wlon)
-
-    DO j = 1, hires%grid%ny
-    DO i = hires%grid%i1, hires%grid%i2
-      CALL inverse_oblique_sg_projection( hires%grid%x( i), hires%grid%y( j), hires%grid%lambda_M, hires%grid%phi_M, hires%grid%beta_stereo, hires%grid%lon( i,j), hires%grid%lat( i,j))
+    ! Safety
+    IF (nz_ocean_raw /= C%nz_ocean) CALL crash('z_ocean in file "' // TRIM( hires%netcdf%filename) // '" doesnt match model z_ocean!')
+    DO k = 1, nz_ocean_raw
+      IF (ABS( 1._dp - z_ocean_raw( k) / C%z_ocean( k)) > 1E-5_dp) CALL crash('z_ocean in file "' // TRIM( hires%netcdf%filename) // '" doesnt match model z_ocean!')
     END DO
-    END DO
-    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=16)
@@ -1379,6 +1262,8 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_hires_extrapolated_ocean_data_to_file'
     CHARACTER(LEN=256)                                 :: hires_ocean_filename
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_var_T, id_var_S
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1390,9 +1275,28 @@ CONTAINS
     CALL write_ocean_header( hires, filename_ocean_glob, hires_foldername)
 
     ! Create a NetCDF file and write data to it
-    IF (par%master) hires_ocean_filename = TRIM(hires_foldername)//'/extrapolated_ocean_data.nc'
+    hires_ocean_filename = TRIM(hires_foldername)//'/extrapolated_ocean_data.nc'
     IF (par%master) WRITE(0,*) '    Writing extrapolated ocean data to file "', TRIM(hires_ocean_filename), '"...'
-    CALL create_extrapolated_ocean_file( hires, hires_ocean_filename)
+
+    ! Create new NetCDF file
+    CALL create_new_netcdf_file_for_writing( hires_ocean_filename, ncid)
+
+    ! Set up grid and z_ocean
+    CALL setup_xy_grid_in_netcdf_file(  hires_ocean_filename, ncid, hires%grid)
+    CALL add_z_ocean_dimension_to_file( hires_ocean_filename, ncid)
+
+    ! Add variables
+    CALL add_field_grid_dp_3D_ocean_notime( hires_ocean_filename, ncid, TRIM( C%name_ocean_temperature), long_name = '3-D ocean temperature', units = 'degrees Celsius')
+    CALL add_field_grid_dp_3D_ocean_notime( hires_ocean_filename, ncid, TRIM( C%name_ocean_salinity   ), long_name = '3-D ocean salinity'   , units = 'PSU')
+
+    ! Write data
+    CALL inquire_var_multiple_options( hires_ocean_filename, ncid, TRIM( C%name_ocean_temperature), id_var_T)
+    CALL inquire_var_multiple_options( hires_ocean_filename, ncid, TRIM( C%name_ocean_salinity   ), id_var_S)
+    CALL write_var_dp_3D( hires_ocean_filename, ncid, id_var_T, hires%T_ocean)
+    CALL write_var_dp_3D( hires_ocean_filename, ncid, id_var_S, hires%S_ocean)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1511,6 +1415,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE check_for_matching_ocean_header
+
   SUBROUTINE read_ocean_header( &
             header_filename,                    &
             original_ocean_filename,       &
@@ -1575,6 +1480,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_ocean_header
+
   SUBROUTINE write_ocean_header( hires, filename_ocean_glob, hires_foldername)
 
     IMPLICIT NONE
@@ -1689,102 +1595,19 @@ CONTAINS
       choice_basin_scheme       = C%choice_basin_scheme_ANT
       filename_basins           = C%filename_basins_ANT
     END IF
-
-    ! Check if the NetCDF file has all the required dimensions and variables
-    CALL allocate_shared_int_0D( hires%grid%nx, hires%grid%wnx)
-    CALL allocate_shared_int_0D( hires%grid%ny, hires%grid%wny)
-    IF (par%master) THEN
-      CALL inquire_hires_geometry_file( hires)
-    END IF
-    CALL sync
-
-    ! Allocate shared memory for x,y and the actual data
-    CALL allocate_shared_dp_1D( hires%grid%nx,                hires%grid%x, hires%grid%wx)
-    CALL allocate_shared_dp_1D(                hires%grid%ny, hires%grid%y, hires%grid%wy)
-    CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%Hi,     hires%wHi    )
     CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%Hb,     hires%wHb    )
 
+    IF (par%master) WRITE(0,*) '    Reading high-resolution geometry for ocean extrapolation from file "', TRIM( hires%netcdf_geo%filename), '"...'
+
     ! Read the data from the NetCDF file
-    IF (par%master) THEN
-      WRITE(0,*) '    Reading high-resolution geometry for ocean extrapolation from file "', TRIM( hires%netcdf_geo%filename), '"...'
-      CALL read_hires_geometry_file( hires)
+    CALL read_field_from_xy_file_2D( hires%netcdf_geo%filename, 'default_options_Hi', region%name, hires%grid, hires%Hi, hires%wHi)
+    CALL deallocate_grid( hires%grid)
+    CALL read_field_from_xy_file_2D( hires%netcdf_geo%filename, 'default_options_Hb', region%name, hires%grid, hires%Hb, hires%wHb)
+
+    ! Safety
+    IF (hires%grid%dx /= C%ocean_extrap_res) THEN
+      CALL crash('high-resolution geometry file "' // TRIM( hires%netcdf_geo%filename) // '" has a different resolution from C%ocean_extrap_res = {dp_01}', dp_01 = C%ocean_extrap_res)
     END IF
-    CALL sync
-
-    ! Allocate shared memory for other grid parameters
-    CALL allocate_shared_dp_0D(  hires%grid%dx,           hires%grid%wdx          )
-    CALL allocate_shared_dp_0D(  hires%grid%xmin,         hires%grid%wxmin        )
-    CALL allocate_shared_dp_0D(  hires%grid%xmax,         hires%grid%wxmax        )
-    CALL allocate_shared_dp_0D(  hires%grid%ymin,         hires%grid%wymin        )
-    CALL allocate_shared_dp_0D(  hires%grid%ymax,         hires%grid%wymax        )
-    CALL allocate_shared_dp_0D(  hires%grid%lambda_M,     hires%grid%wlambda_M    )
-    CALL allocate_shared_dp_0D(  hires%grid%phi_M,        hires%grid%wphi_M       )
-    CALL allocate_shared_dp_0D(  hires%grid%beta_stereo, hires%grid%wbeta_stereo)
-
-    ! Polar stereographic projection parameters and resolution
-    IF (par%master) THEN
-      ! Projection parameters are of course identical to those used for this ice model region
-      hires%grid%lambda_M     = region%mesh%lambda_M
-      hires%grid%phi_M        = region%mesh%phi_M
-      hires%grid%beta_stereo = region%mesh%beta_stereo
-      ! But the resolution is different
-      hires%grid%dx           = hires%grid%x( 2) - hires%grid%x( 1)
-      hires%grid%xmin         = hires%grid%x( 1            )
-      hires%grid%xmax         = hires%grid%x( hires%grid%nx)
-      hires%grid%ymin         = hires%grid%y( 1            )
-      hires%grid%ymax         = hires%grid%y( hires%grid%ny)
-      ! Check if this is the resolution we want
-      IF (hires%grid%dx /= C%ocean_extrap_res) THEN
-        CALL crash('high-resolution geometry file "' // TRIM( hires%netcdf_geo%filename) // '" has a different resolution from C%ocean_extrap_res = {dp_01}', dp_01 = C%ocean_extrap_res)
-      END IF
-    END IF
-    CALL sync
-
-    ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( hires%grid%tol_dist, hires%grid%wtol_dist)
-    IF (par%master) hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
-
-    ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D( hires%grid%n, hires%grid%wn)
-    IF (par%master) hires%grid%n = hires%grid%nx * hires%grid%ny
-    CALL sync
-
-    CALL allocate_shared_int_2D( hires%grid%nx, hires%grid%ny, hires%grid%ij2n, hires%grid%wij2n)
-    CALL allocate_shared_int_2D( hires%grid%n , 2,             hires%grid%n2ij, hires%grid%wn2ij)
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, hires%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, hires%grid%ny
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = hires%grid%ny, 1, -1
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
-
-    ! Assign range to each processor
-    CALL partition_list( hires%grid%nx, par%i, par%n, hires%grid%i1, hires%grid%i2)
-    CALL partition_list( hires%grid%ny, par%i, par%n, hires%grid%j1, hires%grid%j2)
-
-    ! Lat,lon coordinates
-    CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%grid%lat, hires%grid%wlat)
-    CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%grid%lon, hires%grid%wlon)
-
-    DO i = hires%grid%i1, hires%grid%i2
-    DO j = 1, hires%grid%ny
-      CALL inverse_oblique_sg_projection( hires%grid%x( i), hires%grid%y( j), hires%grid%lambda_M, hires%grid%phi_M, hires%grid%beta_stereo, hires%grid%lon( i,j), hires%grid%lat( i,j))
-    END DO
-    END DO
-    CALL sync
 
     ! ===== Map ocean data from the global lon/lat-grid to the high-resolution regional x/y-grid =====
     ! ================================================================================================
@@ -1796,8 +1619,8 @@ CONTAINS
     CALL allocate_shared_dp_3D( hires%grid%nx, hires%grid%ny, C%nz_ocean, hires%S_ocean, hires%wS_ocean)
 
     ! Map the data from the global lon/lat-grid to the high-resolution regional x/y-grid
-    CALL map_glob_to_grid_3D( ocean_glob%nlat, ocean_glob%nlon, ocean_glob%lat, ocean_glob%lon, hires%grid, ocean_glob%T_ocean, hires%T_ocean)
-    CALL map_glob_to_grid_3D( ocean_glob%nlat, ocean_glob%nlon, ocean_glob%lat, ocean_glob%lon, hires%grid, ocean_glob%S_ocean, hires%S_ocean)
+    CALL map_glob_to_grid_3D( ocean_glob%grid%nlat, ocean_glob%grid%nlon, ocean_glob%grid%lat, ocean_glob%grid%lon, hires%grid, ocean_glob%T_ocean, hires%T_ocean)
+    CALL map_glob_to_grid_3D( ocean_glob%grid%nlat, ocean_glob%grid%nlon, ocean_glob%grid%lat, ocean_glob%grid%lon, hires%grid, ocean_glob%S_ocean, hires%S_ocean)
 
     ! ===== Perform the extrapolation on the high-resolution grid =====
     ! =================================================================
@@ -1838,9 +1661,7 @@ CONTAINS
       CALL sync
 
       ! Map double-precision basin ID from ice-model mesh to high-resolution grid
-      CALL calc_remapping_operator_mesh2grid( region%mesh, hires%grid)
-      CALL map_mesh2grid_2D( region%mesh, hires%grid, basin_ID_dp_lores, basin_ID_dp_hires)
-      CALL deallocate_remapping_operators_mesh2grid( hires%grid)
+      CALL map_from_mesh_to_xy_grid_2D( region%mesh, hires%grid, basin_ID_dp_lores, basin_ID_dp_hires)
 
       ! Remove all near-boundary cells
       DO j = 1, hires%grid%ny
@@ -1922,6 +1743,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected=20)
 
   END SUBROUTINE map_and_extrapolate_hires_ocean_data
+
   SUBROUTINE extend_regional_ocean_data_to_cover_domain( hires)
     ! Extend global ocean data over the whole grid, based on the procedure outlined in
     ! Jourdain, N. C., Asay-Davis, X., Hattermann, T., Straneo, F., Seroussi, H., Little, C. M., & Nowicki, S. (2020).
@@ -2324,7 +2146,7 @@ CONTAINS
 ! == Remap ocean fields after mesh update
 ! =======================================
 
-  SUBROUTINE remap_ocean_model( mesh_old, mesh_new, map, ocean_matrix)
+  SUBROUTINE remap_ocean_model( mesh_old, mesh_new, ocean_matrix)
     ! Reallocate all the data fields (no remapping needed, instead we just run
     ! the climate model immediately after a mesh update)
 
@@ -2333,7 +2155,6 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ocean_matrix_regional),    INTENT(INOUT) :: ocean_matrix
 
     ! Local variables:
@@ -2425,7 +2246,7 @@ CONTAINS
       CALL sync
 
       ! The weighing fields history must be remapped
-      CALL remap_field_dp_3D( mesh_old, mesh_new, map, ocean_matrix%applied%w_tot_history, ocean_matrix%applied%ww_tot_history, 'trilin')
+      CALL remap_field_dp_3D( mesh_old, mesh_new, ocean_matrix%applied%w_tot_history, ocean_matrix%applied%ww_tot_history, 'trilin')
 
     ELSE
       IF (par%master) WRITE(0,*) 'remap_ocean_model - ERROR: unknown choice_ocean_model "', TRIM(C%choice_ocean_model), '"!'
@@ -2466,10 +2287,6 @@ CONTAINS
   END SUBROUTINE reallocate_subocean
 
   SUBROUTINE remap_ocean_data( mesh_new, ocean_reg)
-    ! Check if extrapolated ocean files for the current ice model
-    ! setting exist, based on the header found/created during
-    ! initialistion. If so, read those. If not, throw an error, as
-    ! those files should be there.
 
     IMPLICIT NONE
 
@@ -2479,90 +2296,12 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_ocean_data'
-    LOGICAL                                            :: folder_exists
-    TYPE(type_highres_ocean_data)                      :: hires
-    INTEGER                                            :: i,j,n
-    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ===== Read the high-resolution extrapolated ocean data =====
-    ! ============================================================
-
-    INQUIRE( FILE = ocean_reg%hires_ocean_foldername, EXIST = folder_exists)
-    IF (folder_exists) THEN
-      IF (par%master) WRITE(0,*) '   Found extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"'
-      CALL get_hires_ocean_data_from_file( mesh_new, hires, ocean_reg%hires_ocean_foldername)
-    ELSE
-      ! No header fitting the current ice model set-up was found.
-      ! This should not occur, so throw an error and abort.
-      IF (par%master) WRITE(0,*) 'remap_ocean_data - ERROR: no valid extrapolated ocean data found during mesh update!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-
-    ! ===== Map extrapolated data from the high-resolution grid to the actual ice-model mesh =====
-    ! ============================================================================================
-
-    IF (par%master) WRITE(0,*) '    Mapping high-resolution extrapolated ocean data onto the new mesh...'
-
-    ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( hires%grid%tol_dist, hires%grid%wtol_dist)
-    IF (par%master) hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
-
-    ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                               hires%grid%n,    hires%grid%wn)
-    IF (par%master) hires%grid%n  = hires%grid%nx * hires%grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( hires%grid%nx, hires%grid%ny, hires%grid%ij2n, hires%grid%wij2n)
-    CALL allocate_shared_int_2D( hires%grid%n , 2            , hires%grid%n2ij, hires%grid%wn2ij)
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, hires%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, hires%grid%ny
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = hires%grid%ny, 1, -1
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
-
-    ! Map high-resolution ocean data to UFEMISM's mesh
-    CALL calc_remapping_operator_grid2mesh( hires%grid, mesh_new)
-    CALL map_grid2mesh_3D( hires%grid, mesh_new, hires%T_ocean, ocean_reg%T_ocean_ext)
-    CALL map_grid2mesh_3D( hires%grid, mesh_new, hires%S_ocean, ocean_reg%S_ocean_ext)
-    CALL deallocate_remapping_operators_mesh2grid( hires%grid)
-
-    ! Clean up after yourself
-    CALL deallocate_shared( hires%grid%wnx             )
-    CALL deallocate_shared( hires%grid%wny             )
-    CALL deallocate_shared( hires%grid%wx              )
-    CALL deallocate_shared( hires%grid%wy              )
-    CALL deallocate_shared( hires%grid%wxmin           )
-    CALL deallocate_shared( hires%grid%wxmax           )
-    CALL deallocate_shared( hires%grid%wymin           )
-    CALL deallocate_shared( hires%grid%wymax           )
-    CALL deallocate_shared( hires%grid%wdx             )
-    CALL deallocate_shared( hires%grid%wlambda_M       )
-    CALL deallocate_shared( hires%grid%wphi_M          )
-    CALL deallocate_shared( hires%grid%wbeta_stereo   )
-    CALL deallocate_shared( hires%grid%wlat            )
-    CALL deallocate_shared( hires%grid%wlon            )
-    CALL deallocate_shared( hires%grid%wtol_dist       )
-    CALL deallocate_shared( hires%grid%wn              )
-    CALL deallocate_shared( hires%grid%wij2n           )
-    CALL deallocate_shared( hires%grid%wn2ij           )
-    CALL deallocate_shared( hires%wT_ocean             )
-    CALL deallocate_shared( hires%wS_ocean             )
+    ! DENK DROM
+    CALL crash('fixme!')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

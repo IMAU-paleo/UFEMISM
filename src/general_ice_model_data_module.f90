@@ -26,7 +26,7 @@ MODULE general_ice_model_data_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              is_floating, thickness_above_floatation, surface_elevation, &
                                              oblique_sg_projection, is_in_polygon
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model
   USE mesh_help_functions_module,      ONLY: find_triangle_area
   USE mesh_operators_module,           ONLY: map_a_to_b_2D

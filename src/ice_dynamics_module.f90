@@ -2,44 +2,50 @@ MODULE ice_dynamics_module
 
   ! Contains all the routines needed to calculate ice-sheet geometry at the next time
   ! step, including routines to determine said time step.
-  ! NOTE: routines for calculating ice velocities             have been moved to the ice_velocity_module;
-  !       routines for integrating the ice thickness equation have been moved to the ice_thickness_module.
 
 #include <petsc/finclude/petscksp.h>
 
 ! ===== Preamble =====
 ! ====================
 
+  ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,                  ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  USE petsc_module,                          ONLY: perr
-  USE parallel_module,                       ONLY: par, sync, ierr, cerr, partition_list, &
-                                                   allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                                   allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                                   allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                                   allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                                   allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                                   reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                                   reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                                   reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                                   reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                                   deallocate_shared
-  USE utilities_module,                      ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                                   check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                                   vertical_average, surface_elevation
-  USE netcdf_debug_module,                   ONLY: debug, write_to_debug_file
-  USE data_types_module,                     ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
-                                                   type_restart_data
-  USE netcdf_input_module,                   ONLY: read_field_from_file_2D
-  USE mesh_mapping_module,                   ONLY: remap_field_dp_2D, remap_field_dp_3D
-  USE general_ice_model_data_module,         ONLY: update_general_ice_model_data
-  USE mesh_operators_module,                 ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
-  USE ice_velocity_module,                   ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver, remap_velocities, &
-                                                   map_velocities_b_to_c_2D, map_velocities_b_to_c_3D
-  USE ice_thickness_module,                  ONLY: calc_dHi_dt
-  USE basal_conditions_and_sliding_module,   ONLY: initialise_basal_conditions, remap_basal_conditions
-  USE thermodynamics_module,                 ONLY: calc_ice_rheology, remap_ice_temperature
-  USE calving_module,                        ONLY: run_calving_model, remove_unconnected_shelves, imposed_shelf_removal
+  USE petscksp
+  USE configuration_module,                ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  USE parameters_module
+  USE petsc_module,                        ONLY: perr, petscmat_checksum
+  USE parallel_module,                     ONLY: par, sync, ierr, cerr, partition_list, &
+                                                 allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                                 allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                                 allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                                 allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                                 allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                                 reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                                 reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                                 reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                                 reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                                 deallocate_shared
+  USE utilities_module,                    ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                                 check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
+                                                 checksum_dp_1D, checksum_dp_2D, checksum_dp_3D
+  USE netcdf_debug_module,                 ONLY: debug, write_to_debug_file, &
+                                                 save_variable_as_netcdf_int_1D, save_variable_as_netcdf_dp_1D, &
+                                                 save_variable_as_netcdf_int_2D, save_variable_as_netcdf_dp_2D, &
+                                                 save_variable_as_netcdf_int_3D, save_variable_as_netcdf_dp_3D, &
+                                                 write_PETSc_matrix_to_NetCDF, write_CSR_matrix_to_NetCDF
+
+  ! Import specific functionality
+  USE data_types_module,                   ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, type_restart_data
+  USE utilities_module,                    ONLY: surface_elevation
+  USE ice_velocity_main_module,            ONLY: initialise_velocity_solver, solve_stress_balance, remap_velocity_solver
+  USE ice_thickness_module,                ONLY: calc_dHi_dt
+  USE thermodynamics_module,               ONLY: calc_ice_rheology, remap_ice_temperature
+  USE calving_module,                      ONLY: run_calving_model, imposed_shelf_removal, remove_unconnected_shelves
+  USE basal_conditions_and_sliding_module, ONLY: initialise_basal_conditions, remap_basal_conditions
+  USE netcdf_input_module,                 ONLY: read_field_from_file_2D
+  USE mesh_mapping_module,                 ONLY: remap_field_dp_2D
+  USE general_ice_model_data_module,       ONLY: update_general_ice_model_data
 
   IMPLICIT NONE
 
@@ -88,13 +94,17 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ice_dynamics_direct'
+    INTEGER                                            :: vi1,vi2
     REAL(dp)                                           :: dt_crit_SIA, dt_crit_SSA, r_solver_acc, dt_max
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Start-up phase
-    ! ==============
+    ! Abbreviations for cleaner code
+    vi1 = region%mesh%vi1
+    vi2 = region%mesh%vi2
+
+  ! == Start-up phase
 
     ! Get a more accurate velocity solution during the start-up phase to prevent initialisation "bumps"
     IF (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
@@ -103,11 +113,26 @@ CONTAINS
       r_solver_acc = 1._dp
     END IF
 
-    region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
-    region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol      * r_solver_acc
-    region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
-    region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
-    region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    IF     (C%choice_stress_balance_approximation == 'none') THEN
+      ! Velocities are set to zero (geometry only subjected to mass balance;
+      ! to keep geometry entirely fixed, set choice_ice_integration_method to 'none')
+    ELSEIF (C%choice_stress_balance_approximation == 'SIA') THEN
+      ! No iterative solver involved
+    ELSEIF (C%choice_stress_balance_approximation == 'SSA') THEN
+      region%ice%SSA%PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%SSA%PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ELSEIF (C%choice_stress_balance_approximation == 'SIA/SSA') THEN
+      region%ice%SSA%PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%SSA%PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ELSEIF (C%choice_stress_balance_approximation == 'DIVA') THEN
+      region%ice%DIVA%PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%DIVA%PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ELSEIF (C%choice_stress_balance_approximation == 'BPA') THEN
+      region%ice%BPA%PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%BPA%PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ELSE
+      CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
+    END IF
 
     ! Reduce the time-step during the start-up phase
     IF     (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
@@ -118,57 +143,71 @@ CONTAINS
       dt_max = C%dt_max
     END IF
 
-    ! Calculate ice velocities with the selected ice-dynamical approximation
-    ! ======================================================================
+  ! == Calculate ice velocities with the selected ice-dynamical approximation
 
-    IF     (C%choice_ice_dynamics == 'none') THEN
-      ! Fixed ice geometry
+    IF     (C%choice_stress_balance_approximation == 'none') THEN
+      ! Velocities are set to zero (geometry only subjected to mass balance;
+      ! to keep geometry entirely fixed, set choice_ice_integration_method to 'none')
 
-    ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
+    ELSEIF (C%choice_stress_balance_approximation == 'SIA') THEN
       ! Shallow ice approximation
 
       IF (region%time == region%t_next_SIA) THEN
 
         ! Calculate new ice velocities
-        CALL solve_SIA( region%mesh, region%ice)
+        CALL solve_stress_balance( region%mesh, region%ice)
 
         ! Calculate critical time step
         CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
-        IF (par%master) region%dt_crit_SIA = dt_crit_SIA
 
-        ! Update timer
-        IF (par%master) region%t_last_SIA = region%time
-        IF (par%master) region%t_next_SIA = region%time + region%dt_crit_SIA
+        IF (par%master) THEN
+
+          ! Apply conditions to the time step
+          dt_crit_SIA = MAX( C%dt_min, MIN( dt_max, dt_crit_SIA))
+
+          ! Update timer
+          region%dt_crit_SIA = dt_crit_SIA
+          region%t_last_SIA  = region%time
+          region%t_next_SIA  = region%time + region%dt_crit_SIA
+
+        END IF
         CALL sync
 
       END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
 
-    ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+    ELSEIF (C%choice_stress_balance_approximation == 'SSA') THEN
       ! Shallow shelf approximation
 
       IF (region%time == region%t_next_SSA) THEN
 
         ! Calculate new ice velocities
-        CALL solve_SSA( region%mesh, region%ice)
+        CALL solve_stress_balance( region%mesh, region%ice)
 
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
-        IF (par%master) region%dt_crit_SSA = dt_crit_SSA
 
-        ! Update timer
-        IF (par%master) region%t_last_SSA = region%time
-        IF (par%master) region%t_next_SSA = region%time + region%dt_crit_SSA
+        IF (par%master) THEN
+
+          ! Apply conditions to the time step
+          dt_crit_SSA = MAX( C%dt_min, MIN( dt_max, dt_crit_SSA))
+
+          ! Update timer
+          region%dt_crit_SSA = dt_crit_SSA
+          region%t_last_SSA  = region%time
+          region%t_next_SSA  = region%time + region%dt_crit_SSA
+
+        END IF
         CALL sync
 
       END IF ! IF (ABS(region%time - region%t_next_SSA) < dt_tol) THEN
 
-    ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+    ELSEIF (C%choice_stress_balance_approximation == 'SIA/SSA') THEN
       ! Hybrid SIA/SSA (Bueler and Brown, 2009)
 
       IF (region%time == region%t_next_SIA) THEN
 
         ! Calculate new ice velocities
-        CALL solve_SIA( region%mesh, region%ice)
+        CALL solve_stress_balance( region%mesh, region%ice)
 
         ! Calculate critical time step
         CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
@@ -191,7 +230,7 @@ CONTAINS
       IF (region%time == region%t_next_SSA) THEN
 
         ! Calculate new ice velocities
-        CALL solve_SSA( region%mesh, region%ice)
+        CALL solve_stress_balance( region%mesh, region%ice)
 
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
@@ -211,29 +250,22 @@ CONTAINS
 
       END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
 
-    ELSE ! IF     (C%choice_ice_dynamics == 'SIA') THEN
-      CALL crash('"direct" time stepping works only with SIA, SSA, or SIA/SSA ice dynamics, not with DIVA!')
-    END IF ! IF     (C%choice_ice_dynamics == 'SIA') THEN
+    ELSE   ! IF     (C%choice_stress_balance_approximation == 'SIA') THEN
+      CALL crash('"direct" time stepping works only with SIA, SSA, or SIA/SSA ice dynamics, not with DIVA or BPA!')
+    END IF ! IF     (C%choice_stress_balance_approximation == 'SIA') THEN
 
     ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
     CALL determine_timesteps_and_actions( region, t_end)
 
     !IF (par%master) WRITE(0,'(A,F7.4,A,F7.4,A,F7.4)') 'dt_crit_SIA = ', dt_crit_SIA, ', dt_crit_SSA = ', dt_crit_SSA, ', dt = ', region%dt
 
-    ! Calculate new ice geometry
-    ! ==========================
+  ! == Calculate new ice geometry
 
-    IF (C%choice_ice_dynamics == 'none') THEN
-      ! Fixed ice geometry
-      region%ice%dHi_dt_a( region%mesh%vi1 : region%mesh%vi2) = 0._dp
-      CALL sync
-    ELSE
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD)
-    END IF
+    ! Calculate dH/dt based on the new velocity solution
+    CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD)
 
     ! Calculate ice thickness at the end of this model loop
-    region%ice%Hi_tplusdt_a( region%mesh%vi1:region%mesh%vi2) = MAX( 0._dp, &
-      region%ice%Hi_a( region%mesh%vi1:region%mesh%vi2) + region%dt * region%ice%dHi_dt_a( region%mesh%vi1:region%mesh%vi2))
+    region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
     CALL sync
 
     ! Finalise routine path
@@ -255,7 +287,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ice_dynamics_pc'
     INTEGER                                            :: vi1,vi2
     LOGICAL                                            :: do_update_ice_velocity
-    REAL(dp)                                           :: dt_from_pc, dt_crit_adv
+    REAL(dp)                                           :: dt_from_pc, dt_crit_adv, r_solver_acc, dt_max
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -264,21 +296,64 @@ CONTAINS
     vi1 = region%mesh%vi1
     vi2 = region%mesh%vi2
 
+  ! == Start-up phase
+
+    ! Get a more accurate velocity solution during the start-up phase to prevent initialisation "bumps"
+    IF (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
+      r_solver_acc = 0.01_dp * 0.99_dp * (region%time - C%start_time_of_run) / C%dt_startup_phase
+    ELSE
+      r_solver_acc = 1._dp
+    END IF
+
+    IF     (C%choice_stress_balance_approximation == 'none') THEN
+      ! Velocities are set to zero (geometry only subjected to mass balance;
+      ! to keep geometry entirely fixed, set choice_ice_integration_method to 'none')
+    ELSEIF (C%choice_stress_balance_approximation == 'SIA') THEN
+      ! No iterative solver involved
+    ELSEIF (C%choice_stress_balance_approximation == 'SSA') THEN
+      region%ice%SSA%PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%SSA%PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ELSEIF (C%choice_stress_balance_approximation == 'SIA/SSA') THEN
+      region%ice%SSA%PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%SSA%PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ELSEIF (C%choice_stress_balance_approximation == 'DIVA') THEN
+      region%ice%DIVA%PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%DIVA%PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ELSEIF (C%choice_stress_balance_approximation == 'BPA') THEN
+      region%ice%BPA%PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%BPA%PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ELSE
+      CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
+    END IF
+
+    ! Reduce the time-step during the start-up phase
+    IF     (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
+      dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((region%time - C%start_time_of_run) / C%dt_startup_phase)**2
+    ELSEIF (region%time >= C%end_time_of_run   - C%dt_startup_phase) THEN
+      dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((C%end_time_of_run - region%time  ) / C%dt_startup_phase)**2
+    ELSE
+      dt_max = C%dt_max
+    END IF
+
+  ! == Update ice velocities
+
     ! Determine whether or not we need to update ice velocities
     do_update_ice_velocity = .FALSE.
-    IF     (C%choice_ice_dynamics == 'none') THEN
-      region%ice%dHi_dt_a( vi1:vi2) = 0._dp
-      CALL sync
-    ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
+    IF     (C%choice_stress_balance_approximation == 'none') THEN
+      ! Velocities are set to zero (geometry only subjected to mass balance;
+      ! to keep geometry entirely fixed, set choice_ice_integration_method to 'none')
+    ELSEIF (C%choice_stress_balance_approximation == 'SIA') THEN
       IF (region%time == region%t_next_SIA ) do_update_ice_velocity = .TRUE.
-    ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+    ELSEIF (C%choice_stress_balance_approximation == 'SSA') THEN
       IF (region%time == region%t_next_SSA ) do_update_ice_velocity = .TRUE.
-    ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+    ELSEIF (C%choice_stress_balance_approximation == 'SIA/SSA') THEN
       IF (region%time == region%t_next_SIA ) do_update_ice_velocity = .TRUE.
-    ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+    ELSEIF (C%choice_stress_balance_approximation == 'DIVA') THEN
       IF (region%time == region%t_next_DIVA) do_update_ice_velocity = .TRUE.
+    ELSEIF (C%choice_stress_balance_approximation == 'BPA') THEN
+      IF (region%time == region%t_next_BPA ) do_update_ice_velocity = .TRUE.
     ELSE
-      CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
+      CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
     END IF
 
     IF (do_update_ice_velocity) THEN
@@ -289,7 +364,7 @@ CONTAINS
         region%dt_crit_ice_prev = region%dt_crit_ice
         region%ice%pc_eta_prev  = region%ice%pc_eta
         dt_from_pc              = (C%pc_epsilon / region%ice%pc_eta)**(C%pc_k_I + C%pc_k_p) * (C%pc_epsilon / region%ice%pc_eta_prev)**(-C%pc_k_p) * region%dt
-        region%dt_crit_ice      = MAX(C%dt_min, MINVAL([ C%dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc]))
+        region%dt_crit_ice      = MAX(C%dt_min, MINVAL([ dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc]))
         region%ice%pc_zeta      = region%dt_crit_ice / region%dt_crit_ice_prev
         region%ice%pc_beta1     = 1._dp + region%ice%pc_zeta / 2._dp
         region%ice%pc_beta2     =       - region%ice%pc_zeta / 2._dp
@@ -309,56 +384,41 @@ CONTAINS
       ! Update step
       ! ===========
 
-      ! Calculate velocities for predicted geometry
+      ! Solve the stress balance and calculate ice velocities for predicted geometry
       region%ice%Hi_old( vi1:vi2) = region%ice%Hi_a(    vi1:vi2)
       region%ice%Hi_a(   vi1:vi2) = region%ice%Hi_pred( vi1:vi2)
       CALL update_general_ice_model_data( region%mesh, region%ice)
+      CALL solve_stress_balance( region%mesh, region%ice)
 
-      IF     (C%choice_ice_dynamics == 'SIA') THEN
+      ! Update timer
 
-        ! Calculate velocities
-        CALL solve_SIA(  region%mesh, region%ice)
-
-        ! Update timer
+      IF     (C%choice_stress_balance_approximation == 'none') THEN
+        ! Velocities are set to zero (geometry only subjected to mass balance;
+        ! to keep geometry entirely fixed, set choice_ice_integration_method to 'none')
+      ELSEIF (C%choice_stress_balance_approximation == 'SIA') THEN
         IF (par%master) region%t_last_SIA = region%time
         IF (par%master) region%t_next_SIA = region%time + region%dt_crit_ice
         CALL sync
-
-      ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
-
-        ! Calculate velocities
-        CALL solve_SSA(  region%mesh, region%ice)
-
-        ! Update timer
+      ELSEIF (C%choice_stress_balance_approximation == 'SSA') THEN
         IF (par%master) region%t_last_SSA = region%time
         IF (par%master) region%t_next_SSA = region%time + region%dt_crit_ice
         CALL sync
-
-      ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
-
-        ! Calculate velocities
-        CALL solve_SIA(  region%mesh, region%ice)
-        CALL solve_SSA(  region%mesh, region%ice)
-
-        ! Update timer
+      ELSEIF (C%choice_stress_balance_approximation == 'SIA/SSA') THEN
         IF (par%master) region%t_last_SIA = region%time
         IF (par%master) region%t_last_SSA = region%time
         IF (par%master) region%t_next_SIA = region%time + region%dt_crit_ice
         IF (par%master) region%t_next_SSA = region%time + region%dt_crit_ice
         CALL sync
-
-      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-
-        ! Calculate velocities
-        CALL solve_DIVA( region%mesh, region%ice)
-
-        ! Update timer
+      ELSEIF (C%choice_stress_balance_approximation == 'DIVA') THEN
         IF (par%master) region%t_last_DIVA = region%time
         IF (par%master) region%t_next_DIVA = region%time + region%dt_crit_ice
         CALL sync
-
+      ELSEIF (C%choice_stress_balance_approximation == 'BPA') THEN
+        IF (par%master) region%t_last_BPA = region%time
+        IF (par%master) region%t_next_BPA = region%time + region%dt_crit_ice
+        CALL sync
       ELSE
-        CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
+        CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
       END IF
 
       ! Corrector step
@@ -614,83 +674,41 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_critical_timestep_SIA'
-    INTEGER                                            :: aci, vi ,vj, k
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c,  Hi_c,  dHs_dx_c,  dHs_dy_c
-    INTEGER                                            :: wu_c, wv_c, wHi_c, wdHs_dx_c, wdHs_dy_c
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  u_3D_c,  v_3D_c
-    INTEGER                                            :: wu_3D_c, wv_3D_c
-    REAL(dp)                                           :: D_SIA, dist, dt
-    REAL(dp), DIMENSION(C%nz)                          :: prof
+    INTEGER                                            :: ti, via, vib, vic
+    REAL(dp)                                           :: d_ab, d_bc, d_ca, d_min, Hi, D_SIA, dt
     REAL(dp), PARAMETER                                :: dt_correction_factor = 0.9_dp ! Make actual applied time step a little bit smaller, just to be sure.
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nAc,       u_c     , wu_c     )
-    CALL allocate_shared_dp_1D( mesh%nAc,       v_c     , wv_c     )
-    CALL allocate_shared_dp_1D( mesh%nAc,       Hi_c    , wHi_c    )
-    CALL allocate_shared_dp_1D( mesh%nAc,       dHs_dx_c, wdHs_dx_c)
-    CALL allocate_shared_dp_1D( mesh%nAc,       dHs_dy_c, wdHs_dy_c)
-    CALL allocate_shared_dp_2D( mesh%nAc, C%nz, u_3D_c  , wu_3D_c  )
-    CALL allocate_shared_dp_2D( mesh%nAc, C%nz, v_3D_c  , wv_3D_c  )
-
-    ! Calculate ice velocity and thickness, and surface slopes on the staggered grid
-    CALL map_velocities_b_to_c_3D( mesh, ice%u_3D_SIA_b, ice%v_3D_SIA_b, u_3D_c, v_3D_c)
-
-    ! Calculate vertically averaged velocities
-    DO aci = mesh%ci1, mesh%ci2
-      prof = u_3D_c( aci,:)
-      CALL vertical_average( prof, u_c( aci))
-      prof = v_3D_c( aci,:)
-      CALL vertical_average( prof, v_c( aci))
-    END DO
-    CALL sync
-
-    CALL map_a_to_c_2D( mesh, ice%Hi_a, Hi_c    )
-    CALL ddx_a_to_c_2D( mesh, ice%Hs_a, dHs_dx_c)
-    CALL ddy_a_to_c_2D( mesh, ice%Hs_a, dHs_dy_c)
-
     ! Initialise time step with maximum allowed value
     dt_crit_SIA = C%dt_max
 
-    DO aci = mesh%ci1, mesh%ci2
+    DO ti = mesh%ti1, mesh%ti2
 
-      ! Only check at ice-covered vertices
-      vi = mesh%Aci( aci,1)
-      vj = mesh%Aci( aci,2)
-      IF (ice%Hi_a( vi) == 0._dp .OR. ice%Hi_a( vj) == 0._dp) CYCLE
+      ! Calculate shortest triangle side
+      via = mesh%Tri( ti,1)
+      vib = mesh%Tri( ti,2)
+      vic = mesh%Tri( ti,3)
 
-      ! Calculate the SIA ice diffusivity
-      D_SIA = 1E-9_dp
-      D_SIA = MAX( D_SIA, ABS( u_c( aci) * Hi_c( aci) / dHs_dx_c( aci) ))
-      D_SIA = MAX( D_SIA, ABS( v_c( aci) * Hi_c( aci) / dHs_dy_c( aci) ))
+      d_ab = NORM2( mesh%V( vib,:) - mesh%V( via,:))
+      d_bc = NORM2( mesh%V( vic,:) - mesh%V( vib,:))
+      d_ca = NORM2( mesh%V( via,:) - mesh%V( vic,:))
 
-      vi = mesh%Aci( aci,1)
-      vj = mesh%Aci( aci,2)
-      dist = NORM2( mesh%V( vi,:) - mesh%V( vj,:))
-      dt = dist**2 / (6._dp * D_SIA)
-      dt_crit_SIA = MIN(dt_crit_SIA, dt)
+      d_min = MINVAL([ d_ab, d_bc, d_ca])
 
-      ! Also check the 3D advective time step
-      DO k = 1, C%nz
-        dt = dist / (ABS( u_3D_c( aci,k)) + ABS( v_3D_c( aci,k)))
-        dt_crit_SIA = MIN( dt_crit_SIA, dt)
-      END DO
+      ! Find maximum diffusivity in the vertical column
+      D_SIA = MAXVAL( ABS( ice%SIA%D_3D_b( ti,:)))
+
+      ! Calculate critical timestep
+      Hi = MAXVAL( [ice%Hi_a( via), ice%Hi_a( vib), ice%Hi_a( vic)])
+      dt = d_min**2 / (6._dp * Hi * D_SIA)
+      dt_crit_SIA = MIN( dt_crit_SIA, dt)
 
     END DO
 
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, dt_crit_SIA, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
     dt_crit_SIA = dt_crit_SIA * dt_correction_factor
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wu_c     )
-    CALL deallocate_shared( wv_c     )
-    CALL deallocate_shared( wHi_c    )
-    CALL deallocate_shared( wdHs_dx_c)
-    CALL deallocate_shared( wdHs_dy_c)
-    CALL deallocate_shared( wu_3D_c  )
-    CALL deallocate_shared( wv_3D_c  )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -710,20 +728,11 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_critical_timestep_adv'
     INTEGER                                            :: aci, vi, vj
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c
-    INTEGER                                            :: wu_c, wv_c
     REAL(dp)                                           :: dist, dt
     REAL(dp), PARAMETER                                :: dt_correction_factor = 0.9_dp ! Make actual applied time step a little bit smaller, just to be sure.
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nAc, u_c, wu_c)
-    CALL allocate_shared_dp_1D( mesh%nAc, v_c, wv_c)
-
-    ! Calculate ice velocity on the staggered grid
-    CALL map_velocities_b_to_c_2D( mesh, ice%u_vav_b, ice%v_vav_b, u_c, v_c)
 
     dt_crit_adv = 2._dp * C%dt_max
 
@@ -735,17 +744,13 @@ CONTAINS
       IF (ice%Hi_a( vi) == 0._dp .OR. ice%Hi_a( vj) == 0._dp) CYCLE
 
       dist = NORM2( mesh%V( vi,:) - mesh%V( vj,:))
-      dt = dist / (ABS( u_c( aci)) + ABS( v_c( aci)))
+      dt = dist / (ABS( ice%u_vav_c( aci)) + ABS( ice%v_vav_c( aci)))
       dt_crit_adv = MIN( dt_crit_adv, dt)
 
     END DO
 
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, dt_crit_adv, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
     dt_crit_adv = MIN(C%dt_max, dt_crit_adv * dt_correction_factor)
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wu_c)
-    CALL deallocate_shared( wv_c)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -831,20 +836,22 @@ CONTAINS
       ! First the ice dynamics
       ! ======================
 
-      IF     (C%choice_ice_dynamics == 'none') THEN
+      IF     (C%choice_stress_balance_approximation == 'none') THEN
         ! Just stick to the maximum time step
-      ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
+      ELSEIF (C%choice_stress_balance_approximation == 'SIA') THEN
         t_next = MIN( t_next, region%t_next_SIA)
-      ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+      ELSEIF (C%choice_stress_balance_approximation == 'SSA') THEN
         t_next = MIN( t_next, region%t_next_SSA)
-      ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+      ELSEIF (C%choice_stress_balance_approximation == 'SIA/SSA') THEN
         t_next = MIN( t_next, region%t_next_SIA)
         t_next = MIN( t_next, region%t_next_SSA)
-      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+      ELSEIF (C%choice_stress_balance_approximation == 'DIVA') THEN
         t_next = MIN( t_next, region%t_next_DIVA)
+      ELSEIF (C%choice_stress_balance_approximation == 'BPA') THEN
+        t_next = MIN( t_next, region%t_next_BPA)
       ELSE
-        CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
-      END IF ! IF (C%choice_ice_dynamics == 'SIA') THEN
+        CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
+      END IF ! IF (C%choice_stress_balance_approximation == 'SIA') THEN
 
       ! Then the other model components
       ! ===============================
@@ -986,16 +993,7 @@ CONTAINS
     CALL initialise_geothermal_heat_flux( mesh, ice)
 
     ! Initialise data and matrices for the velocity solver(s)
-    ! If we're running with choice_ice_dynamics == "none", initialise the velocity
-    ! solver pretending we are using the DIVA, as we will need to get reasonable
-    ! velocities at least once during initialisation to get the thermodynamics right.
-    IF (C%choice_ice_dynamics == 'none') THEN
-      C%choice_ice_dynamics = 'DIVA'
-      CALL initialise_velocity_solver( mesh, ice)
-      C%choice_ice_dynamics = 'none'
-    ELSE
-      CALL initialise_velocity_solver( mesh, ice)
-    END IF
+    CALL initialise_velocity_solver( mesh, ice)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
@@ -1074,6 +1072,8 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%v_vav_a               , ice%wv_vav_a              )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_vav_b               , ice%wu_vav_b              )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_vav_b               , ice%wv_vav_b              )
+    CALL allocate_shared_dp_1D(   mesh%nAc ,              ice%u_vav_c               , ice%wu_vav_c              )
+    CALL allocate_shared_dp_1D(   mesh%nAc ,              ice%v_vav_c               , ice%wv_vav_c              )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%uabs_vav_a            , ice%wuabs_vav_a           )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%uabs_vav_b            , ice%wuabs_vav_b           )
 
@@ -1092,6 +1092,17 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%w_base_a              , ice%ww_base_a             )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%uabs_base_a           , ice%wuabs_base_a          )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%uabs_base_b           , ice%wuabs_base_b          )
+
+    ! Strain rates
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%du_dx_3D_a            , ice%wdu_dx_3D_a           )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%du_dy_3D_a            , ice%wdu_dy_3D_a           )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%du_dz_3D_a            , ice%wdu_dz_3D_a           )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dv_dx_3D_a            , ice%wdv_dx_3D_a           )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dv_dy_3D_a            , ice%wdv_dy_3D_a           )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dv_dz_3D_a            , ice%wdv_dz_3D_a           )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dw_dx_3D_a            , ice%wdw_dx_3D_a           )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dw_dy_3D_a            , ice%wdw_dy_3D_a           )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dw_dz_3D_a            , ice%wdw_dz_3D_a           )
 
     ! Different masks
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_land_a           , ice%wmask_land_a          )
@@ -1115,11 +1126,31 @@ CONTAINS
     CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%Cpi_a                 , ice%wCpi_a                )
     CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%Ki_a                  , ice%wKi_a                 )
 
-    ! Zeta derivatives
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dt_a            , ice%wdzeta_dt_a           )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dx_a            , ice%wdzeta_dx_a           )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dy_a            , ice%wdzeta_dy_a           )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dzeta_dz_a            , ice%wdzeta_dz_a           )
+    ! Basal friction coefficient
+    CALL allocate_shared_dp_1D(   mesh%nV               , ice%beta_b_a              , ice%wbeta_b_a             )
+
+    ! Zeta gradients
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dt_ak           , ice%wdzeta_dt_ak          )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dx_ak           , ice%wdzeta_dx_ak          )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dy_ak           , ice%wdzeta_dy_ak          )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dz_ak           , ice%wdzeta_dz_ak          )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%d2zeta_dx2_ak         , ice%wd2zeta_dx2_ak        )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%d2zeta_dxdy_ak        , ice%wd2zeta_dxdy_ak       )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%d2zeta_dy2_ak         , ice%wd2zeta_dy2_ak        )
+
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%dzeta_dx_bk           , ice%wdzeta_dx_bk          )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%dzeta_dy_bk           , ice%wdzeta_dy_bk          )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%dzeta_dz_bk           , ice%wdzeta_dz_bk          )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%d2zeta_dx2_bk         , ice%wd2zeta_dx2_bk        )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%d2zeta_dxdy_bk        , ice%wd2zeta_dxdy_bk       )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%d2zeta_dy2_bk         , ice%wd2zeta_dy2_bk        )
+
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz-1     , ice%dzeta_dx_bks          , ice%wdzeta_dx_bks         )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz-1     , ice%dzeta_dy_bks          , ice%wdzeta_dy_bks         )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz-1     , ice%dzeta_dz_bks          , ice%wdzeta_dz_bks         )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz-1     , ice%d2zeta_dx2_bks        , ice%wd2zeta_dx2_bks       )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz-1     , ice%d2zeta_dxdy_bks       , ice%wd2zeta_dxdy_bks      )
+    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz-1     , ice%d2zeta_dy2_bks        , ice%wd2zeta_dy2_bks       )
 
     ! Ice dynamics - ice thickness calculation
     CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem, ice%dVi_in                , ice%wdVi_in               )
@@ -1255,35 +1286,46 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%TAF_a                 , ice%wTAF_a                )
    !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ti_a                  , ice%wTi_a                 )
 
-    ! Ice velocities (these are remapped/reallocated in remap_velocities)
-   !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
+    ! Ice velocities
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
 
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
 
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_surf_a              , ice%ww_surf_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_surf_a              , ice%ww_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
 
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_base_a              , ice%ww_base_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_base_a              , ice%ww_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+
+    ! Strain rates
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%du_dx_3D_a            , ice%wdu_dx_3D_a           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%du_dy_3D_a            , ice%wdu_dy_3D_a           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%du_dz_3D_a            , ice%wdu_dz_3D_a           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dv_dx_3D_a            , ice%wdv_dx_3D_a           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dv_dy_3D_a            , ice%wdv_dy_3D_a           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dv_dz_3D_a            , ice%wdv_dz_3D_a           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dw_dx_3D_a            , ice%wdw_dx_3D_a           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dw_dy_3D_a            , ice%wdw_dy_3D_a           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dw_dz_3D_a            , ice%wdw_dz_3D_a           )
 
     ! Different masks
     CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_land_a           , ice%wmask_land_a          )
@@ -1307,11 +1349,31 @@ CONTAINS
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Cpi_a                 , ice%wCpi_a                )
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ki_a                  , ice%wKi_a                 )
 
-    ! Zeta derivatives
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dt_a            , ice%wdzeta_dt_a           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dx_a            , ice%wdzeta_dx_a           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dy_a            , ice%wdzeta_dy_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dzeta_dz_a            , ice%wdzeta_dz_a           )
+    ! Basal friction coefficient
+    CALL reallocate_shared_dp_1D(   mesh_new%nV                   , ice%beta_b_a              , ice%wbeta_b_a             )
+
+    ! Zeta gradients
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dt_ak           , ice%wdzeta_dt_ak          )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dx_ak           , ice%wdzeta_dx_ak          )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dy_ak           , ice%wdzeta_dy_ak          )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dz_ak           , ice%wdzeta_dz_ak          )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%d2zeta_dx2_ak         , ice%wd2zeta_dx2_ak        )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%d2zeta_dxdy_ak        , ice%wd2zeta_dxdy_ak       )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%d2zeta_dy2_ak         , ice%wd2zeta_dy2_ak        )
+
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%dzeta_dx_bk           , ice%wdzeta_dx_bk          )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%dzeta_dy_bk           , ice%wdzeta_dy_bk          )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%dzeta_dz_bk           , ice%wdzeta_dz_bk          )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%d2zeta_dx2_bk         , ice%wd2zeta_dx2_bk        )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%d2zeta_dxdy_bk        , ice%wd2zeta_dxdy_bk       )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%d2zeta_dy2_bk         , ice%wd2zeta_dy2_bk        )
+
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz-1         , ice%dzeta_dx_bks          , ice%wdzeta_dx_bks         )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz-1         , ice%dzeta_dy_bks          , ice%wdzeta_dy_bks         )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz-1         , ice%dzeta_dz_bks          , ice%wdzeta_dz_bks         )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz-1         , ice%d2zeta_dx2_bks        , ice%wd2zeta_dx2_bks       )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz-1         , ice%d2zeta_dxdy_bks       , ice%wd2zeta_dxdy_bks      )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz-1         , ice%d2zeta_dy2_bks        , ice%wd2zeta_dy2_bks       )
 
     ! Ice dynamics - ice thickness calculation
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem, ice%dVi_in                , ice%wdVi_in               )
@@ -1361,16 +1423,7 @@ CONTAINS
     ! ==========================
 
     ! Remap velocities
-    ! If we're running with choice_ice_dynamics == "none", remap velocities
-    ! pretending we are using the DIVA, just like we did  during initialisation
-    ! to get reasonable velocities for the thermodynamics.
-    IF (C%choice_ice_dynamics == 'none') THEN
-      C%choice_ice_dynamics = 'DIVA'
-      CALL remap_velocities( mesh_old, mesh_new, ice)
-      C%choice_ice_dynamics = 'none'
-    ELSE
-      CALL remap_velocities( mesh_old, mesh_new, ice)
-    END IF
+    CALL remap_velocity_solver( mesh_old, mesh_new, ice)
 
     ! Recalculate ice flow factor
     CALL calc_ice_rheology( mesh_new, ice, time)

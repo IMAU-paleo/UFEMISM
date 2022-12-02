@@ -112,6 +112,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_SMB_model
+
   SUBROUTINE initialise_SMB_model( mesh, ice, SMB, region_name, restart)
     ! Allocate memory for the data fields of the SMB model.
 
@@ -196,6 +197,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_SMB_model_idealised
+
   SUBROUTINE run_SMB_model_idealised_EISMINT1( mesh, SMB, time, mask_noice)
 
     IMPLICIT NONE
@@ -217,44 +219,92 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Default EISMINT configuration
-    E         = 450000._dp
-    S_b       = 0.01_dp / 1000._dp
-    M_max     = 0.5_dp
-
     IF     (C%choice_idealised_SMB == 'EISMINT1_A') THEN ! Moving margin, steady state
-      ! No changes
+      ! Steady state
+
+      E         = 450000._dp
+      S_b       = 0.01_dp / 1000._dp
+      M_max     = 0.5_dp
+
     ELSEIF (C%choice_idealised_SMB == 'EISMINT1_B') THEN ! Moving margin, 20 kyr
+
       IF (time < 0._dp) THEN
-        ! No changes; first 120 kyr are initialised with EISMINT_1
+        ! Steady state, identical to EISMINT1_A
+
+        E         = 450000._dp
+        S_b       = 0.01_dp / 1000._dp
+        M_max     = 0.5_dp
+
       ELSE
+        ! 20-kyr sinusoid
+
         E         = 450000._dp + 100000._dp * SIN( 2._dp * pi * time / 20000._dp)
+        S_b       = 0.01_dp / 1000._dp
+        M_max     = 0.5_dp
+
       END IF
+
     ELSEIF (C%choice_idealised_SMB == 'EISMINT1_C') THEN ! Moving margin, 40 kyr
+
       IF (time < 0._dp) THEN
-        ! No changes; first 120 kyr are initialised with EISMINT_1
+        ! Steady state, identical to EISMINT1_A
+
+        E         = 450000._dp
+        S_b       = 0.01_dp / 1000._dp
+        M_max     = 0.5_dp
+
       ELSE
+        ! 40-kyr sinusoid
+
         E         = 450000._dp + 100000._dp * SIN( 2._dp * pi * time / 40000._dp)
+        S_b       = 0.01_dp / 1000._dp
+        M_max     = 0.5_dp
+
       END IF
+
     ELSEIF (C%choice_idealised_SMB == 'EISMINT1_D') THEN ! Fixed margin, steady state
+      ! Steady state
+
       M_max       = 0.3_dp
+      S_b         = 0.01_dp / 1000._dp
       E           = 999000._dp
+
     ELSEIF (C%choice_idealised_SMB == 'EISMINT1_E') THEN ! Fixed margin, 20 kyr
+
       IF (time < 0._dp) THEN
+        ! Steady state, identical to EISMINT1_D
+
         M_max     = 0.3_dp
+        S_b       = 0.01_dp / 1000._dp
         E         = 999000._dp
+
       ELSE
+        ! 20-kyr sinusoid
+
         M_max     = 0.3_dp + 0.2_dp * SIN( 2._dp * pi * time / 20000._dp)
+        S_b       = 0.01_dp / 1000._dp
         E         = 999000._dp
+
       END IF
+
     ELSEIF (C%choice_idealised_SMB == 'EISMINT1_F') THEN ! Fixed margin, 40 kyr
+
       IF (time < 0._dp) THEN
+        ! Steady state, identical to EISMINT1_D
+
         M_max     = 0.3_dp
+        S_b       = 0.01_dp / 1000._dp
         E         = 999000._dp
+
       ELSE
+        ! 40-kyr sinusoid
+
         M_max     = 0.3_dp + 0.2_dp * SIN( 2._dp * pi * time / 40000._dp)
+        S_b       = 0.01_dp / 1000._dp
         E         = 999000._dp
+
       END IF
+
     END IF
 
     DO vi = mesh%vi1, mesh%vi2
@@ -271,6 +321,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
     END SUBROUTINE run_SMB_model_idealised_EISMINT1
+
     SUBROUTINE run_SMB_model_idealised_Bueler( mesh, SMB, time, mask_noice)
 
     IMPLICIT NONE
@@ -301,6 +352,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_SMB_model_idealised_Bueler
+
   SUBROUTINE run_SMB_model_idealised_BIVMIP_B( mesh, SMB, mask_noice)
     ! Almost the same as the EISMINT1 moving-margin experiment,
     ! but slightly smaller so the ice lobe doesn't reach the domain border
@@ -478,6 +530,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_SMB_model_IMAUITM
+
   SUBROUTINE run_SMB_model_IMAUITM_wrongrefreezing( mesh, ice, climate, SMB, mask_noice)
     ! Run the IMAU-ITM SMB model. Old version, exactly as it was in ANICE2.1 (so with the "wrong" refreezing)
 
@@ -591,6 +644,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_SMB_model_IMAUITM_wrongrefreezing
+
   SUBROUTINE initialise_SMB_model_IMAU_ITM( mesh, ice, SMB, region_name, restart)
     ! Allocate memory for the data fields of the SMB model.
 

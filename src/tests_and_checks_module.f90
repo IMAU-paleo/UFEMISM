@@ -35,8 +35,8 @@ MODULE tests_and_checks_module
 
 CONTAINS
 
-! ===== Test matrix stuff =====
-! =============================
+! ===== Matrix operators =====
+! ============================
 
   SUBROUTINE run_all_matrix_tests( mesh)
     ! Test all the matrix operators
@@ -44,10 +44,11 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_all_matrix_tests'
+    INTEGER                                            :: it
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -175,10 +176,6 @@ CONTAINS
     ! ddy_c_to_a_2D
     ! ddy_c_to_b_2D
     ! ddy_c_to_c_2D
-    !
-    ! d2dx2_a_to_a_2D
-    ! d2dxdy_a_to_a_2D
-    ! d2dy2_a_to_a_2D
 
     IMPLICIT NONE
 
@@ -234,14 +231,6 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                :: ddy_c_to_c
     INTEGER :: wddy_a_to_a, wddy_a_to_b, wddy_a_to_c, wddy_b_to_a, wddy_b_to_b, wddy_b_to_c, wddy_c_to_a, wddy_c_to_b, wddy_c_to_c
 
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2dx2_a_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2dxdy_a_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2dy2_a_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2dx2_a_to_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2dxdy_a_to_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2dy2_a_to_a
-    INTEGER :: wd2dx2_a_ex, wd2dxdy_a_ex, wd2dy2_a_ex, wd2dx2_a_to_a, wd2dxdy_a_to_a, wd2dy2_a_to_a
-
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -291,13 +280,6 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nTri, ddy_c_to_b,      wddy_c_to_b     )
     CALL allocate_shared_dp_1D( mesh%nAc,  ddy_c_to_c,      wddy_c_to_c     )
 
-    CALL allocate_shared_dp_1D( mesh%nV,   d2dx2_a_ex,      wd2dx2_a_ex     )
-    CALL allocate_shared_dp_1D( mesh%nV,   d2dxdy_a_ex,     wd2dxdy_a_ex    )
-    CALL allocate_shared_dp_1D( mesh%nV,   d2dy2_a_ex,      wd2dy2_a_ex     )
-    CALL allocate_shared_dp_1D( mesh%nV,   d2dx2_a_to_a,    wd2dx2_a_to_a   )
-    CALL allocate_shared_dp_1D( mesh%nV,   d2dxdy_a_to_a,   wd2dxdy_a_to_a  )
-    CALL allocate_shared_dp_1D( mesh%nV,   d2dy2_a_to_a,    wd2dy2_a_to_a   )
-
   ! Calculate exact solutions
   ! =========================
 
@@ -308,9 +290,6 @@ CONTAINS
       d_a_ex(      vi) = d
       ddx_a_ex(    vi) = ddx
       ddy_a_ex(    vi) = ddy
-      d2dx2_a_ex(  vi) = d2dx2
-      d2dxdy_a_ex( vi) = d2dxdy
-      d2dy2_a_ex(  vi) = d2dy2
     END DO
     DO ti = mesh%ti1, mesh%ti2
       x = mesh%TriGC( ti,1)
@@ -372,12 +351,6 @@ CONTAINS
     CALL ddy_c_to_b_2D( mesh, d_c_ex, ddy_c_to_b)
     CALL ddy_c_to_c_2D( mesh, d_c_ex, ddy_c_to_c)
 
-    ! second partial derivatives
-    CALL d2dx2_a_to_a_2D(  mesh, d_a_ex, d2dx2_a_to_a )
-    CALL d2dxdy_a_to_a_2D( mesh, d_a_ex, d2dxdy_a_to_a)
-    CALL d2dy2_a_to_a_2D(  mesh, d_a_ex, d2dy2_a_to_a )
-    CALL sync
-
   ! Write results to debug file
   ! ===========================
 
@@ -416,15 +389,10 @@ CONTAINS
 !      debug%dp_2D_c_08 = ddy_b_to_c
 !      debug%dp_2D_c_09 = ddy_c_to_c
 !
-!      !! 2nd-order
-!      !debug%dp_2D_a_01 = d2dx2_a_to_a
-!      !debug%dp_2D_a_02 = d2dxdy_a_to_a
-!      !debug%dp_2D_a_03 = d2dy2_a_to_a
-!
-!      CALL write_to_debug_file
-!
 !    END IF
 !    CALL sync
+!
+!    CALL write_to_debug_file
 
   ! Clean up after yourself
   ! =======================
@@ -469,13 +437,6 @@ CONTAINS
     CALL deallocate_shared( wddy_c_to_b  )
     CALL deallocate_shared( wddy_c_to_c  )
 
-    CALL deallocate_shared( wd2dx2_a_ex     )
-    CALL deallocate_shared( wd2dxdy_a_ex    )
-    CALL deallocate_shared( wd2dy2_a_ex     )
-    CALL deallocate_shared( wd2dx2_a_to_a   )
-    CALL deallocate_shared( wd2dxdy_a_to_a  )
-    CALL deallocate_shared( wd2dy2_a_to_a   )
-
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -509,10 +470,6 @@ CONTAINS
     ! ddy_c_to_a_3D
     ! ddy_c_to_b_3D
     ! ddy_c_to_c_3D
-    !
-    ! d2dx2_a_to_a_3D
-    ! d2dxdy_a_to_a_3D
-    ! d2dy2_a_to_a_3D
 
     IMPLICIT NONE
 
@@ -568,14 +525,6 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_c_to_c
     INTEGER :: wddy_a_to_a, wddy_a_to_b, wddy_a_to_c, wddy_b_to_a, wddy_b_to_b, wddy_b_to_c, wddy_c_to_a, wddy_c_to_b, wddy_c_to_c
 
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dx2_a_ex
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dxdy_a_ex
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dy2_a_ex
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dx2_a_to_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dxdy_a_to_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dy2_a_to_a
-    INTEGER :: wd2dx2_a_ex, wd2dxdy_a_ex, wd2dy2_a_ex, wd2dx2_a_to_a, wd2dxdy_a_to_a, wd2dy2_a_to_a
-
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -627,14 +576,6 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddy_c_to_b,      wddy_c_to_b     )
     CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddy_c_to_c,      wddy_c_to_c     )
 
-    ! Second partial derivatives
-    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dx2_a_ex,      wd2dx2_a_ex     )
-    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dxdy_a_ex,     wd2dxdy_a_ex    )
-    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dy2_a_ex,      wd2dy2_a_ex     )
-    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dx2_a_to_a,    wd2dx2_a_to_a   )
-    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dxdy_a_to_a,   wd2dxdy_a_to_a  )
-    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dy2_a_to_a,    wd2dy2_a_to_a   )
-
   ! Calculate exact solutions
   ! =========================
 
@@ -645,9 +586,6 @@ CONTAINS
       d_a_ex(      vi,:) = d
       ddx_a_ex(    vi,:) = ddx
       ddy_a_ex(    vi,:) = ddy
-      d2dx2_a_ex(  vi,:) = d2dx2
-      d2dxdy_a_ex( vi,:) = d2dxdy
-      d2dy2_a_ex(  vi,:) = d2dy2
     END DO
     DO ti = mesh%ti1, mesh%ti2
       x = mesh%TriGC( ti,1)
@@ -709,11 +647,6 @@ CONTAINS
     CALL ddy_c_to_b_3D( mesh, d_c_ex, ddy_c_to_b)
     CALL ddy_c_to_c_3D( mesh, d_c_ex, ddy_c_to_c)
 
-    ! second partial derivatives
-    CALL d2dx2_a_to_a_3D(  mesh, d_a_ex, d2dx2_a_to_a )
-    CALL d2dxdy_a_to_a_3D( mesh, d_a_ex, d2dxdy_a_to_a)
-    CALL d2dy2_a_to_a_3D(  mesh, d_a_ex, d2dy2_a_to_a )
-
   ! Clean up after yourself
   ! =======================
 
@@ -756,13 +689,6 @@ CONTAINS
     CALL deallocate_shared( wddy_c_to_a  )
     CALL deallocate_shared( wddy_c_to_b  )
     CALL deallocate_shared( wddy_c_to_c  )
-
-    CALL deallocate_shared( wd2dx2_a_ex     )
-    CALL deallocate_shared( wd2dxdy_a_ex    )
-    CALL deallocate_shared( wd2dy2_a_ex     )
-    CALL deallocate_shared( wd2dx2_a_to_a   )
-    CALL deallocate_shared( wd2dxdy_a_to_a  )
-    CALL deallocate_shared( wd2dy2_a_to_a   )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1097,9 +1023,10 @@ CONTAINS
     ! Write result to debug file
     IF (par%master) THEN
       debug%dp_2D_b_01 = x_b
-      CALL write_to_debug_file
     END IF
     CALL sync
+
+    CALL write_to_debug_file
 
     ! Clean up after yourself
     CALL VecDestroy( vN_b    , perr)
@@ -1119,8 +1046,8 @@ CONTAINS
   END SUBROUTINE solve_modified_Laplace_equation_b
 
 
-  ! ===== Tests =====
-  ! =================
+  ! ===== NetCDF in/output files =====
+  ! ==================================
 
   SUBROUTINE NetCDF_input_test( region)
     ! A simple test of the new NetCDF functionality

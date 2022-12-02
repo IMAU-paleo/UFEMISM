@@ -41,7 +41,7 @@ MODULE netcdf_input_module
                                              find_triangle_areas, find_connection_widths, determine_mesh_resolution, check_mesh, &
                                              find_Voronoi_cell_geometric_centres
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
-  USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
+  USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh_basic
   USE mesh_mapping_module,             ONLY: map_from_xy_grid_to_mesh_2D        , map_from_lonlat_grid_to_mesh_2D        , map_from_mesh_to_mesh_2D, &
                                              map_from_xy_grid_to_mesh_2D_monthly, map_from_lonlat_grid_to_mesh_2D_monthly, map_from_mesh_to_mesh_2D_monthly, &
                                              map_from_xy_grid_to_mesh_3D        , map_from_lonlat_grid_to_mesh_3D        , map_from_mesh_to_mesh_3D
@@ -59,6 +59,7 @@ MODULE netcdf_input_module
                                              field_name_options_iAci, field_name_options_A, field_name_options_R, &
                                              field_name_options_Hi, field_name_options_Hb, field_name_options_Hs, field_name_options_dHb, &
                                              field_name_options_SL, field_name_options_Ti, &
+                                             open_existing_netcdf_file_for_reading, close_netcdf_file, &
                                              inquire_dim_multiple_options, inquire_var_multiple_options, &
                                              read_var_int_0D, read_var_int_1D, read_var_int_2D, read_var_int_3D, read_var_int_4D, &
                                              read_var_dp_0D , read_var_dp_1D , read_var_dp_2D , read_var_dp_3D , read_var_dp_4D, &
@@ -400,6 +401,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_xy_file_2D'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     CHARACTER(LEN=256)                                 :: indexing, xdir, ydir
@@ -410,18 +412,21 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_xy_grid_from_file( filename, grid, region_name)
+    CALL setup_xy_grid_from_file( filename, ncid, grid, region_name)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_xy_grid_field_dp_2D( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_xy_grid_field_dp_2D( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Determine indexing and dimension directions
-    CALL determine_xy_indexing( filename, var_name, indexing, xdir, ydir)
+    CALL determine_xy_indexing( filename, ncid, var_name, indexing, xdir, ydir)
 
     IF     (indexing == 'xy') THEN
 
@@ -430,14 +435,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_2D( filename, id_var, d)
+        CALL read_var_dp_2D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_3D( grid%nx, grid%ny, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ grid%nx, grid%ny, 1 /) )
+        CALL read_var_dp_3D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ grid%nx, grid%ny, 1 /) )
         ! Copy to output memory
         d( grid%i1:grid%i2,:) = d_with_time( grid%i1:grid%i2,:,1)
         ! Clean up after yourself
@@ -451,14 +456,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_2D( filename, id_var, d)
+        CALL read_var_dp_2D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_3D( grid%ny, grid%nx, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ grid%ny, grid%nx, 1 /) )
+        CALL read_var_dp_3D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ grid%ny, grid%nx, 1 /) )
         ! Copy to output memory
         d( :,grid%i1:grid%i2) = d_with_time( :,grid%i1:grid%i2,1)
         ! Clean up after yourself
@@ -500,6 +505,9 @@ CONTAINS
       CALL crash('unknown ydir = "' // TRIM( ydir) // '"!')
     END IF
 
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 19)
 
@@ -522,6 +530,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_xy_file_2D_monthly'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     CHARACTER(LEN=256)                                 :: indexing, xdir, ydir
@@ -532,18 +541,21 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_xy_grid_from_file( filename, grid, region_name)
+    CALL setup_xy_grid_from_file( filename, ncid, grid, region_name)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_xy_grid_field_dp_2D_monthly( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_xy_grid_field_dp_2D_monthly( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Determine indexing and dimension directions
-    CALL determine_xy_indexing( filename, var_name, indexing, xdir, ydir)
+    CALL determine_xy_indexing( filename, ncid, var_name, indexing, xdir, ydir)
 
     IF     (indexing == 'xy') THEN
 
@@ -552,14 +564,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d)
+        CALL read_var_dp_3D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nx, grid%ny, 12, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, 12, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, 12, 1 /) )
         ! Copy to output memory
         d( grid%i1:grid%i2,:,:) = d_with_time( grid%i1:grid%i2,:,:,1)
         ! Clean up after yourself
@@ -573,14 +585,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d)
+        CALL read_var_dp_3D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%ny, grid%nx, 12, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%ny, grid%nx, 12, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%ny, grid%nx, 12, 1 /) )
         ! Copy to output memory
         d( :,grid%i1:grid%i2,:) = d_with_time( :,grid%i1:grid%i2,:,1)
         ! Clean up after yourself
@@ -622,6 +634,9 @@ CONTAINS
       CALL crash('unknown ydir = "' // TRIM( ydir) // '"!')
     END IF
 
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 19)
 
@@ -644,6 +659,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_xy_file_3D'
+    INTEGER                                            :: ncid
     INTEGER                                            :: nzeta_from_file
     REAL(dp), DIMENSION(:    ), POINTER                ::  zeta_from_file
     INTEGER                                            :: wzeta_from_file
@@ -659,21 +675,24 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_xy_grid_from_file( filename, grid, region_name)
+    CALL setup_xy_grid_from_file( filename, ncid, grid, region_name)
 
     ! Set up the zeta coordinate from the file
-    CALL setup_zeta_from_file( filename, nzeta_from_file, zeta_from_file, wzeta_from_file)
+    CALL setup_zeta_from_file( filename, ncid, nzeta_from_file, zeta_from_file, wzeta_from_file)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_xy_grid_field_dp_3D( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_xy_grid_field_dp_3D( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Determine indexing and dimension directions
-    CALL determine_xy_indexing( filename, var_name, indexing, xdir, ydir)
+    CALL determine_xy_indexing( filename, ncid, var_name, indexing, xdir, ydir)
 
     IF     (indexing == 'xy') THEN
 
@@ -682,14 +701,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d_zeta_from_file)
+        CALL read_var_dp_3D( filename, ncid, id_var, d_zeta_from_file)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nx, grid%ny, nzeta_from_file, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, nzeta_from_file, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, nzeta_from_file, 1 /) )
         ! Copy to output memory
         d_zeta_from_file( grid%i1:grid%i2,:,:) = d_with_time( grid%i1:grid%i2,:,:,1)
         ! Clean up after yourself
@@ -703,14 +722,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d_zeta_from_file)
+        CALL read_var_dp_3D( filename, ncid, id_var, d_zeta_from_file)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%ny, grid%nx, nzeta_from_file, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%ny, grid%nx, nzeta_from_file, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%ny, grid%nx, nzeta_from_file, 1 /) )
         ! Copy to output memory
         d_zeta_from_file( :,grid%i1:grid%i2,:) = d_with_time( :,grid%i1:grid%i2,:,1)
         ! Clean up after yourself
@@ -762,6 +781,9 @@ CONTAINS
     CALL deallocate_shared(   wzeta_from_file)
     CALL deallocate_shared( wd_zeta_from_file)
 
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 19)
 
@@ -787,6 +809,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_xy_file_3D_ocean'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     CHARACTER(LEN=256)                                 :: indexing, xdir, ydir
@@ -797,21 +820,24 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_xy_grid_from_file( filename, grid, region_name)
+    CALL setup_xy_grid_from_file( filename, ncid, grid, region_name)
 
     ! Set up the zeta coordinate from the file
-    CALL setup_z_ocean_from_file( filename, nz_ocean, z_ocean, wz_ocean)
+    CALL setup_z_ocean_from_file( filename, ncid, nz_ocean, z_ocean, wz_ocean)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_xy_grid_field_dp_3D_ocean( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_xy_grid_field_dp_3D_ocean( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Determine indexing and dimension directions
-    CALL determine_xy_indexing( filename, var_name, indexing, xdir, ydir)
+    CALL determine_xy_indexing( filename, ncid, var_name, indexing, xdir, ydir)
 
     IF     (indexing == 'xy') THEN
 
@@ -820,14 +846,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d)
+        CALL read_var_dp_3D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nx, grid%ny, nz_ocean, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, nz_ocean, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, nz_ocean, 1 /) )
         ! Copy to output memory
         d( grid%i1:grid%i2,:,:) = d_with_time( grid%i1:grid%i2,:,:,1)
         ! Clean up after yourself
@@ -841,14 +867,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d)
+        CALL read_var_dp_3D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%ny, grid%nx, nz_ocean, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%ny, grid%nx, nz_ocean, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%ny, grid%nx, nz_ocean, 1 /) )
         ! Copy to output memory
         d( :,grid%i1:grid%i2,:) = d_with_time( :,grid%i1:grid%i2,:,1)
         ! Clean up after yourself
@@ -890,6 +916,9 @@ CONTAINS
       CALL crash('unknown ydir = "' // TRIM( ydir) // '"!')
     END IF
 
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 19)
 
@@ -913,6 +942,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_lonlat_file_2D'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     CHARACTER(LEN=256)                                 :: indexing, londir, latdir
@@ -923,18 +953,21 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_lonlat_grid_from_file( filename, grid, region_name)
+    CALL setup_lonlat_grid_from_file( filename, ncid, grid, region_name)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_lonlat_grid_field_dp_2D( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_lonlat_grid_field_dp_2D( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Determine indexing and dimension directions
-    CALL determine_lonlat_indexing( filename, var_name, indexing, londir, latdir)
+    CALL determine_lonlat_indexing( filename, ncid, var_name, indexing, londir, latdir)
 
     IF     (indexing == 'lonlat') THEN
 
@@ -943,14 +976,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_2D( filename, id_var, d)
+        CALL read_var_dp_2D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_3D( grid%nlon, grid%nlat, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ grid%nlon, grid%nlat, 1 /) )
+        CALL read_var_dp_3D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ grid%nlon, grid%nlat, 1 /) )
         ! Copy to output memory
         d( grid%i1:grid%i2,:) = d_with_time( grid%i1:grid%i2,:,1)
         ! Clean up after yourself
@@ -964,14 +997,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_2D( filename, id_var, d)
+        CALL read_var_dp_2D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_3D( grid%nlat, grid%nlon, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ grid%nlat, grid%nlon, 1 /) )
+        CALL read_var_dp_3D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ grid%nlat, grid%nlon, 1 /) )
         ! Copy to output memory
         d( :,grid%i1:grid%i2) = d_with_time( :,grid%i1:grid%i2,1)
         ! Clean up after yourself
@@ -1016,6 +1049,9 @@ CONTAINS
     ! Correct longitude shifts and range
     CALL correct_longitude_shifts_and_range_2D( filename, grid, d)
 
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
 
@@ -1038,6 +1074,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_lonlat_file_2D'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     CHARACTER(LEN=256)                                 :: indexing, londir, latdir
@@ -1048,18 +1085,21 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_lonlat_grid_from_file( filename, grid, region_name)
+    CALL setup_lonlat_grid_from_file( filename, ncid, grid, region_name)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_lonlat_grid_field_dp_2D_monthly( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_lonlat_grid_field_dp_2D_monthly( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Determine indexing and dimension directions
-    CALL determine_lonlat_indexing( filename, var_name, indexing, londir, latdir)
+    CALL determine_lonlat_indexing( filename, ncid, var_name, indexing, londir, latdir)
 
     IF     (indexing == 'lonlat') THEN
 
@@ -1068,14 +1108,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d)
+        CALL read_var_dp_3D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nlon, grid%nlat, 12, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlon, grid%nlat, 12, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlon, grid%nlat, 12, 1 /) )
         ! Copy to output memory
         d( grid%i1:grid%i2,:,:) = d_with_time( grid%i1:grid%i2,:,:,1)
         ! Clean up after yourself
@@ -1089,14 +1129,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d)
+        CALL read_var_dp_3D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nlat, grid%nlon, 12, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlat, grid%nlon, 12, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlat, grid%nlon, 12, 1 /) )
         ! Copy to output memory
         d( :,grid%i1:grid%i2,:) = d_with_time( :,grid%i1:grid%i2,:,1)
         ! Clean up after yourself
@@ -1141,6 +1181,9 @@ CONTAINS
     ! Correct longitude shifts and range
     CALL correct_longitude_shifts_and_range_3D( filename, grid, d)
 
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
 
@@ -1163,6 +1206,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_lonlat_file_3D'
+    INTEGER                                            :: ncid
     INTEGER                                            :: nzeta_from_file
     REAL(dp), DIMENSION(:    ), POINTER                ::  zeta_from_file
     INTEGER                                            :: wzeta_from_file
@@ -1178,21 +1222,24 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_lonlat_grid_from_file( filename, grid, region_name)
+    CALL setup_lonlat_grid_from_file( filename, ncid, grid, region_name)
 
     ! Set up the zeta coordinate from the file
-    CALL setup_zeta_from_file( filename, nzeta_from_file, zeta_from_file, wzeta_from_file)
+    CALL setup_zeta_from_file( filename, ncid, nzeta_from_file, zeta_from_file, wzeta_from_file)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_lonlat_grid_field_dp_3D( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_lonlat_grid_field_dp_3D( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Determine indexing and dimension directions
-    CALL determine_lonlat_indexing( filename, var_name, indexing, londir, latdir)
+    CALL determine_lonlat_indexing( filename, ncid, var_name, indexing, londir, latdir)
 
     IF     (indexing == 'lonlat') THEN
 
@@ -1201,14 +1248,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d_zeta_from_file)
+        CALL read_var_dp_3D( filename, ncid, id_var, d_zeta_from_file)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nlon, grid%nlat, nzeta_from_file, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlon, grid%nlat, nzeta_from_file, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlon, grid%nlat, nzeta_from_file, 1 /) )
         ! Copy to output memory
         d_zeta_from_file( grid%i1:grid%i2,:,:) = d_with_time( grid%i1:grid%i2,:,:,1)
         ! Clean up after yourself
@@ -1222,14 +1269,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d_zeta_from_file)
+        CALL read_var_dp_3D( filename, ncid, id_var, d_zeta_from_file)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nlat, grid%nlon, nzeta_from_file, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlat, grid%nlon, nzeta_from_file, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlat, grid%nlon, nzeta_from_file, 1 /) )
         ! Copy to output memory
         d_zeta_from_file( :,grid%i1:grid%i2,:) = d_with_time( :,grid%i1:grid%i2,:,1)
         ! Clean up after yourself
@@ -1284,6 +1331,9 @@ CONTAINS
     CALL deallocate_shared(   wzeta_from_file)
     CALL deallocate_shared( wd_zeta_from_file)
 
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
 
@@ -1309,6 +1359,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_lonlat_file_3D_ocean'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     CHARACTER(LEN=256)                                 :: indexing, londir, latdir
@@ -1319,21 +1370,24 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_lonlat_grid_from_file( filename, grid, region_name)
+    CALL setup_lonlat_grid_from_file( filename, ncid, grid, region_name)
 
     ! Set up the zeta coordinate from the file
-    CALL setup_z_ocean_from_file( filename, nz_ocean, z_ocean, wz_ocean)
+    CALL setup_z_ocean_from_file( filename, ncid, nz_ocean, z_ocean, wz_ocean)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_lonlat_grid_field_dp_3D_ocean( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_lonlat_grid_field_dp_3D_ocean( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Determine indexing and dimension directions
-    CALL determine_lonlat_indexing( filename, var_name, indexing, londir, latdir)
+    CALL determine_lonlat_indexing( filename, ncid, var_name, indexing, londir, latdir)
 
     IF     (indexing == 'lonlat') THEN
 
@@ -1342,14 +1396,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d)
+        CALL read_var_dp_3D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nlon, grid%nlat, nz_ocean, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlon, grid%nlat, nz_ocean, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlon, grid%nlat, nz_ocean, 1 /) )
         ! Copy to output memory
         d( grid%i1:grid%i2,:,:) = d_with_time( grid%i1:grid%i2,:,:,1)
         ! Clean up after yourself
@@ -1363,14 +1417,14 @@ CONTAINS
 
       ! Read data from file
       IF (.NOT. PRESENT( time_to_read)) THEN
-        CALL read_var_dp_3D( filename, id_var, d)
+        CALL read_var_dp_3D( filename, ncid, id_var, d)
       ELSE
         ! Allocate shared memory
         CALL allocate_shared_dp_4D( grid%nlat, grid%nlon, nz_ocean, 1, d_with_time, wd_with_time)
         ! Find out which timeframe to read
-        CALL find_timeframe( filename, time_to_read, ti)
+        CALL find_timeframe( filename, ncid, time_to_read, ti)
         ! Read data
-        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlat, grid%nlon, nz_ocean, 1 /) )
+        CALL read_var_dp_4D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlat, grid%nlon, nz_ocean, 1 /) )
         ! Copy to output memory
         d( :,grid%i1:grid%i2,:) = d_with_time( :,grid%i1:grid%i2,:,1)
         ! Clean up after yourself
@@ -1415,6 +1469,9 @@ CONTAINS
     ! Correct longitude shifts and range
     CALL correct_longitude_shifts_and_range_3D( filename, grid, d)
 
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
 
@@ -1438,6 +1495,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_mesh_file_2D'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_with_time
@@ -1447,34 +1505,40 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_mesh_from_file( filename, mesh, region_name)
+    CALL setup_mesh_from_file( filename, ncid, mesh, region_name)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_mesh_field_dp_2D( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_mesh_field_dp_2D( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, d, wd)
 
     ! Read data from file
     IF (.NOT. PRESENT( time_to_read)) THEN
-      CALL read_var_dp_1D( filename, id_var, d)
+      CALL read_var_dp_1D( filename, ncid, id_var, d)
     ELSE
       ! Allocate shared memory
       CALL allocate_shared_dp_2D( mesh%nV, 1, d_with_time, wd_with_time)
       ! Find out which timeframe to read
-      CALL find_timeframe( filename, time_to_read, ti)
+      CALL find_timeframe( filename, ncid, time_to_read, ti)
       ! Read data
-      CALL read_var_dp_2D( filename, id_var, d_with_time, start = (/ 1, ti /), count = (/ mesh%nV, 1 /) )
+      CALL read_var_dp_2D( filename, ncid, id_var, d_with_time, start = (/ 1, ti /), count = (/ mesh%nV, 1 /) )
       ! Copy to output memory
       d( mesh%vi1:mesh%vi2) = d_with_time( mesh%vi1:mesh%vi2,1)
       ! Clean up after yourself
       CALL deallocate_shared( wd_with_time)
     END IF
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
@@ -1498,6 +1562,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_mesh_file_2D_monthly'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_with_time
@@ -1507,34 +1572,40 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_mesh_from_file( filename, mesh, region_name)
+    CALL setup_mesh_from_file( filename, ncid, mesh, region_name)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_mesh_field_dp_2D_monthly( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_mesh_field_dp_2D_monthly( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, 12, d, wd)
 
     ! Read data from file
     IF (.NOT. PRESENT( time_to_read)) THEN
-      CALL read_var_dp_2D( filename, id_var, d)
+      CALL read_var_dp_2D( filename, ncid, id_var, d)
     ELSE
       ! Allocate shared memory
       CALL allocate_shared_dp_3D( mesh%nV, 12, 1, d_with_time, wd_with_time)
       ! Find out which timeframe to read
-      CALL find_timeframe( filename, time_to_read, ti)
+      CALL find_timeframe( filename, ncid, time_to_read, ti)
       ! Read data
-      CALL read_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, 12, 1 /) )
+      CALL read_var_dp_3D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, 12, 1 /) )
       ! Copy to output memory
       d( mesh%vi1:mesh%vi2,:) = d_with_time( mesh%vi1:mesh%vi2,:,1)
       ! Clean up after yourself
       CALL deallocate_shared( wd_with_time)
     END IF
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
@@ -1558,6 +1629,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_mesh_file_3D'
+    INTEGER                                            :: ncid
     INTEGER                                            :: nzeta_from_file
     REAL(dp), DIMENSION(:    ), POINTER                ::  zeta_from_file
     INTEGER                                            :: wzeta_from_file
@@ -1572,32 +1644,35 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_mesh_from_file( filename, mesh, region_name)
+    CALL setup_mesh_from_file( filename, ncid, mesh, region_name)
 
     ! Set up the zeta coordinate from the file
-    CALL setup_zeta_from_file( filename, nzeta_from_file, zeta_from_file, wzeta_from_file)
+    CALL setup_zeta_from_file( filename, ncid, nzeta_from_file, zeta_from_file, wzeta_from_file)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_mesh_field_dp_3D( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_mesh_field_dp_3D( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, nzeta_from_file, d_zeta_from_file, wd_zeta_from_file)
 
     ! Read data from file
     IF (.NOT. PRESENT( time_to_read)) THEN
-      CALL read_var_dp_2D( filename, id_var, d_zeta_from_file)
+      CALL read_var_dp_2D( filename, ncid, id_var, d_zeta_from_file)
     ELSE
       ! Allocate shared memory
       CALL allocate_shared_dp_3D( mesh%nV, nzeta_from_file, 1, d_with_time, wd_with_time)
       ! Find out which timeframe to read
-      CALL find_timeframe( filename, time_to_read, ti)
+      CALL find_timeframe( filename, ncid, time_to_read, ti)
       ! Read data
-      CALL read_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, nzeta_from_file, 1 /) )
+      CALL read_var_dp_3D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, nzeta_from_file, 1 /) )
       ! Copy to output memory
       d_zeta_from_file( mesh%vi1:mesh%vi2,:) = d_with_time( mesh%vi1:mesh%vi2,:,1)
       ! Clean up after yourself
@@ -1613,6 +1688,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared(   wzeta_from_file)
     CALL deallocate_shared( wd_zeta_from_file)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
@@ -1639,6 +1717,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_mesh_file_3D_ocean'
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     CHARACTER(LEN=256)                                 :: var_name
     REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_with_time
@@ -1648,37 +1727,43 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the grid from the file
-    CALL setup_mesh_from_file( filename, mesh, region_name)
+    CALL setup_mesh_from_file( filename, ncid, mesh, region_name)
 
     ! Set up the zeta coordinate from the file
-    CALL setup_z_ocean_from_file( filename, nz_ocean, z_ocean, wz_ocean)
+    CALL setup_z_ocean_from_file( filename, ncid, nz_ocean, z_ocean, wz_ocean)
 
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options, id_var, var_name = var_name)
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
     ! Check if the variable has the required dimensions
-    CALL check_mesh_field_dp_3D_ocean( filename, var_name, should_have_time = PRESENT( time_to_read))
+    CALL check_mesh_field_dp_3D_ocean( filename, ncid, var_name, should_have_time = PRESENT( time_to_read))
 
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, nz_ocean, d, wd)
 
     ! Read data from file
     IF (.NOT. PRESENT( time_to_read)) THEN
-      CALL read_var_dp_2D( filename, id_var, d)
+      CALL read_var_dp_2D( filename, ncid, id_var, d)
     ELSE
       ! Allocate shared memory
       CALL allocate_shared_dp_3D( mesh%nV, nz_ocean, 1, d_with_time, wd_with_time)
       ! Find out which timeframe to read
-      CALL find_timeframe( filename, time_to_read, ti)
+      CALL find_timeframe( filename, ncid, time_to_read, ti)
       ! Read data
-      CALL read_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, nz_ocean, 1 /) )
+      CALL read_var_dp_3D( filename, ncid, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, nz_ocean, 1 /) )
       ! Copy to output memory
       d( mesh%vi1:mesh%vi2,:) = d_with_time( mesh%vi1:mesh%vi2,:,1)
       ! Clean up after yourself
       CALL deallocate_shared( wd_with_time)
     END IF
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
@@ -1688,7 +1773,7 @@ CONTAINS
   ! ===== Set up grids/mesh from a NetCDF file =====
   ! ================================================
 
-  SUBROUTINE setup_xy_grid_from_file(     filename, grid, region_name)
+  SUBROUTINE setup_xy_grid_from_file(     filename, ncid, grid, region_name)
     ! Set up an x/y-grid from a NetCDF file
     !
     ! Assumes no memory has yet been allocated for the grid at all
@@ -1697,6 +1782,7 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    INTEGER,                             INTENT(IN)    :: ncid
     TYPE(type_grid),                     INTENT(INOUT) :: grid
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
@@ -1711,8 +1797,8 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Check grid dimensions and variables for validity
-    CALL check_x( filename)
-    CALL check_y( filename)
+    CALL check_x( filename, ncid)
+    CALL check_y( filename, ncid)
 
     ! Allocate memory for the grid size
     CALL allocate_shared_int_0D( grid%nx, grid%wnx)
@@ -1720,8 +1806,8 @@ CONTAINS
     CALL allocate_shared_int_0D( grid%n , grid%wn )
 
     ! Inquire x and y dimensions
-    CALL inquire_dim_multiple_options( filename, field_name_options_x, id_dim_x, dim_length = grid%nx)
-    CALL inquire_dim_multiple_options( filename, field_name_options_y, id_dim_y, dim_length = grid%ny)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_x, id_dim_x, dim_length = grid%nx)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_y, id_dim_y, dim_length = grid%ny)
     grid%n = grid%nx * grid%ny
 
     ! Allocate memory for x and y
@@ -1729,12 +1815,12 @@ CONTAINS
     CALL allocate_shared_dp_1D( grid%ny, grid%y, grid%wy)
 
     ! Inquire x and y variables
-    CALL inquire_var_multiple_options( filename, field_name_options_x, id_var_x)
-    CALL inquire_var_multiple_options( filename, field_name_options_y, id_var_y)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_x, id_var_x)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_y, id_var_y)
 
     ! Read x and y
-    CALL read_var_dp_1D(  filename, id_var_x, grid%x)
-    CALL read_var_dp_1D(  filename, id_var_y, grid%y)
+    CALL read_var_dp_1D(  filename, ncid, id_var_x, grid%x)
+    CALL read_var_dp_1D(  filename, ncid, id_var_y, grid%y)
 
     ! Allocate memory for, and calculate, some secondary grid properties
     CALL allocate_shared_dp_0D(                    grid%xmin       , grid%wxmin       )
@@ -1834,7 +1920,7 @@ CONTAINS
 
   END SUBROUTINE setup_xy_grid_from_file
 
-  SUBROUTINE setup_lonlat_grid_from_file( filename, grid, region_name)
+  SUBROUTINE setup_lonlat_grid_from_file( filename, ncid, grid, region_name)
     ! Set up a lon/lat-grid from a NetCDF file
     !
     ! Assumes no memory has yet been allocated for the grid at all
@@ -1843,6 +1929,7 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    INTEGER,                             INTENT(IN)    :: ncid
     TYPE(type_grid_lonlat),              INTENT(INOUT) :: grid
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
@@ -1857,8 +1944,8 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Check grid dimensions and variables for validity
-    CALL check_lon( filename)
-    CALL check_lat( filename)
+    CALL check_lon( filename, ncid)
+    CALL check_lat( filename, ncid)
 
     ! Allocate memory for the grid size
     CALL allocate_shared_int_0D( grid%nlon, grid%wnlon)
@@ -1866,8 +1953,8 @@ CONTAINS
     CALL allocate_shared_int_0D( grid%n   , grid%wn   )
 
     ! Inquire lon and lat dimensions
-    CALL inquire_dim_multiple_options( filename, field_name_options_lon, id_dim_lon, dim_length = grid%nlon)
-    CALL inquire_dim_multiple_options( filename, field_name_options_lat, id_dim_lat, dim_length = grid%nlat)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_lon, id_dim_lon, dim_length = grid%nlon)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_lat, id_dim_lat, dim_length = grid%nlat)
 
     IF (par%master) THEN
       grid%n = grid%nlon * grid%nlat
@@ -1878,12 +1965,12 @@ CONTAINS
     CALL allocate_shared_dp_1D( grid%nlat, grid%lat, grid%wlat)
 
     ! Inquire lon and lat variables
-    CALL inquire_var_multiple_options( filename, field_name_options_lon, id_var_lon)
-    CALL inquire_var_multiple_options( filename, field_name_options_lat, id_var_lat)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_lon, id_var_lon)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_lat, id_var_lat)
 
     ! Read lon and lat
-    CALL read_var_dp_1D(  filename, id_var_lon, grid%lon)
-    CALL read_var_dp_1D(  filename, id_var_lat, grid%lat)
+    CALL read_var_dp_1D(  filename, ncid, id_var_lon, grid%lon)
+    CALL read_var_dp_1D(  filename, ncid, id_var_lat, grid%lat)
 
     ! Allocate memory for, and calculate, some secondary grid properties
     CALL allocate_shared_dp_0D( grid%lonmin     , grid%wlonmin     )
@@ -1975,7 +2062,7 @@ CONTAINS
 
   END SUBROUTINE setup_lonlat_grid_from_file
 
-  SUBROUTINE setup_mesh_from_file(        filename, mesh, region_name)
+  SUBROUTINE setup_mesh_from_file(        filename, ncid, mesh, region_name)
     ! Set up a mesh from a NetCDF file
     !
     ! Assumes no memory has yet been allocated for the mesh at all
@@ -1984,12 +2071,12 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    INTEGER,                             INTENT(IN)    :: ncid
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'setup_mesh_from_file'
-    INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_vi, id_dim_ti, id_dim_ci, id_dim_two, id_dim_three
     INTEGER                                            :: nV_mem, nTri_mem, nC_mem, n_two, n_three
     INTEGER                                            :: id_var_V, id_var_nC, id_var_C, id_var_niTri, id_var_iTri, id_var_edge_index
@@ -2000,41 +2087,41 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Check mesh dimensions and variables for validity
-    CALL check_mesh_dimensions( filename)
+    CALL check_mesh_dimensions( filename, ncid)
 
     ! Inquire mesh dimensions
-    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nV    , id_dim_vi   , dim_length = nV_mem  )
-    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nTri  , id_dim_ti   , dim_length = nTri_mem)
-    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nC_mem, id_dim_ci   , dim_length = nC_mem  )
-    CALL inquire_dim_multiple_options( filename, field_name_options_dim_two   , id_dim_two  , dim_length = n_two   )
-    CALL inquire_dim_multiple_options( filename, field_name_options_dim_three , id_dim_three, dim_length = n_three )
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_dim_nV    , id_dim_vi   , dim_length = nV_mem  )
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_dim_nTri  , id_dim_ti   , dim_length = nTri_mem)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_dim_nC_mem, id_dim_ci   , dim_length = nC_mem  )
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_dim_two   , id_dim_two  , dim_length = n_two   )
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_dim_three , id_dim_three, dim_length = n_three )
 
     ! Allocate memory for the mesh
     CALL allocate_mesh_primary( mesh, region_name, nV_mem, nTri_mem, nC_mem)
 
     ! Inquire mesh variables
-    CALL inquire_var_multiple_options( filename, field_name_options_V             , id_var_V             )
-    CALL inquire_var_multiple_options( filename, field_name_options_nC            , id_var_nC            )
-    CALL inquire_var_multiple_options( filename, field_name_options_C             , id_var_C             )
-    CALL inquire_var_multiple_options( filename, field_name_options_niTri         , id_var_niTri         )
-    CALL inquire_var_multiple_options( filename, field_name_options_iTri          , id_var_iTri          )
-    CALL inquire_var_multiple_options( filename, field_name_options_edge_index    , id_var_edge_index    )
-    CALL inquire_var_multiple_options( filename, field_name_options_Tri           , id_var_Tri           )
-    CALL inquire_var_multiple_options( filename, field_name_options_Tricc         , id_var_Tricc         )
-    CALL inquire_var_multiple_options( filename, field_name_options_TriC          , id_var_TriC          )
-    CALL inquire_var_multiple_options( filename, field_name_options_Tri_edge_index, id_var_Tri_edge_index)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_V             , id_var_V             )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_nC            , id_var_nC            )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_C             , id_var_C             )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_niTri         , id_var_niTri         )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_iTri          , id_var_iTri          )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_edge_index    , id_var_edge_index    )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_Tri           , id_var_Tri           )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_Tricc         , id_var_Tricc         )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_TriC          , id_var_TriC          )
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_Tri_edge_index, id_var_Tri_edge_index)
 
     ! Read mesh data
-    CALL read_var_dp_2D(  filename, id_var_V             , mesh%V             )
-    CALL read_var_int_1D( filename, id_var_nC            , mesh%nC            )
-    CALL read_var_int_2D( filename, id_var_C             , mesh%C             )
-    CALL read_var_int_1D( filename, id_var_niTri         , mesh%niTri         )
-    CALL read_var_int_2D( filename, id_var_iTri          , mesh%iTri          )
-    CALL read_var_int_1D( filename, id_var_edge_index    , mesh%edge_index    )
-    CALL read_var_int_2D( filename, id_var_Tri           , mesh%Tri           )
-    CALL read_var_dp_2D(  filename, id_var_Tricc         , mesh%Tricc         )
-    CALL read_var_int_2D( filename, id_var_TriC          , mesh%TriC          )
-    CALL read_var_int_1D( filename, id_var_Tri_edge_index, mesh%Tri_edge_index)
+    CALL read_var_dp_2D(  filename, ncid, id_var_V             , mesh%V             )
+    CALL read_var_int_1D( filename, ncid, id_var_nC            , mesh%nC            )
+    CALL read_var_int_2D( filename, ncid, id_var_C             , mesh%C             )
+    CALL read_var_int_1D( filename, ncid, id_var_niTri         , mesh%niTri         )
+    CALL read_var_int_2D( filename, ncid, id_var_iTri          , mesh%iTri          )
+    CALL read_var_int_1D( filename, ncid, id_var_edge_index    , mesh%edge_index    )
+    CALL read_var_int_2D( filename, ncid, id_var_Tri           , mesh%Tri           )
+    CALL read_var_dp_2D(  filename, ncid, id_var_Tricc         , mesh%Tricc         )
+    CALL read_var_int_2D( filename, ncid, id_var_TriC          , mesh%TriC          )
+    CALL read_var_int_1D( filename, ncid, id_var_Tri_edge_index, mesh%Tri_edge_index)
 
     ! Calculate secondary mesh data
 
@@ -2061,7 +2148,7 @@ CONTAINS
     CALL find_triangle_areas(                 mesh)
     CALL find_connection_widths(              mesh)
     CALL make_Ac_mesh(                        mesh)    ! Adds  5 MPI windows
-    CALL calc_matrix_operators_mesh(          mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
+    CALL calc_matrix_operators_mesh_basic(    mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
     CALL determine_mesh_resolution(           mesh)
     CALL find_Voronoi_cell_geometric_centres( mesh)
 
@@ -2075,13 +2162,14 @@ CONTAINS
 
   END SUBROUTINE setup_mesh_from_file
 
-  SUBROUTINE setup_zeta_from_file( filename, nzeta, zeta, wzeta)
+  SUBROUTINE setup_zeta_from_file(        filename, ncid, nzeta, zeta, wzeta)
     ! Set up a zeta coordinate from a NetCDF file
 
     IMPLICIT NONE
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    INTEGER,                             INTENT(IN)    :: ncid
     INTEGER,                             INTENT(OUT)   :: nzeta
     REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   ::  zeta
     INTEGER,                             INTENT(OUT)   :: wzeta
@@ -2094,32 +2182,33 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Check zeta dimension and variable for validity
-    CALL check_zeta( filename)
+    CALL check_zeta( filename, ncid)
 
     ! Inquire zeta dimension
-    CALL inquire_dim_multiple_options( filename, field_name_options_zeta, id_dim_zeta, dim_length = nzeta)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_zeta, id_dim_zeta, dim_length = nzeta)
 
     ! Inquire zeta variable
-    CALL inquire_var_multiple_options( filename, field_name_options_zeta, id_var_zeta)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_zeta, id_var_zeta)
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( nzeta, zeta, wzeta)
 
     ! Read zeta from file
-    CALL read_var_dp_1D( filename, id_var_zeta, zeta)
+    CALL read_var_dp_1D( filename, ncid, id_var_zeta, zeta)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
 
   END SUBROUTINE setup_zeta_from_file
 
-  SUBROUTINE setup_z_ocean_from_file( filename, nz_ocean, z_ocean, wz_ocean)
+  SUBROUTINE setup_z_ocean_from_file(     filename, ncid, nz_ocean, z_ocean, wz_ocean)
     ! Set up a z_ocean coordinate from a NetCDF file
 
     IMPLICIT NONE
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    INTEGER,                             INTENT(IN)    :: ncid
     INTEGER,                             INTENT(OUT)   :: nz_ocean
     REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   ::  z_ocean
     INTEGER,                             INTENT(OUT)   :: wz_ocean
@@ -2132,19 +2221,19 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Check z_ocean dimension and variable for validity
-    CALL check_z_ocean( filename)
+    CALL check_z_ocean( filename, ncid)
 
     ! Inquire z_ocean dimension
-    CALL inquire_dim_multiple_options( filename, field_name_options_z_ocean, id_dim_z_ocean, dim_length = nz_ocean)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_z_ocean, id_dim_z_ocean, dim_length = nz_ocean)
 
     ! Inquire z_ocean variable
-    CALL inquire_var_multiple_options( filename, field_name_options_z_ocean, id_var_z_ocean)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_z_ocean, id_var_z_ocean)
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( nz_ocean, z_ocean, wz_ocean)
 
     ! Read z_ocean from file
-    CALL read_var_dp_1D( filename, id_var_z_ocean, z_ocean)
+    CALL read_var_dp_1D( filename, ncid, id_var_z_ocean, z_ocean)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
@@ -2154,13 +2243,14 @@ CONTAINS
   ! ===== Determine indexing and dimension directions =====
   ! =======================================================
 
-  SUBROUTINE determine_xy_indexing( filename, var_name, indexing, xdir, ydir)
+  SUBROUTINE determine_xy_indexing( filename, ncid, var_name, indexing, xdir, ydir)
     ! Determine the indexing and dimension directions of a variable in an x/y-grid file
 
     IMPLICIT NONE
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    INTEGER,                             INTENT(IN)    :: ncid
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
     CHARACTER(LEN=256),                  INTENT(OUT)   :: indexing
     CHARACTER(LEN=256),                  INTENT(OUT)   :: xdir
@@ -2179,24 +2269,24 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Check if the x and y dimensions and variables of this file are valid
-    CALL check_x( filename)
-    CALL check_y( filename)
+    CALL check_x( filename, ncid)
+    CALL check_y( filename, ncid)
 
     ! Inquire x and y dimensions
-    CALL inquire_dim_multiple_options( filename, field_name_options_x, id_dim_x, dim_length = nx)
-    CALL inquire_dim_multiple_options( filename, field_name_options_y, id_dim_y, dim_length = ny)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_x, id_dim_x, dim_length = nx)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_y, id_dim_y, dim_length = ny)
 
     ! Allocate memory for x and y
     CALL allocate_shared_dp_1D( nx, x, wx)
     CALL allocate_shared_dp_1D( ny, y, wy)
 
     ! Inquire x and y variables
-    CALL inquire_var_multiple_options( filename, field_name_options_x, id_var_x)
-    CALL inquire_var_multiple_options( filename, field_name_options_y, id_var_y)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_x, id_var_x)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_y, id_var_y)
 
     ! Read x and y
-    CALL read_var_dp_1D(  filename, id_var_x, x)
-    CALL read_var_dp_1D(  filename, id_var_y, y)
+    CALL read_var_dp_1D(  filename, ncid, id_var_x, x)
+    CALL read_var_dp_1D(  filename, ncid, id_var_y, y)
 
     ! Determine directions of x and y
     IF (x( 2) > x( 1)) THEN
@@ -2211,7 +2301,7 @@ CONTAINS
     END IF
 
     ! Inquire dimensions of the specified field variable
-    CALL inquire_var_multiple_options( filename, var_name, id_var, dims_of_var = dims_of_var)
+    CALL inquire_var_multiple_options( filename, ncid, var_name, id_var, dims_of_var = dims_of_var)
 
     ! Determine indexing
     IF     (dims_of_var( 1) == id_dim_x .AND. dims_of_var( 2) == id_dim_y) THEN
@@ -2231,13 +2321,14 @@ CONTAINS
 
   END SUBROUTINE determine_xy_indexing
 
-  SUBROUTINE determine_lonlat_indexing( filename, var_name, indexing, londir, latdir)
+  SUBROUTINE determine_lonlat_indexing( filename, ncid, var_name, indexing, londir, latdir)
     ! Determine the indexing and dimension directions of a variable in a lon/lat-grid file
 
     IMPLICIT NONE
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    INTEGER,                             INTENT(IN)    :: ncid
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
     CHARACTER(LEN=256),                  INTENT(OUT)   :: indexing
     CHARACTER(LEN=256),                  INTENT(OUT)   :: londir
@@ -2256,24 +2347,24 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Check if the lon and lat dimensions and variables of this file are valid
-    CALL check_lon( filename)
-    CALL check_lat( filename)
+    CALL check_lon( filename, ncid)
+    CALL check_lat( filename, ncid)
 
     ! Inquire lon and lat dimensions
-    CALL inquire_dim_multiple_options( filename, field_name_options_lon, id_dim_lon, dim_length = nlon)
-    CALL inquire_dim_multiple_options( filename, field_name_options_lat, id_dim_lat, dim_length = nlat)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_lon, id_dim_lon, dim_length = nlon)
+    CALL inquire_dim_multiple_options( filename, ncid, field_name_options_lat, id_dim_lat, dim_length = nlat)
 
     ! Allocate memory for lon and lat
     CALL allocate_shared_dp_1D( nlon, lon, wlon)
     CALL allocate_shared_dp_1D( nlat, lat, wlat)
 
     ! Inquire lon and lon variables
-    CALL inquire_var_multiple_options( filename, field_name_options_lon, id_var_lon)
-    CALL inquire_var_multiple_options( filename, field_name_options_lat, id_var_lat)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_lon, id_var_lon)
+    CALL inquire_var_multiple_options( filename, ncid, field_name_options_lat, id_var_lat)
 
     ! Read lon and lat
-    CALL read_var_dp_1D(  filename, id_var_lon, lon)
-    CALL read_var_dp_1D(  filename, id_var_lat, lat)
+    CALL read_var_dp_1D(  filename, ncid, id_var_lon, lon)
+    CALL read_var_dp_1D(  filename, ncid, id_var_lat, lat)
 
     ! Determine directions of x and y
     IF (lon( 2) > lon( 1)) THEN
@@ -2288,7 +2379,7 @@ CONTAINS
     END IF
 
     ! Inquire dimensions of the specified field variable
-    CALL inquire_var_multiple_options( filename, var_name, id_var, dims_of_var = dims_of_var)
+    CALL inquire_var_multiple_options( filename, ncid, var_name, id_var, dims_of_var = dims_of_var)
 
     ! Determine indexing
     IF     (dims_of_var( 1) == id_dim_lon .AND. dims_of_var( 2) == id_dim_lat) THEN

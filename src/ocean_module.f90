@@ -25,7 +25,7 @@ MODULE ocean_module
                                              smooth_Gaussian_2D, remap_field_dp_3D
   USE netcdf_output_module,            ONLY: create_new_netcdf_file_for_writing, setup_xy_grid_in_netcdf_file, add_z_ocean_dimension_to_file, &
                                              add_field_grid_dp_3D_ocean_notime
-  USE netcdf_basic_module,             ONLY: inquire_var_multiple_options, write_var_dp_3D
+  USE netcdf_basic_module,             ONLY: close_netcdf_file, inquire_var_multiple_options, write_var_dp_3D
 
   IMPLICIT NONE
 
@@ -1227,9 +1227,10 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Read data
     IF (par%master) WRITE(0,*) '    Reading high-resolution extrapolated ocean data from file "', TRIM( hires%netcdf%filename), '"...'
     hires%netcdf%filename = TRIM( hires_foldername) // '/extrapolated_ocean_data.nc'
+
+    ! Read data
     CALL read_field_from_xy_file_3D_ocean( hires%netcdf%filename, TRIM( C%name_ocean_temperature), 'ANT', hires%grid, hires%T_ocean, hires%wT_ocean, nz_ocean_raw, z_ocean_raw, wz_ocean_raw)
     CALL deallocate_grid( hires%grid)
     CALL read_field_from_xy_file_3D_ocean( hires%netcdf%filename, TRIM( C%name_ocean_salinity   ), 'ANT', hires%grid, hires%S_ocean, hires%wS_ocean, nz_ocean_raw, z_ocean_raw, wz_ocean_raw)
@@ -1261,6 +1262,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_hires_extrapolated_ocean_data_to_file'
     CHARACTER(LEN=256)                                 :: hires_ocean_filename
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var_T, id_var_S
 
     ! Add routine to path
@@ -1277,21 +1279,24 @@ CONTAINS
     IF (par%master) WRITE(0,*) '    Writing extrapolated ocean data to file "', TRIM(hires_ocean_filename), '"...'
 
     ! Create new NetCDF file
-    CALL create_new_netcdf_file_for_writing( hires_ocean_filename)
+    CALL create_new_netcdf_file_for_writing( hires_ocean_filename, ncid)
 
     ! Set up grid and z_ocean
-    CALL setup_xy_grid_in_netcdf_file(  hires_ocean_filename, hires%grid)
-    CALL add_z_ocean_dimension_to_file( hires_ocean_filename)
+    CALL setup_xy_grid_in_netcdf_file(  hires_ocean_filename, ncid, hires%grid)
+    CALL add_z_ocean_dimension_to_file( hires_ocean_filename, ncid)
 
     ! Add variables
-    CALL add_field_grid_dp_3D_ocean_notime( hires_ocean_filename, TRIM( C%name_ocean_temperature), long_name = '3-D ocean temperature', units = 'degrees Celsius')
-    CALL add_field_grid_dp_3D_ocean_notime( hires_ocean_filename, TRIM( C%name_ocean_salinity   ), long_name = '3-D ocean salinity'   , units = 'PSU')
+    CALL add_field_grid_dp_3D_ocean_notime( hires_ocean_filename, ncid, TRIM( C%name_ocean_temperature), long_name = '3-D ocean temperature', units = 'degrees Celsius')
+    CALL add_field_grid_dp_3D_ocean_notime( hires_ocean_filename, ncid, TRIM( C%name_ocean_salinity   ), long_name = '3-D ocean salinity'   , units = 'PSU')
 
     ! Write data
-    CALL inquire_var_multiple_options( hires_ocean_filename, TRIM( C%name_ocean_temperature), id_var_T)
-    CALL inquire_var_multiple_options( hires_ocean_filename, TRIM( C%name_ocean_salinity   ), id_var_S)
-    CALL write_var_dp_3D( hires_ocean_filename, id_var_T, hires%T_ocean)
-    CALL write_var_dp_3D( hires_ocean_filename, id_var_S, hires%S_ocean)
+    CALL inquire_var_multiple_options( hires_ocean_filename, ncid, TRIM( C%name_ocean_temperature), id_var_T)
+    CALL inquire_var_multiple_options( hires_ocean_filename, ncid, TRIM( C%name_ocean_salinity   ), id_var_S)
+    CALL write_var_dp_3D( hires_ocean_filename, ncid, id_var_T, hires%T_ocean)
+    CALL write_var_dp_3D( hires_ocean_filename, ncid, id_var_S, hires%S_ocean)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1592,8 +1597,9 @@ CONTAINS
     END IF
     CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%Hb,     hires%wHb    )
 
-    ! Read the data from the NetCDF file
     IF (par%master) WRITE(0,*) '    Reading high-resolution geometry for ocean extrapolation from file "', TRIM( hires%netcdf_geo%filename), '"...'
+
+    ! Read the data from the NetCDF file
     CALL read_field_from_xy_file_2D( hires%netcdf_geo%filename, 'default_options_Hi', region%name, hires%grid, hires%Hi, hires%wHi)
     CALL deallocate_grid( hires%grid)
     CALL read_field_from_xy_file_2D( hires%netcdf_geo%filename, 'default_options_Hb', region%name, hires%grid, hires%Hb, hires%wHb)

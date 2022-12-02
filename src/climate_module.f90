@@ -994,6 +994,7 @@ CONTAINS
 
     IF (par%master) WRITE(0,*) '   Reading PD observed climate data from file ', TRIM(PD_obs%netcdf%filename), '...'
 
+    ! Read the data
     CALL read_field_from_lonlat_file_2D(         PD_obs%netcdf%filename, 'default_options_Hs', 'ANT', PD_obs%grid, PD_obs%Hs     , PD_obs%wHs     )
     CALL deallocate_grid_lonlat( PD_obs%grid)
     CALL read_field_from_lonlat_file_2D_monthly( PD_obs%netcdf%filename, 'T2m'               , 'ANT', PD_obs%grid, PD_obs%T2m    , PD_obs%wT2m    )
@@ -1046,6 +1047,7 @@ CONTAINS
 
     IF (par%master) WRITE(0,*) '   Reading climate snapshot "', TRIM( name), '" from file ', TRIM( snapshot%netcdf%filename), '...'
 
+    ! Read the data
     CALL read_field_from_lonlat_file_2D(         snapshot%netcdf%filename, 'default_options_Hs', 'ANT', snapshot%grid, snapshot%Hs     , snapshot%wHs     )
     CALL deallocate_grid_lonlat( snapshot%grid)
     CALL read_field_from_lonlat_file_2D_monthly( snapshot%netcdf%filename, 'T2m'               , 'ANT', snapshot%grid, snapshot%T2m    , snapshot%wT2m    )

@@ -72,6 +72,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE solve_matrix_equation_CSR_PETSc
+
   SUBROUTINE solve_matrix_equation_PETSc( A, bb, xx, rtol, abstol)
     ! Solve the matrix equation using a Krylov solver from PETSc
 
@@ -191,6 +192,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE vec_double2petsc
+
   SUBROUTINE vec_petsc2double( x, xx)
     ! Convert a PETSc parallel vector to a regular 1-D Fortran double-precision array
 
@@ -230,6 +232,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE vec_petsc2double
+
   SUBROUTINE mat_petsc2CSR( A, A_CSR)
     ! Convert a PETSC parallel matrix to a CSR-format matrix in regular Fortran arrays
 
@@ -318,6 +321,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 7)
 
   END SUBROUTINE mat_petsc2CSR
+
   SUBROUTINE mat_CSR2petsc( A_CSR, A)
     ! Convert a CSR-format matrix in regular Fortran arrays to a PETSC parallel matrix
     !
@@ -410,6 +414,116 @@ CONTAINS
 
   END SUBROUTINE mat_CSR2petsc
 
+  SUBROUTINE double2petscmat( x, A)
+    ! Convert a regular 1-D Fortran double-precision array to an identity matrix in PETSc format
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: x
+    TYPE(tMat),                          INTENT(OUT)   :: A
+
+    ! Local variables:
+    INTEGER                                            :: n,n1,n2,i
+    TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
+
+    ! Set up the identity matrix in CSR format
+    n = SIZE( x,1)
+
+    ! Allocate memory for the CSR matrix
+    CALL allocate_shared_int_0D( A_CSR%m      , A_CSR%wm      )
+    CALL allocate_shared_int_0D( A_CSR%n      , A_CSR%wn      )
+    CALL allocate_shared_int_0D( A_CSR%nnz_max, A_CSR%wnnz_max)
+    CALL allocate_shared_int_0D( A_CSR%nnz    , A_CSR%wnnz    )
+
+    IF (par%master) THEN
+      A_CSR%m       = n
+      A_CSR%n       = n
+      A_CSR%nnz_max = n
+      A_CSR%nnz     = n
+    END IF
+    CALL sync
+
+    CALL allocate_shared_int_1D( A_CSR%m+1, A_CSR%ptr  , A_CSR%wptr  )
+    CALL allocate_shared_int_1D( A_CSR%nnz, A_CSR%index, A_CSR%windex)
+    CALL allocate_shared_dp_1D(  A_CSR%nnz, A_CSR%val  , A_CSR%wval  )
+
+    ! Fill in values
+    CALL partition_list( n, par%i, par%n, n1, n2)
+    DO i = n1, n2
+      A_CSR%index( i) = i
+      A_CSR%ptr(   i) = i
+      A_CSR%val(   i) = x( i)
+    END DO
+    IF (par%master) THEN
+      A_CSR%nnz = n
+      A_CSR%ptr( n+1) = n+1
+    END IF
+    CALL sync
+
+    ! Convert to PETSc matrix format
+    CALL mat_CSR2petsc( A_CSR, A)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( A_CSR%wm      )
+    CALL deallocate_shared( A_CSR%wn      )
+    CALL deallocate_shared( A_CSR%wnnz_max)
+    CALL deallocate_shared( A_CSR%wnnz    )
+    CALL deallocate_shared( A_CSR%wptr    )
+    CALL deallocate_shared( A_CSR%windex  )
+    CALL deallocate_shared( A_CSR%wval    )
+
+  END SUBROUTINE double2petscmat
+
+  SUBROUTINE petscmat_checksum( A, matname)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(tMat),                          INTENT(IN)    :: A
+    CHARACTER(LEN=*),                    INTENT(IN)    :: matname
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'petscmat_checksum'
+    INTEGER                                            :: m, n, istart, iend, i
+    INTEGER                                            :: ncols
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals
+    REAL(dp)                                           :: Amin, Amax, Asum
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! First get the number of rows and columns
+    CALL MatGetSize( A, m, n, perr)
+    CALL MatGetOwnershipRange( A, istart, iend, perr)
+
+    ALLOCATE( cols( n))
+    ALLOCATE( vals( n))
+
+    Amin =  1E40_dp
+    Amax = -1E40_dp
+    Asum = 0._dp
+
+    DO i = istart+1, iend ! +1 because PETSc indexes from 0
+      CALL MatGetRow(     A, i-1, ncols, cols, vals, perr)
+      Amin = MIN( Amin, MINVAL( vals( 1:ncols)))
+      Amax = MAX( Amax, MAXVAL( vals( 1:ncols)))
+      Asum =      Asum   + SUM( vals( 1:ncols))
+      CALL MatRestoreRow( A, i-1, ncols, cols, vals, perr)
+    END DO
+
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Amin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Amax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Asum, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+
+    CALL warning( 'CHECKSUM ' // TRIM( matname) // ': MIN = {dp_01}, MAX = {dp_02}, SUM = {dp_03}', dp_01 = Amin, dp_02 = Amax, dp_03 = Asum)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE petscmat_checksum
+
 ! == Matrix-vector multiplication
   SUBROUTINE multiply_PETSc_matrix_with_vector_1D( A, xx, yy)
     ! Multiply a PETSc matrix with a FORTRAN vector: y = A*x
@@ -457,6 +571,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE multiply_PETSc_matrix_with_vector_1D
+
   SUBROUTINE multiply_PETSc_matrix_with_vector_2D( A, xx, yy)
     ! Multiply a PETSc matrix with a FORTRAN vector: y = A*x
 
@@ -514,5 +629,93 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE multiply_PETSc_matrix_with_vector_2D
+
+  SUBROUTINE mat_A_eq_diag_B_t_A( AA, bb)
+    ! A = diag(b) * A
+    !
+    ! Essentially a wrapper for MatDiagonalScale, so that
+    ! the vector can be provided in Fortran format
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(tMat),                          INTENT(INOUT) :: AA
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: bb
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'mat_A_eq_diag_B_t_A'
+    TYPE(tVec)                                         :: vbb
+    INTEGER                                            :: m,n
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    CALL MatGetSize( AA, m, n, perr)
+    IF (m /= SIZE( bb,1)) THEN
+      CALL crash('matrix and vector sizes dont match!')
+    END IF
+
+    ! Convert vector from Fortran format to PETSc format
+    CALL vec_double2petsc( bb, vbb)
+
+    ! Multiply matrix rows with vector entries
+    CALL MatDiagonalScale( AA, vbb, PETSC_NULL_VEC, perr)
+
+    ! Clean up after yourself
+    CALL VecDestroy( vbb, perr)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE mat_A_eq_diag_B_t_A
+
+  SUBROUTINE mat_A_eq_B_p_diagC_t_D( BB, cc, DD, AA)
+    ! A = B + diag(C) * D
+    !
+    ! Assumes A has not been allocated yet
+    ! Vector cc is provided in Fortran format
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(tMat),                          INTENT(IN)    :: BB
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: cc
+    TYPE(tMat),                          INTENT(IN)    :: DD
+    TYPE(tMat),                          INTENT(OUT)   :: AA
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'mat_A_eq_B_p_diagC_t_D'
+    INTEGER                                            :: mb,nb,md,nd,mc
+    TYPE(tMat)                                         :: ccDD
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    CALL MatGetSize( BB, mb, nb, perr)
+    CALL MatGetSize( DD, md, nd, perr)
+    mc = SIZE( cc,1)
+    IF (mb /= md .OR. nb /= nd .OR. mb /= mc) THEN
+      CALL crash('matrix and vector sizes dont match!')
+    END IF
+
+    ! ccDD = diag(C) * D
+    CALL MatDuplicate( DD, MAT_COPY_VALUES, ccDD, perr)
+    CALL mat_A_eq_diag_B_t_A( ccDD, cc)
+
+    ! AA = BB
+    CALL MatDuplicate( BB, MAT_COPY_VALUES, AA, perr)
+
+    ! AA = BB + ccDD
+    CALL MatAXPY( AA, 1._dp, ccDD, DIFFERENT_NONZERO_PATTERN, perr)
+
+    ! Clean up after yourself
+    CALL MatDestroy( ccDD, perr)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE mat_A_eq_B_p_diagC_t_D
 
 END MODULE petsc_module

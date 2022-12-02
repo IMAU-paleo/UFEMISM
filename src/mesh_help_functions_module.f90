@@ -3129,6 +3129,91 @@ MODULE mesh_help_functions_module
     CALL sync
 
   END SUBROUTINE rotate_xy_to_po_stag
+  SUBROUTINE rotate_xy_to_po_stag_3D( mesh, u_c, v_c, p_c, o_c)
+    ! Rotate a vector field [u,v] to local [p,o] components on the staggered c (edge) grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),            INTENT(IN)        :: mesh
+    REAL(dp), DIMENSION(:,:  ), INTENT(IN)        :: u_c, v_c
+    REAL(dp), DIMENSION(:,:  ), INTENT(OUT)       :: p_c, o_c
+
+    ! Local variables:
+    INTEGER                                       :: ci, vi, vj
+    REAL(dp)                                      :: Dx, Dy, D
+
+    DO ci = mesh%ci1, mesh%ci2
+
+      vi = mesh%Aci( ci,1)
+      vj = mesh%Aci( ci,2)
+
+      Dx = mesh%V( vj,1) - mesh%V( vi,1)
+      Dy = mesh%V( vj,2) - mesh%V( vi,2)
+      D  = SQRT(Dx**2 + Dy**2)
+
+      p_c( ci,:) = u_c( ci,:) * Dx/D + v_c( ci,:) * Dy/D
+      o_c( ci,:) = v_c( ci,:) * Dx/D - u_c( ci,:) * Dy/D
+
+    END DO ! DO ci = mesh%ci1, mesh%ci2
+    CALL sync
+
+  END SUBROUTINE rotate_xy_to_po_stag_3D
+
+! == ISMIP-HOM periodic boundary conditions
+  SUBROUTINE find_ti_copy_ISMIP_HOM_periodic( mesh, ti, ti_copy)
+    ! Periodic boundary conditions in the ISMIP-HOM experiments are implemented by
+    ! taking advantage of the fact that u(x,y) = u(x+L/2,y+L/2)
+    !
+    ! Velocities at the boundary can therefore be set equal to the interior value
+    ! diagonally across from the boundary point (displaced by [L/2,L/2])
+    !
+    ! This routine finds the interior triangle to copy velocities from
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT)           :: mesh
+    INTEGER,                             INTENT(IN)              :: ti
+    INTEGER,                             INTENT(OUT)             :: ti_copy
+
+    ! Local variables:
+    REAL(dp), DIMENSION(2)                                       :: gc, p
+    INTEGER                                                      :: n, tj
+
+    ! This triangle's geometric centre
+    gc = mesh%TriGC( ti,:)
+
+    ! The point where we want to copy the previous velocity solution
+    IF (gc( 1) > 0._dp) THEN
+      p( 1) = gc( 1) - C%ISMIP_HOM_L / 2._dp
+    ELSE
+      p( 1) = gc( 1) + C%ISMIP_HOM_L / 2._dp
+    END IF
+    IF (gc( 2) > 0._dp) THEN
+      p( 2) = gc( 2) - C%ISMIP_HOM_L / 2._dp
+    ELSE
+      p( 2) = gc( 2) + C%ISMIP_HOM_L / 2._dp
+    END IF
+
+    ! The triangle where we want to copy the previous velocity solution
+    ti_copy = ti
+    CALL find_containing_triangle( mesh, p, ti_copy)
+
+    ! Safety: make sure ti_copy does not also lie on the domain boundary
+    IF (mesh%Tri_edge_index( ti_copy) > 0) THEN
+      DO n = 1, 3
+        tj = mesh%TriC( ti_copy,n)
+        IF (tj == 0) CYCLE
+        IF (mesh%Tri_edge_index( tj) == 0) THEN
+          ti_copy = tj
+          EXIT
+        END IF
+      END DO
+    END IF
+    IF (mesh%Tri_edge_index( ti_copy) > 0) CALL crash('couldnt find non-boundary triangle to copy data from!')
+
+  END SUBROUTINE find_ti_copy_ISMIP_HOM_periodic
 
 ! == Diagnostic tools: write a (small) mesh to the screen, and check if mesh data is self-consistent
   SUBROUTINE write_mesh_to_screen( mesh)

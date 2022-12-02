@@ -29,7 +29,6 @@ MODULE ice_thickness_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_SMB_model, type_BMB_model, &
                                              type_reference_geometry
   USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag, find_containing_vertex
-  USE ice_velocity_module,             ONLY: map_velocities_b_to_c_2D
 
   IMPLICIT NONE
 
@@ -95,14 +94,18 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dHi_dt_explicit'
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c,  up_c,  uo_c
-    INTEGER                                            :: wu_c, wv_c, wup_c, wuo_c
+    REAL(dp), DIMENSION(:    ), POINTER                ::  up_c,  uo_c
+    INTEGER                                            :: wup_c, wuo_c
     INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj
     REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
     REAL(dp), DIMENSION(mesh%nV)                       :: Vi_MB
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nAc, up_c, wup_c)
+    CALL allocate_shared_dp_1D( mesh%nAc, uo_c, wuo_c)
 
     ! Initialise at zero
     ice%dVi_in(  mesh%vi1:mesh%vi2, :) = 0._dp
@@ -114,14 +117,8 @@ CONTAINS
     rescale_factor = 0._dp
     Vi_MB         = 0._dp
 
-    ! Calculate vertically averaged ice velocities along vertex connections
-    CALL allocate_shared_dp_1D( mesh%nAc, u_c , wu_c )
-    CALL allocate_shared_dp_1D( mesh%nAc, v_c , wv_c )
-    CALL allocate_shared_dp_1D( mesh%nAc, up_c, wup_c)
-    CALL allocate_shared_dp_1D( mesh%nAc, uo_c, wuo_c)
-
-    CALL map_velocities_b_to_c_2D( mesh, ice%u_vav_b, ice%v_vav_b, u_c, v_c)
-    CALL rotate_xy_to_po_stag( mesh, u_c, v_c, up_c, uo_c)
+    ! Rotate velocities to find components along/across cell boundaries
+    CALL rotate_xy_to_po_stag( mesh, ice%u_vav_c, ice%v_vav_c, up_c, uo_c)
 
     ! Calculate ice fluxes across all Aa vertex connections
     ! based on ice velocities calculated on Ac mesh
@@ -249,8 +246,6 @@ CONTAINS
     CALL sync
 
     ! Clean up after yourself
-    CALL deallocate_shared( wu_c )
-    CALL deallocate_shared( wv_c )
     CALL deallocate_shared( wup_c)
     CALL deallocate_shared( wuo_c)
 

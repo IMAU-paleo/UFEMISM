@@ -65,99 +65,120 @@ MODULE utilities_module
 CONTAINS
 
 ! == Some operations on the scaled vertical coordinate
-  SUBROUTINE vertical_integration_from_bottom_to_zeta( f, integral_f)
-    ! This subroutine integrates f from the bottom level at C%zeta(k=C%nz) = 1 up to the level C%zeta(k):
-    !  See Eq. (12.1)
-    ! If the integrand f is positive (our case) the integral is negative because the integration is in
+  SUBROUTINE vertical_integration_from_bottom_to_zeta( zeta, f, integral_f)
+    ! This subroutine integrates f from the bottom level at zeta( k=nz) = 1 up to the level zeta( k)
+    !
+    ! NOTE: if the integrand f is positive, the integral is negative because the integration is in
     ! the opposite zeta direction. A 1D array which contains for each k-layer the integrated value from
     ! the bottom up to that k-layer is returned. The value of the integrand f at some integration step k
-    ! is the average of f(k+1) and f(k):
-    !  integral_f(k) = integral_f(k+1) + 0.5 * (f(k+1) + f(k)) * (-dzeta)
-    ! with dzeta = C%zeta(k+1) - C%zeta(k). So for f > 0  integral_f < 0.
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
-    REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
-
-    ! Local variables:
-    INTEGER                                :: k
-
-    integral_f(C%nz) = 0._dp
-    DO k = C%nz-1, 1, -1
-      integral_f(k) = integral_f(k+1) - 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
-    END DO
-
-  END SUBROUTINE vertical_integration_from_bottom_to_zeta
-  SUBROUTINE vertical_integration_from_top_to_zeta(    f, integral_f)
-    ! This subroutine integrates f from the top level at C%zeta(k=1) = 0 down to the level C%zeta(k): Eq. (12.2)
-    ! Similar to Eq. (12.1) but in the other direction.
-    ! If the integrand f is positive (our case) the integral is positive because the integration is in
-    ! the zeta direction. A 1D array which contains for each k-layer the integrated value from
-    ! the top down to that k-layer is returned. The value of the integrand f at some integration step k
-    ! is the average of f(k) and f(k-1):
-    ! integral_f(k) = integral_f(k-1) + 0.5 * (f(k) + f(k-1)) * (dzeta); with dzeta = C%zeta(k+1) - C%zeta(k).
+    ! is the average of f( k+1) and f( k):
+    !  integral_f( k) = integral_f( k+1) + 0.5 * (f( k+1) + f( k)) * (-dzeta)
+    ! with dzeta = zeta( k+1) - zeta( k). So for f > 0,  integral_f < 0.
+    !
     ! Heiko Goelzer (h.goelzer@uu.nl) Jan 2016
 
     IMPLICIT NONE
 
-    ! Input variables:
-    REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
-    REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
+    ! In/output variables:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: zeta
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: f
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: integral_f
 
     ! Local variables:
-    INTEGER                                :: k
+    INTEGER                                            :: nz, k
 
-    integral_f(1) = 0._dp
-    DO k = 2, C%nz, 1
-      integral_f(k) = integral_f(k-1) + 0.5_dp * (f(k) + f(k-1)) * (C%zeta(k) - C%zeta(k-1))
+    nz = SIZE( zeta,1)
+
+    integral_f( nz) = 0._dp
+
+    DO k = nz-1, 1, -1
+      integral_f( k) = integral_f( k+1) - 0.5_dp * (f( k+1) + f( k)) * (zeta( k+1) - zeta( k))
+    END DO
+
+  END SUBROUTINE vertical_integration_from_bottom_to_zeta
+
+  SUBROUTINE vertical_integration_from_top_to_zeta( zeta, f, integral_f)
+    ! This subroutine integrates f from the top level at zeta( k=1) = 0 down to the level zeta( k
+    !
+    ! If the integrand f is positive, the integral is positive because the integration is in
+    ! the zeta direction. A 1D array which contains for each k-layer the integrated value from
+    ! the top down to that k-layer is returned. The value of the integrand f at some integration step k
+    ! is the average of f( k) and f( k-1):
+    ! integral_f( k) = integral_f( k-1) + 0.5 * (f( k) + f( k-1)) * (dzeta)
+    ! with dzeta = zeta( k+1) - zeta( k).
+    !
+    ! Heiko Goelzer (h.goelzer@uu.nl) Jan 2016
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: zeta
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: f
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: integral_f
+
+    ! Local variables:
+    INTEGER                                            :: nz, k
+
+    nz = SIZE( zeta,1)
+
+    integral_f( 1) = 0._dp
+    DO k = 2, nz, 1
+      integral_f( k) = integral_f( k-1) + 0.5_dp * (f( k) + f( k-1)) * (zeta( k) - zeta( k-1))
     END DO
 
   END SUBROUTINE vertical_integration_from_top_to_zeta
-  SUBROUTINE vertical_integrate(                       f, integral_f)
+
+  SUBROUTINE vertical_integrate( zeta, f, integral_f)
     ! Integrate f over the ice column (from the base to the surface)
 
     IMPLICIT NONE
 
-    ! Input variable:
-    REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
-    REAL(dp),                  INTENT(OUT):: integral_f
+    ! In/output variable:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: zeta
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: f
+    REAL(dp),                            INTENT(OUT)   :: integral_f
 
     ! Local variable:
-    INTEGER                               :: k
+    INTEGER                                            :: nz, k
+
+    nz = SIZE( zeta,1)
 
     ! Initial value is zero
-    integral_f = 0.0_dp
+    integral_f = 0._dp
 
     ! Intermediate values include sum of all previous values
     ! Take current value as average between points
-    DO k = 2, C%nz
-       integral_f = integral_f + 0.5_dp*(f(k)+f(k-1))*(C%zeta(k) - C%zeta(k-1))
+
+    DO k = 2, nz
+       integral_f = integral_f + 0.5_dp * (f( k) + f( k-1)) * (zeta( k) - zeta( k-1))
     END DO
 
   END SUBROUTINE vertical_integrate
-  SUBROUTINE vertical_average(                         f, average_f)
+
+  SUBROUTINE vertical_average( zeta, f, average_f)
     ! Calculate the vertical average of any given function f defined at the vertical zeta grid.
-    !  See Eq. (11.3) in DOCUMENTATION/icedyn-documentation/icedyn-documentation.pdf.
-    ! The integration is in the direction of the positive zeta-axis from C%zeta(k=1) = 0 up to C%zeta(k=C%nz) = 1.
-    ! Numerically: de average between layer k and k+1 is calculated and multiplied by the distance between those
+    !
+    ! The integration is in the direction of the positive zeta-axis from zeta( k=1) = 0 up to zeta( k=nz) = 1.
+    ! Numerically: the average between layer k and k+1 is calculated and multiplied by the distance between those
     ! layers k and k+1, which is imediately the weight factor for this contribution because de total layer distance
     ! is scaled to 1. The sum of all the weighted contribution gives average_f the vertical average of f.
 
     IMPLICIT NONE
 
-    ! Input variables:
-    REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
-    REAL(dp),                  INTENT(OUT):: average_f
+    ! In/output variables:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: zeta
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: f
+    REAL(dp),                            INTENT(OUT)   :: average_f
 
     ! Local variables:
-    INTEGER                               :: k
+    INTEGER                                            :: nz, k
 
-    !  See Eq. (11.4) in DOCUMENTATION/icedyn-documentation/icedyn-documentation.pdf
+    nz = SIZE( zeta,1)
+
     average_f = 0._dp
-    DO k = 1, C%nz-1
-      average_f = average_f + 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
+
+    DO k = 1, nz-1
+      average_f = average_f + 0.5_dp * (f( k+1) + f( k)) * (zeta( k+1) - zeta( k))
     END DO
 
   END SUBROUTINE vertical_average
@@ -175,6 +196,7 @@ CONTAINS
     IF (Hi < (SL - Hb) * seawater_density/ice_density) isso = .TRUE.
 
   END FUNCTION is_floating
+
   FUNCTION surface_elevation( Hi, Hb, SL) RESULT( Hs)
     ! The surface elevation equation
 
@@ -186,6 +208,7 @@ CONTAINS
     Hs = Hi + MAX( SL - ice_density / seawater_density * Hi, Hb)
 
   END FUNCTION surface_elevation
+
   FUNCTION thickness_above_floatation( Hi, Hb, SL) RESULT( TAF)
     ! The thickness-above-floatation equation
 
@@ -307,6 +330,7 @@ CONTAINS
     IF(PRESENT(k_P)) k_P = (1._dp + COS(alpha)) / (1._dp + SIN(phi_M) * SIN(phi_P) + COS(phi_M) * COS(phi_P) * COS(lambda_P - lambda_M))
 
   END SUBROUTINE oblique_sg_projection
+
   SUBROUTINE inverse_oblique_sg_projection( x_IM_P_prime, y_IM_P_prime, lambda_M_deg, phi_M_deg, beta_deg, lambda_P, phi_P)
     ! This subroutine projects with an inverse oblique stereographic projection the
     ! (x,y) coordinates to a longitude-latitude coordinate system, with coordinates (lambda, phi) in degrees.
@@ -595,6 +619,7 @@ CONTAINS
     CALL deallocate_shared( wmask_dst_outside_src)
 
   END SUBROUTINE map_square_to_square_cons_2nd_order_2D
+
   SUBROUTINE map_square_to_square_cons_2nd_order_3D( nx_src, ny_src, x_src, y_src, nx_dst, ny_dst, x_dst, y_dst, d_src, d_dst)
     ! Map data from one square grid to another (e.g. PD ice thickness from the square grid in the input file to the model square grid)
 
@@ -676,6 +701,7 @@ CONTAINS
     I_pq = xp*dy - yp*dx + (dx / (2._dp*dy)) * (yq**2 - yp**2)
 
   END SUBROUTINE line_integral_xdy
+
   SUBROUTINE line_integral_mxydx( p, q, tol_dist, I_pq)
     ! Calculate the line integral -xy dx from p to q
 
@@ -705,6 +731,7 @@ CONTAINS
     I_pq = (1._dp/2._dp * (xp*dy/dx - yp) * (xq**2-xp**2)) - (1._dp/3._dp * dy/dx * (xq**3-xp**3))
 
   END SUBROUTINE line_integral_mxydx
+
   SUBROUTINE line_integral_xydy(  p, q, tol_dist, I_pq)
     ! Calculate the line integral xy dy from p to q
 
@@ -838,6 +865,7 @@ CONTAINS
     CALL deallocate_shared( wd_ext_smooth)
 
   END SUBROUTINE smooth_Gaussian_2D_grid
+
   SUBROUTINE smooth_Gaussian_3D_grid( grid, d, r)
     ! Apply a Gaussian smoothing filter of with sigma = n*dx to the 3D data field d
 
@@ -867,6 +895,7 @@ CONTAINS
     CALL deallocate_shared( wd_2D)
 
   END SUBROUTINE smooth_Gaussian_3D_grid
+
   SUBROUTINE smooth_Shepard_2D_grid( grid, d, r)
     ! Apply a Shepard smoothing filter of with sigma = n*dx to the 2D data field d
 
@@ -954,6 +983,7 @@ CONTAINS
     CALL deallocate_shared( wd_ext_smooth)
 
   END SUBROUTINE smooth_Shepard_2D_grid
+
   SUBROUTINE smooth_Shepard_3D_grid( grid, d, r)
     ! Apply a Shepard smoothing filter of with sigma = n*dx to the 3D data field d
 
@@ -1162,6 +1192,7 @@ CONTAINS
     Ainv( 2,2) =  A( 1,1) / detA
 
   END SUBROUTINE calc_matrix_inverse_2_by_2
+
   SUBROUTINE calc_matrix_inverse_3_by_3( A, Ainv)
     ! Direct inversion of a 3-by-3 matrix
     !
@@ -1222,6 +1253,7 @@ CONTAINS
     Ainv = Ainv / detA
 
   END SUBROUTINE calc_matrix_inverse_3_by_3
+
   SUBROUTINE calc_matrix_inverse_general( A, Ainv)
     ! Calculate the inverse Ainv of an n-by-n matrix A using LAPACK
 
@@ -1246,13 +1278,6 @@ CONTAINS
 
     ! Safety
     IF (info /= 0) THEN
-      ! IF (n == 5) THEN
-        ! PRINT *, A(1,1), A(1,2), A(1,3), A(1,4), A(1,5)
-        ! PRINT *, A(2,1), A(2,2), A(2,3), A(2,4), A(2,5)
-        ! PRINT *, A(3,1), A(3,2), A(3,3), A(3,4), A(3,5)
-        ! PRINT *, A(4,1), A(4,2), A(4,3), A(4,4), A(4,5)
-        ! PRINT *, A(5,1), A(5,2), A(5,3), A(5,4), A(5,5)
-      ! END IF
       WRITE(0,*) 'calc_matrix_inverse_general - DGETRF error: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1317,6 +1342,7 @@ CONTAINS
     CALL sync
 
   END SUBROUTINE check_for_NaN_dp_1D
+
   SUBROUTINE check_for_NaN_dp_2D(  d, d_name)
     ! Check if NaN values occur in the 2-D dp data field d
     ! NOTE: parallelised!
@@ -1368,6 +1394,7 @@ CONTAINS
     CALL sync
 
   END SUBROUTINE check_for_NaN_dp_2D
+
   SUBROUTINE check_for_NaN_dp_3D(  d, d_name)
     ! Check if NaN values occur in the 3-D dp data field d
     ! NOTE: parallelised!
@@ -1422,6 +1449,7 @@ CONTAINS
     CALL sync
 
   END SUBROUTINE check_for_NaN_dp_3D
+
   SUBROUTINE check_for_NaN_int_1D( d, d_name)
     ! Check if NaN values occur in the 1-D int data field d
     ! NOTE: parallelised!
@@ -1470,6 +1498,7 @@ CONTAINS
     CALL sync
 
   END SUBROUTINE check_for_NaN_int_1D
+
   SUBROUTINE check_for_NaN_int_2D( d, d_name)
     ! Check if NaN values occur in the 2-D int data field d
     ! NOTE: parallelised!
@@ -1521,6 +1550,7 @@ CONTAINS
     CALL sync
 
   END SUBROUTINE check_for_NaN_int_2D
+
   SUBROUTINE check_for_NaN_int_3D( d, d_name)
     ! Check if NaN values occur in the 3-D int data field d
     ! NOTE: parallelised!
@@ -1575,6 +1605,102 @@ CONTAINS
     CALL sync
 
   END SUBROUTINE check_for_NaN_int_3D
+
+  SUBROUTINE checksum_dp_1D(  d, d_name)
+    ! Print min, max, and sum of array to screen
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:    ),              INTENT(IN)    :: d
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
+
+    ! Local variables:
+    INTEGER                                                :: nx,i1,i2
+    REAL(dp)                                               :: Amin, Amax, Asum
+
+    ! Field size
+    nx = SIZE(d,1)
+
+    ! Parallelisation range
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Inspect data field
+    Amin = MINVAL( d(i1:i2))
+    Amax = MAXVAL( d(i1:i2))
+    Asum =    SUM( d(i1:i2))
+
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Amin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Amax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Asum, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+
+    CALL warning( 'CHECKSUM ' // TRIM( d_name) // ': MIN = {dp_01}, MAX = {dp_02}, SUM = {dp_03}', dp_01 = Amin, dp_02 = Amax, dp_03 = Asum)
+
+  END SUBROUTINE checksum_dp_1D
+
+  SUBROUTINE checksum_dp_2D(  d, d_name)
+    ! Print min, max, and sum of array to screen
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:  ),              INTENT(IN)    :: d
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
+
+    ! Local variables:
+    INTEGER                                                :: nx,i1,i2
+    REAL(dp)                                               :: Amin, Amax, Asum
+
+    ! Field size
+    nx = SIZE(d,1)
+
+    ! Parallelisation range
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Inspect data field
+    Amin = MINVAL( d(i1:i2,:))
+    Amax = MAXVAL( d(i1:i2,:))
+    Asum =    SUM( d(i1:i2,:))
+
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Amin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Amax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Asum, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+
+    CALL warning( 'CHECKSUM ' // TRIM( d_name) // ': MIN = {dp_01}, MAX = {dp_02}, SUM = {dp_03}', dp_01 = Amin, dp_02 = Amax, dp_03 = Asum)
+
+  END SUBROUTINE checksum_dp_2D
+
+  SUBROUTINE checksum_dp_3D(  d, d_name)
+    ! Print min, max, and sum of array to screen
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:,:),              INTENT(IN)    :: d
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
+
+    ! Local variables:
+    INTEGER                                                :: nx,i1,i2
+    REAL(dp)                                               :: Amin, Amax, Asum
+
+    ! Field size
+    nx = SIZE(d,1)
+
+    ! Parallelisation range
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Inspect data field
+    Amin = MINVAL( d(i1:i2,:,:))
+    Amax = MAXVAL( d(i1:i2,:,:))
+    Asum =    SUM( d(i1:i2,:,:))
+
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Amin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Amax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, Asum, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+
+    CALL warning( 'CHECKSUM ' // TRIM( d_name) // ': MIN = {dp_01}, MAX = {dp_02}, SUM = {dp_03}', dp_01 = Amin, dp_02 = Amax, dp_03 = Asum)
+
+  END SUBROUTINE checksum_dp_3D
 
   ! == Basic array operations
   SUBROUTINE permute_2D_dp(  d, wd, map)
@@ -1637,6 +1763,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE permute_2D_dp
+
   SUBROUTINE permute_2D_int( d, wd, map)
     ! Permute a 2-D array
 
@@ -1697,6 +1824,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE permute_2D_int
+
   SUBROUTINE permute_3D_dp(  d, wd, map)
     ! Permute a 3-D array
 
@@ -1839,6 +1967,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE permute_3D_dp
+
   SUBROUTINE permute_3D_int( d, wd, map)
     ! Permute a 3-D array
 
@@ -1981,6 +2110,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE permute_3D_int
+
   SUBROUTINE flip_1D_dp( d)
     ! Flip a 1-D array
 
@@ -2015,6 +2145,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE flip_1D_dp
+
   SUBROUTINE flip_2D_x1_dp( d)
     ! Flip a 2-D array along the first dimension
 
@@ -2050,6 +2181,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE flip_2D_x1_dp
+
   SUBROUTINE flip_2D_x2_dp( d)
     ! Flip a 2-D array along the second dimension
 
@@ -2085,6 +2217,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE flip_2D_x2_dp
+
   SUBROUTINE flip_3D_x1_dp( d)
     ! Flip a 3-D array along the first dimension
 
@@ -2120,6 +2253,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE flip_3D_x1_dp
+
   SUBROUTINE flip_3D_x2_dp( d)
     ! Flip a 3-D array along the second dimension
 
@@ -2155,6 +2289,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE flip_3D_x2_dp
+
   SUBROUTINE flip_3D_x3_dp( d)
     ! Flip a 3-D array along the third dimension
 
@@ -2357,6 +2492,7 @@ CONTAINS
     DEALLOCATE( ddz_src)
 
   END SUBROUTINE remap_cons_2nd_order_1D
+
   SUBROUTINE remap_zeta_grid_dp( zeta_src, d_src, zeta_dst, d_dst)
     ! Remap a 3-D data field from one scaled coordinate zeta to another.
 
@@ -2428,6 +2564,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_zeta_grid_dp
+
   SUBROUTINE remap_zeta_mesh_dp( zeta_src, d_src, zeta_dst, d_dst)
     ! Remap a 3-D data field from one scaled coordinate zeta to another.
 
@@ -2554,6 +2691,7 @@ CONTAINS
     CALL sync
 
   END SUBROUTINE map_glob_to_grid_2D
+
   SUBROUTINE map_glob_to_grid_3D( nlat, nlon, lat, lon, grid, d_glob, d_grid)
     ! Map a data field from a global lat-lon grid to the regional square grid
 
@@ -3156,6 +3294,7 @@ CONTAINS
     END IF
 
   END FUNCTION is_in_polygon
+
   SUBROUTINE segment_intersection( p, q, r, s, llis, do_cross, tol_dist)
     ! Find out if the line segments [pq] and [rs] intersect. If so, return
     ! the coordinates of the point of intersection
@@ -3201,6 +3340,7 @@ CONTAINS
     END IF
 
   END SUBROUTINE segment_intersection
+
   FUNCTION cross2( a,b) RESULT(z)
     ! Vector product z between 2-dimensional vectors a and b
 
@@ -3252,6 +3392,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE deallocate_grid
+
   SUBROUTINE deallocate_grid_lonlat( grid)
     ! Deallocate a grid
 
@@ -3285,6 +3426,153 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE deallocate_grid_lonlat
+
+  ! == Flood-fill stuff
+  SUBROUTINE extend_group_single_iteration_a( mesh)
+    ! Extend the group of vertices described by the provided map and stack
+    ! outward by a single flood-fill iteration
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+
+    ! Local variables:
+    INTEGER                                            :: i,vi,ci,vj
+
+    ! Safety
+    IF (mesh%VstackN1 == 0) CALL crash('extend_group_single_iteration_a - needs at least one vertex to start!')
+
+    ! List all not-yet-stacked neighbours of the stacked vertices in stack2
+    mesh%VstackN2 = 0
+    DO i = 1, mesh%VstackN1
+      vi = mesh%Vstack1( i)
+      ! Safety
+      IF (mesh%Vmap( vi) /= 2) CALL crash('extend_group_single_iteration_a - map and stack dont match!')
+      DO ci = 1, mesh%nC( vi)
+        vj = mesh%C( vi,ci)
+        IF (mesh%Vmap( vj) == 0) THEN
+          mesh%Vmap( vj) = 1
+          mesh%VstackN2 = mesh%VstackN2 + 1
+          mesh%Vstack2( mesh%VstackN2) = vj
+        END IF ! IF (map( vj) == 0) THEN
+      END DO ! DO ci = 1, mesh%nC( vi)
+    END DO ! DO i = 1, stackN
+
+    ! Add all these neighbours to the stack
+    DO i = 1, mesh%VstackN2
+      vi = mesh%Vstack2( i)
+      mesh%Vmap( vi) = 2
+      mesh%VstackN1 = mesh%VstackN1 + 1
+      mesh%Vstack1( mesh%VstackN1) = vi
+    END DO ! DO i = 1, stackN2
+
+  END SUBROUTINE extend_group_single_iteration_a
+
+  SUBROUTINE extend_group_single_iteration_b( mesh)
+    ! Extend the group of triangles described by the provided map and stack
+    ! outward by a single flood-fill iteration
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+
+    ! Local variables:
+    INTEGER                                            :: i,ti,n,tj
+
+    ! Safety
+    IF (mesh%TristackN1 == 0) CALL crash('extend_group_single_iteration_b - needs at least one triangle to start!')
+
+    ! List all not-yet-stacked neighbours of the stacked vertices in stack2
+    mesh%TristackN2 = 0
+    DO i = 1, mesh%TristackN1
+      ti = mesh%Tristack1( i)
+      ! Safety
+      IF (mesh%Trimap( ti) /= 2) CALL crash('extend_group_single_iteration_b - map and stack dont match!')
+      DO n = 1, 3
+        tj = mesh%TriC( ti,n)
+        IF (tj == 0) CYCLE
+        IF (mesh%Trimap( tj) == 0) THEN
+          mesh%Trimap( tj) = 1
+          mesh%TristackN2 = mesh%TristackN2 + 1
+          mesh%Tristack2( mesh%TristackN2) = tj
+        END IF ! IF (map( tj) == 0) THEN
+      END DO ! DO n = 1, 3
+    END DO ! DO i = 1, stackN
+
+    ! Add all these neighbours to the stack
+    DO i = 1, mesh%TristackN2
+      ti = mesh%Tristack2( i)
+      mesh%Trimap( ti) = 2
+      mesh%TristackN1 = mesh%TristackN1 + 1
+      mesh%Tristack1( mesh%TristackN1) = ti
+    END DO ! DO i = 1, stackN2
+
+  END SUBROUTINE extend_group_single_iteration_b
+
+  SUBROUTINE extend_group_single_iteration_c( mesh)
+    ! Extend the group of edges described by the provided map and stack
+    ! outward by a single flood-fill iteration
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+
+    ! Local variables:
+    INTEGER                                            :: i,aci,via,vib,vil,vir,ci,acj
+
+    ! Safety
+    IF (mesh%EstackN1 == 0) CALL crash('extend_group_single_iteration_c - needs at least one triangles to start!')
+
+    ! List all not-yet-stacked neighbours of the stacked vertices in stack2
+    mesh%EstackN2 = 0
+    DO i = 1, mesh%EstackN1
+      aci = mesh%Estack1( i)
+      ! Safety
+      IF (mesh%Emap( aci) /= 2) CALL crash('extend_group_single_iteration_c - map and stack dont match!')
+      via = mesh%Aci( aci,1)
+      vib = mesh%Aci( aci,2)
+      vil = mesh%Aci( aci,3)
+      vir = mesh%Aci( aci,4)
+      ! Add edges via-vil, vib-vil
+      IF (vil > 0) THEN
+        DO ci = 1, mesh%nC( vil)
+          IF (mesh%C( vil,ci) == via .OR. mesh%C( vil,ci) == vib) THEN
+            acj = mesh%iAci( vil,ci)
+            IF (mesh%Emap( acj) == 0) THEN
+              mesh%Emap( acj) = 1
+              mesh%EstackN2 = mesh%EstackN2 + 1
+              mesh%Estack2( mesh%EstackN2) = acj
+            END IF ! IF (map( acj) == 0) THEN
+          END IF ! IF (mesh%C( vil,ci) == via .OR. mesh%C( vil,ci) == vib) THEN
+        END DO ! DO ci = 1, mesh%nC( vil)
+      END IF ! IF (vil > 0) THEN
+      ! Add edges via-vir, vib-vir
+      IF (vir > 0) THEN
+        DO ci = 1, mesh%nC( vir)
+          IF (mesh%C( vir,ci) == via .OR. mesh%C( vir,ci) == vib) THEN
+            acj = mesh%iAci( vir,ci)
+            IF (mesh%Emap( acj) == 0) THEN
+              mesh%Emap( acj) = 1
+              mesh%EstackN2 = mesh%EstackN2 + 1
+              mesh%Estack2( mesh%EstackN2) = acj
+            END IF ! IF (map( acj) == 0) THEN
+          END IF ! IF (mesh%C( vir,ci) == via .OR. mesh%C( vir,ci) == vib) THEN
+        END DO ! DO ci = 1, mesh%nC( vir)
+      END IF ! IF (vir > 0) THEN
+    END DO ! DO i = 1, stackN
+
+    ! Add all these neighbours to the stack
+    DO i = 1, mesh%EstackN2
+      aci = mesh%Estack2( i)
+      mesh%Emap( aci) = 2
+      mesh%EstackN1 = mesh%EstackN1 + 1
+      mesh%Estack1( mesh%EstackN1) = aci
+    END DO ! DO i = 1, stackN2
+
+  END SUBROUTINE extend_group_single_iteration_c
 
   ! == Extras
   SUBROUTINE time_display( region, t_end, dt_ave, it)

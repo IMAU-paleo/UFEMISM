@@ -22,7 +22,7 @@ MODULE UFEMISM_main_model
                                                  reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                                  deallocate_shared
   USE netcdf_debug_module,                 ONLY: debug, write_to_debug_file, create_debug_file, initialise_debug_fields, reallocate_debug_fields, associate_debug_fields
-  USE netcdf_output_module,                ONLY: create_output_files, write_to_output_files
+  USE netcdf_output_module,                ONLY: create_output_files_grid, create_output_files_mesh, write_to_output_files
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, &
                                                  type_climate_matrix_global, type_ocean_matrix_global
   USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
@@ -31,6 +31,7 @@ MODULE UFEMISM_main_model
   USE mesh_creation_module,                ONLY: create_mesh_from_cart_data
   USE mesh_update_module,                  ONLY: determine_mesh_fitness, create_new_mesh
   USE mesh_mapping_module,                 ONLY: clear_all_maps_involving_this_mesh
+  USE mesh_operators_module,               ONLY: calc_matrix_operators_x_y_z_3D
   USE general_ice_model_data_module,       ONLY: initialise_mask_noice, initialise_basins
   USE ice_dynamics_module,                 ONLY: initialise_ice_model,                    remap_ice_model,      run_ice_model,      update_ice_thickness
   USE thermodynamics_module,               ONLY: initialise_ice_temperature,                                    run_thermo_model,   calc_ice_rheology
@@ -45,7 +46,6 @@ MODULE UFEMISM_main_model
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion, write_inverted_bed_roughness_to_file
   USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
-  USE ice_velocity_module,                 ONLY: solve_DIVA
   USE text_output_module,                  ONLY: create_regional_text_output, write_regional_text_output
   USE utilities_module,                    ONLY: time_display
 
@@ -202,7 +202,7 @@ CONTAINS
       ! =================
 
       t1 = MPI_WTIME()
-      CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%time, do_solve_heat_equation = region%do_thermo)
+      CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%BMB, region%time, do_solve_heat_equation = region%do_thermo)
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_thermo = region%tcomp_thermo + t2 - t1
 
@@ -236,7 +236,8 @@ CONTAINS
       IF (region%do_output) THEN
         ! If the mesh has been updated, create a new NetCDF file
         IF (.NOT. region%output_file_exists) THEN
-          CALL create_output_files( region)
+          CALL create_output_files_mesh( region)
+          CALL create_debug_file( region)
           CALL sync
           region%output_file_exists = .TRUE.
         END IF
@@ -277,7 +278,8 @@ CONTAINS
     IF (region%time == C%end_time_of_run) THEN
       ! If the mesh has been updated, create a new NetCDF file
       IF (.NOT. region%output_file_exists) THEN
-        CALL create_output_files( region)
+        CALL create_output_files_mesh( region)
+        CALL create_debug_file( region)
         CALL sync
         region%output_file_exists = .TRUE.
       END IF
@@ -533,8 +535,10 @@ CONTAINS
     ! ===== Output files =====
     ! ========================
 
-    CALL create_output_files(    region)
-    CALL associate_debug_fields( region)
+    CALL create_output_files_grid( region)
+    CALL create_output_files_mesh( region)
+    CALL create_debug_file(        region)
+    CALL associate_debug_fields(   region)
     region%output_file_exists = .TRUE.
     CALL sync
 
@@ -628,17 +632,6 @@ CONTAINS
 
     CALL create_regional_text_output( region)
 
-    ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
-    ! ===========================================================================
-
-    ! If we're running with choice_ice_dynamics == "none", calculate a velocity field
-    ! once during initialisation (so that the thermodynamics are solved correctly)
-    IF (C%choice_ice_dynamics == 'none') THEN
-      C%choice_ice_dynamics = 'DIVA'
-      CALL solve_DIVA( region%mesh, region%ice)
-      C%choice_ice_dynamics = 'none'
-    END IF
-
     IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
 
     ! Finalise routine path
@@ -692,6 +685,10 @@ CONTAINS
     CALL allocate_shared_dp_0D(   region%t_last_DIVA,      region%wt_last_DIVA     )
     CALL allocate_shared_dp_0D(   region%t_next_DIVA,      region%wt_next_DIVA     )
     CALL allocate_shared_bool_0D( region%do_DIVA,          region%wdo_DIVA         )
+
+    CALL allocate_shared_dp_0D(   region%t_last_BPA,       region%wt_last_BPA      )
+    CALL allocate_shared_dp_0D(   region%t_next_BPA,       region%wt_next_BPA      )
+    CALL allocate_shared_bool_0D( region%do_BPA,           region%wdo_BPA          )
 
     CALL allocate_shared_dp_0D(   region%t_last_thermo,    region%wt_last_thermo   )
     CALL allocate_shared_dp_0D(   region%t_next_thermo,    region%wt_next_thermo   )
@@ -749,6 +746,10 @@ CONTAINS
       region%t_last_DIVA    = C%start_time_of_run
       region%t_next_DIVA    = C%start_time_of_run
       region%do_DIVA        = .TRUE.
+
+      region%t_last_BPA     = C%start_time_of_run
+      region%t_next_BPA     = C%start_time_of_run
+      region%do_BPA         = .TRUE.
 
       region%t_last_thermo  = C%start_time_of_run
       region%t_next_thermo  = C%start_time_of_run + C%dt_thermo

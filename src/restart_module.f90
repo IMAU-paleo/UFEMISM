@@ -25,6 +25,7 @@ MODULE restart_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_basic_module,             ONLY: open_existing_netcdf_file_for_reading, close_netcdf_file
   USE netcdf_input_module,             ONLY: setup_mesh_from_file, read_field_from_file_2D, read_field_from_file_2D_monthly, &
                                              read_field_from_file_3D
   USE data_types_netcdf_module,        ONLY: type_netcdf_restart
@@ -48,6 +49,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_mesh_from_restart_file'
     CHARACTER(LEN=256)                                 :: filename
+    INTEGER                                            :: ncid
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -65,8 +67,14 @@ CONTAINS
 
     IF (par%master) WRITE(0,*) '  Reading mesh from restart file "', TRIM( filename), '"...'
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
     ! Set up the mesh from the restart file
-    CALL setup_mesh_from_file( filename, region%mesh, region%name)
+    CALL setup_mesh_from_file( filename, ncid, region%mesh, region%name)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     IF (par%master) THEN
       WRITE(0,'(A)')                '    Finished restarting mesh.'
@@ -128,14 +136,14 @@ CONTAINS
     CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%restart%FirnDepth,          region%restart%wFirnDepth         )
 
     ! Read data from the restart file
-    CALL read_field_from_file_2D(         region%restart%netcdf%filename, restart%name_var_Hi              , region%mesh, region%restart%Hi              , region%name, time_to_restart_from)
-    CALL read_field_from_file_2D(         region%restart%netcdf%filename, restart%name_var_Hb              , region%mesh, region%restart%Hb              , region%name, time_to_restart_from)
-    CALL read_field_from_file_2D(         region%restart%netcdf%filename, restart%name_var_Hs              , region%mesh, region%restart%Hs              , region%name, time_to_restart_from)
-    CALL read_field_from_file_2D(         region%restart%netcdf%filename, restart%name_var_beta_sq         , region%mesh, region%restart%beta_sq         , region%name, time_to_restart_from)
-    CALL read_field_from_file_2D(         region%restart%netcdf%filename, restart%name_var_phi_fric        , region%mesh, region%restart%phi_fric        , region%name, time_to_restart_from)
-    CALL read_field_from_file_3D(         region%restart%netcdf%filename, restart%name_var_Ti              , region%mesh, region%restart%Ti              , region%name, time_to_restart_from)
-    CALL read_field_from_file_2D(         region%restart%netcdf%filename, restart%name_var_MeltPreviousYear, region%mesh, region%restart%MeltPreviousYear, region%name, time_to_restart_from)
-    CALL read_field_from_file_2D_monthly( region%restart%netcdf%filename, restart%name_var_FirnDepth       , region%mesh, region%restart%FirnDepth       , region%name, time_to_restart_from)
+    CALL read_field_from_file_2D(         filename, restart%name_var_Hi              , region%mesh, region%restart%Hi              , region%name, time_to_restart_from)
+    CALL read_field_from_file_2D(         filename, restart%name_var_Hb              , region%mesh, region%restart%Hb              , region%name, time_to_restart_from)
+    CALL read_field_from_file_2D(         filename, restart%name_var_Hs              , region%mesh, region%restart%Hs              , region%name, time_to_restart_from)
+    CALL read_field_from_file_2D(         filename, restart%name_var_beta_sq         , region%mesh, region%restart%beta_sq         , region%name, time_to_restart_from)
+    CALL read_field_from_file_2D(         filename, restart%name_var_phi_fric        , region%mesh, region%restart%phi_fric        , region%name, time_to_restart_from)
+    CALL read_field_from_file_3D(         filename, restart%name_var_Ti              , region%mesh, region%restart%Ti              , region%name, time_to_restart_from)
+    CALL read_field_from_file_2D(         filename, restart%name_var_MeltPreviousYear, region%mesh, region%restart%MeltPreviousYear, region%name, time_to_restart_from)
+    CALL read_field_from_file_2D_monthly( filename, restart%name_var_FirnDepth       , region%mesh, region%restart%FirnDepth       , region%name, time_to_restart_from)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 12)

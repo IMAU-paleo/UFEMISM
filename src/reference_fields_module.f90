@@ -172,7 +172,9 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Read data from input file
+  ! == Read data from input file
+
+    ! Read the data fields and the grid
     CALL read_field_from_xy_file_2D( filename_refgeo, 'default_options_Hi', region_name, refgeo%grid, refgeo%Hi_grid, refgeo%wHi_grid)
     CALL deallocate_grid( refgeo%grid)
     CALL read_field_from_xy_file_2D( filename_refgeo, 'default_options_Hb', region_name, refgeo%grid, refgeo%Hb_grid, refgeo%wHb_grid)

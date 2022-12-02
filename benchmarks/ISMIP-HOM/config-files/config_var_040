@@ -1,0 +1,53 @@
+&CONFIG
+
+  ! == Benchmark experiments
+  ! ========================
+
+    ISMIP_HOM_L_config                          = 40000.0                         ! Domain size of the ISMIP-HOM benchmarks
+
+  ! == Whether or not to let UFEMISM dynamically create its own output folder
+  ! =========================================================================
+
+    fixed_output_dir_suffix_config              = '_040'                               ! Suffix to put after the fixed output directory name, useful when doing ensemble runs with the template+variation set-up
+
+    xmin_ANT_config                             = -20000.0                       ! Western  boundary     of the Antarctica domain [m]
+    xmax_ANT_config                             =  20000.0                       ! Eastern  boundary     of the Antarctica domain [m]
+    ymin_ANT_config                             = -20000.0                       ! Southern boundary     of the Antarctica domain [m]
+    ymax_ANT_config                             =  20000.0                       ! Northern boundary     of the Antarctica domain [m]
+
+  ! == Mesh generation parameters
+  ! =============================
+
+    res_max_config                              = 1.0                              ! Maximum allowed resolution                            [km]
+    res_max_margin_config                       = 1.0                              ! Maximum allowed resolution over land-based ice margin [km]
+    res_max_gl_config                           = 1.0                              !                                 grounding line        [km]
+    res_max_cf_config                           = 1.0                              !                                 calving front         [km]
+    res_max_mountain_config                     = 1.0                              !                                 mountains             [km]
+    res_max_coast_config                        = 1.0                              !                                 coastline             [km]
+
+  ! == Resolutions of the different square grids
+  ! ============================================
+
+    dx_grid_output_config                       = 1000.0                           ! Resolution of the square grid used for writing output                       [m]
+    dx_grid_GIA_config                          = 1000.0                           ! Resolution of the square grid used for GIA modelling (ELRA or SELEN)        [m]
+    dx_grid_smooth_config                       = 1000.0                           ! Resolution of the square grid used for data smoothing in the climate matrix [m]
+
+  ! == Reference geometries (initial, present-day, and GIA equilibrium)
+  ! ===================================================================
+
+    ! == Initial geometry
+    ! ===================
+
+    dx_refgeo_init_idealised_config             = 1000.0                           ! Resolution of square grid used for idealised initial geometry
+
+    ! == Present-day geometry
+    ! =======================
+
+    dx_refgeo_PD_idealised_config               = 1000.0                           ! Resolution of square grid used for idealised present-day geometry
+
+    ! == GIA equilibrium geometry
+    ! ===========================
+
+    dx_refgeo_GIAeq_idealised_config            = 1000.0                           ! Resolution of square grid used for idealised GIA equilibrium geometry
+
+/

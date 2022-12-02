@@ -35,7 +35,7 @@ MODULE mesh_mapping_module
   USE utilities_module,                ONLY: line_integral_xdy, line_integral_mxydx, line_integral_xydy, smooth_Gaussian_2D_grid, &
                                              smooth_Gaussian_3D_grid
   USE petsc_module,                    ONLY: multiply_PETSc_matrix_with_vector_1D, multiply_PETSc_matrix_with_vector_2D, mat_CSR2petsc
-  USE mesh_operators_module,           ONLY: calc_matrix_operators_grid, apply_Neumann_BC_direct_a_2D, apply_Neumann_BC_direct_a_3D
+  USE mesh_operators_module,           ONLY: calc_matrix_operators_grid
   USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, add_entry_CSR_dist, finalise_matrix_CSR_dist, deallocate_matrix_CSR
 
   IMPLICIT NONE
@@ -2248,8 +2248,6 @@ CONTAINS
     ALLOCATE( single_row_grid%LI_mxydx(   single_row_grid%n_max))
     ALLOCATE( single_row_grid%LI_xydy(    single_row_grid%n_max))
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating all the line integrals...'
-
     CALL allocate_shared_int_1D( mesh%nV, mask_do_simple_average, wmask_do_simple_average)
     mask_do_simple_average( mesh%vi1:mesh%vi2) = 0
 
@@ -2413,8 +2411,6 @@ CONTAINS
   ! Calculate w0, w1x, w1y for the mesh-to-grid remapping operator
   ! ==============================================================
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating w0, w1x, w1y...'
-
     CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
     CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
     CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1y, perr)
@@ -2488,8 +2484,6 @@ CONTAINS
 
     ! Calculate the remapping matrix
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating remapping matrix...'
-
     CALL calc_matrix_operators_grid( grid, grid_M_ddx, grid_M_ddy)
 
     CALL MatDuplicate( w0, MAT_COPY_VALUES, map%M, perr)
@@ -2562,6 +2556,7 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
     REAL(dp)                                           :: A_overlap_tot
     TYPE(tMat)                                         :: M1, M2
+    LOGICAL                                            :: has_value
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -2579,8 +2574,6 @@ CONTAINS
 
   ! == Find all grid cells that overlap with small triangles
   ! ========================================================
-
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - finding all grid cells overlapping with small/big triangles...'
 
     CALL allocate_shared_int_2D( grid%nx, grid%ny, overlaps_with_small_triangle, woverlaps_with_small_triangle)
     CALL allocate_shared_int_2D( grid%nx, grid%ny, containing_triangle         , wcontaining_triangle         )
@@ -2687,11 +2680,9 @@ CONTAINS
   ! == Integrate around all grid cells that overlap with small triangles
   ! ====================================================================
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating all line integrals...'
-
     ! Initialise the three matrices using the native UFEMISM CSR-matrix format
 
-    ! Matrix sise
+    ! Matrix size
     nrows_A         = grid%n     ! to
     ncols_A         = mesh%nTri  ! from
     nnz_est         = 4 * MAX( nrows_A, ncols_A)
@@ -2728,15 +2719,47 @@ CONTAINS
       j = grid%n2ij( n,2)
       p = [grid%x( i), grid%y( j)]
 
+      ! The four sides of the grid cell
+      xl = grid%x( i) - grid%dx / 2._dp
+      xu = grid%x( i) + grid%dx / 2._dp
+      yl = grid%y( j) - grid%dx / 2._dp
+      yu = grid%y( j) + grid%dx / 2._dp
+
+      ! If this grid cell lies entirely outside of the mesh domain, use
+      ! nearest-neighbour extrapolation
+
+      DO WHILE (xl <= mesh%xmin)
+        i = i+1
+        p( 1) = grid%x( i)
+        xl = grid%x( i) - grid%dx / 2._dp
+        xu = grid%x( i) + grid%dx / 2._dp
+        IF (i > grid%nx) CALL crash('grid domain doesnt overlap with mesh domain at all!')
+      END DO
+      DO WHILE (xu >= mesh%xmax)
+        i = i-1
+        p( 1) = grid%x( i)
+        xl = grid%x( i) - grid%dx / 2._dp
+        xu = grid%x( i) + grid%dx / 2._dp
+        IF (i < 1) CALL crash('grid domain doesnt overlap with mesh domain at all!')
+      END DO
+      DO WHILE (yl <= mesh%ymin)
+        j = j+1
+        p( 2) = grid%y( j)
+        yl = grid%y( j) - grid%dx / 2._dp
+        yu = grid%y( j) + grid%dx / 2._dp
+        IF (j > grid%ny) CALL crash('grid domain doesnt overlap with mesh domain at all!')
+      END DO
+      DO WHILE (yu >= mesh%ymax)
+        j = j-1
+        p( 2) = grid%y( j)
+        yl = grid%y( j) - grid%dx / 2._dp
+        yu = grid%y( j) + grid%dx / 2._dp
+        IF (j < 1) CALL crash('grid domain doesnt overlap with mesh domain at all!')
+      END DO
+
       IF (overlaps_with_small_triangle( i,j) == 1) THEN
         ! This grid cell overlaps with a small triangle; integrate around it, and around
         ! all triangles overlapping with it
-
-        ! The four sides of the grid cell
-        xl = grid%x( i) - grid%dx / 2._dp
-        xu = grid%x( i) + grid%dx / 2._dp
-        yl = grid%y( j) - grid%dx / 2._dp
-        yu = grid%y( j) + grid%dx / 2._dp
 
         sw = [xl, yl]
         nw = [xl, yu]
@@ -2853,8 +2876,6 @@ CONTAINS
   ! Calculate w0, w1x, w1y for the mesh-to-grid remapping operator
   ! ==============================================================
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating w0, w1x, w1y...'
-
     CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
     CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
     CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w1y, perr)
@@ -2899,6 +2920,12 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Clean up after yourself
+    DEALLOCATE( cols   )
+    DEALLOCATE( vals   )
+    DEALLOCATE( w0_row )
+    DEALLOCATE( w1x_row)
+    DEALLOCATE( w1y_row)
     CALL MatDestroy( A_xdy_g_b  , perr)
     CALL MatDestroy( A_mxydx_g_b, perr)
     CALL MatDestroy( A_xydy_g_b , perr)
@@ -2918,8 +2945,6 @@ CONTAINS
 
     ! Calculate the remapping matrix
 
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating remapping matrix...'
-
     CALL MatMatMult( w0,  mesh%M_map_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, map%M, perr)
     CALL MatMatMult( w1x, mesh%M_ddx_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1   , perr)  ! This can be done more efficiently now that the non-zero structure is known...
     CALL MatMatMult( w1y, mesh%M_ddy_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2   , perr)
@@ -2933,6 +2958,32 @@ CONTAINS
 
     CALL MatDestroy( M1, perr)
     CALL MatDestroy( M2, perr)
+
+    ! Safety: check if all grid cells get values
+
+    ALLOCATE( cols(    nnz_per_row_max))
+    ALLOCATE( vals(    nnz_per_row_max))
+
+    CALL MatGetOwnershipRange( map%M, n1, n2, perr)
+
+    DO n = n1+1, n2 ! +1 because PETSc indexes from 0
+
+      ! w0
+      CALL MatGetRow( map%M, n-1, ncols, cols, vals, perr)
+      IF (ncols == 0) CALL crash('ncols == 0!')
+      has_value = .FALSE.
+      DO k = 1, ncols
+        IF (vals( k) /= 0._dp) has_value = .TRUE.
+      END DO
+      IF (.NOT. has_value) CALL crash('only zeroes!')
+      CALL MatRestoreRow( map%M, n-1, ncols, cols, vals, perr)
+
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    DEALLOCATE( cols   )
+    DEALLOCATE( vals   )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

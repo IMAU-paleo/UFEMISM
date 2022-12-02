@@ -45,6 +45,7 @@ MODULE netcdf_extra_module
                                              field_name_options_iAci, field_name_options_A, field_name_options_R, &
                                              field_name_options_Hi, field_name_options_Hb, field_name_options_Hs, field_name_options_dHb, &
                                              field_name_options_SL, field_name_options_Ti, &
+                                             open_existing_netcdf_file_for_reading, close_netcdf_file, &
                                              inquire_dim_multiple_options, inquire_var_multiple_options, &
                                              read_var_int_0D, read_var_int_1D, read_var_int_2D, read_var_int_3D, read_var_int_4D, &
                                              read_var_dp_0D , read_var_dp_1D , read_var_dp_2D , read_var_dp_3D , read_var_dp_4D
@@ -65,28 +66,34 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_insolation_data_file'
-    INTEGER                                            :: int_dummy
+    INTEGER                                            :: ncid
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( forcing%netcdf_ins%filename, ncid)
+
     ! Inquire dimensions
-    CALL inquire_dim_multiple_options( forcing%netcdf_ins%filename, field_name_options_time , &
+    CALL inquire_dim_multiple_options( forcing%netcdf_ins%filename, ncid, field_name_options_time , &
       forcing%netcdf_ins%id_dim_time , dim_length = forcing%ins_nyears)
-    CALL inquire_dim_multiple_options( forcing%netcdf_ins%filename, field_name_options_month, &
+    CALL inquire_dim_multiple_options( forcing%netcdf_ins%filename, ncid, field_name_options_month, &
       forcing%netcdf_ins%id_dim_month)
-    CALL inquire_dim_multiple_options( forcing%netcdf_ins%filename, field_name_options_lat  , &
+    CALL inquire_dim_multiple_options( forcing%netcdf_ins%filename, ncid, field_name_options_lat  , &
       forcing%netcdf_ins%id_dim_lat  , dim_length = forcing%ins_nlat)
 
     ! Inquire variables
-    CALL inquire_var_multiple_options( forcing%netcdf_ins%filename, field_name_options_time , &
+    CALL inquire_var_multiple_options( forcing%netcdf_ins%filename, ncid, field_name_options_time , &
       forcing%netcdf_ins%id_var_time )
-    CALL inquire_var_multiple_options( forcing%netcdf_ins%filename, field_name_options_month, &
+    CALL inquire_var_multiple_options( forcing%netcdf_ins%filename, ncid, field_name_options_month, &
       forcing%netcdf_ins%id_var_month)
-    CALL inquire_var_multiple_options( forcing%netcdf_ins%filename, field_name_options_lat  , &
+    CALL inquire_var_multiple_options( forcing%netcdf_ins%filename, ncid, field_name_options_lat  , &
       forcing%netcdf_ins%id_var_lat  )
-    CALL inquire_var_multiple_options( forcing%netcdf_ins%filename, 'Q_TOA', &
+    CALL inquire_var_multiple_options( forcing%netcdf_ins%filename, ncid, 'Q_TOA', &
       forcing%netcdf_ins%id_var_Q_TOA)
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -104,6 +111,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file_timeframes'
+    INTEGER                                            :: ncid
     INTEGER                                            :: mi, li
     REAL(dp), DIMENSION(:,:,:), POINTER                ::  Q0_with_time,  Q1_with_time
     INTEGER                                            :: wQ0_with_time, wQ1_with_time
@@ -115,11 +123,17 @@ CONTAINS
     CALL allocate_shared_dp_3D( 1, 12, forcing%ins_nlat, Q0_with_time, wQ0_with_time)
     CALL allocate_shared_dp_3D( 1, 12, forcing%ins_nlat, Q1_with_time, wQ1_with_time)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( forcing%netcdf_ins%filename, ncid)
+
     ! Read data
-    CALL read_var_dp_3D( forcing%netcdf_ins%filename, forcing%netcdf_ins%id_var_Q_TOA, Q0_with_time, &
+    CALL read_var_dp_3D( forcing%netcdf_ins%filename, ncid, forcing%netcdf_ins%id_var_Q_TOA, Q0_with_time, &
       start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /) )
-    CALL read_var_dp_3D( forcing%netcdf_ins%filename, forcing%netcdf_ins%id_var_Q_TOA, Q1_with_time, &
+    CALL read_var_dp_3D( forcing%netcdf_ins%filename, ncid, forcing%netcdf_ins%id_var_Q_TOA, Q1_with_time, &
       start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /) )
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Remove the time dimension
     IF (par%master) THEN
@@ -152,13 +166,20 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file_time_lat'
+    INTEGER                                            :: ncid
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_reading( forcing%netcdf_ins%filename, ncid)
+
     ! Read the data
-    CALL read_var_dp_1D( forcing%netcdf_ins%filename, forcing%netcdf_ins%id_var_time, forcing%ins_time)
-    CALL read_var_dp_1D( forcing%netcdf_ins%filename, forcing%netcdf_ins%id_var_lat , forcing%ins_lat )
+    CALL read_var_dp_1D( forcing%netcdf_ins%filename, ncid, forcing%netcdf_ins%id_var_time, forcing%ins_time)
+    CALL read_var_dp_1D( forcing%netcdf_ins%filename, ncid, forcing%netcdf_ins%id_var_lat , forcing%ins_lat )
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

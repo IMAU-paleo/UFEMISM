@@ -808,7 +808,7 @@ CONTAINS
           CYCLE
         END IF
 
-        ! If so, find the ice thickness the thickest non-calving-front neighbour
+        ! If so, find the ice thickness of the thickest non-calving-front neighbour
         Hi_neighbour_max = 0._dp
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
@@ -847,7 +847,7 @@ CONTAINS
           CYCLE
         END IF
 
-        ! If so, find the ice thickness the thickest non-calving-front neighbour
+        ! If so, find the ice thickness of the thickest non-calving-front neighbour
         Hi_neighbour_max = 0._dp
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)

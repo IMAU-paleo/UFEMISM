@@ -1158,9 +1158,10 @@ MODULE data_types_module
 
     REAL(dp), DIMENSION(:    ), POINTER     :: S_ocean_base                  ! Ocean salinity at the ice shelf base
     INTEGER,  DIMENSION(:    ), POINTER     :: M_ocean_base                  ! Mask of vertices used during melt parameterisation
+    REAL(dp), DIMENSION(:    ), POINTER     :: T_base_inv                    ! Inverted ocean temps (degrees)
     REAL(dp), DIMENSION(:    ), POINTER     :: T_base_ave                    ! Averaged inverted ocean temps over a running window (degrees)
     REAL(dp), DIMENSION(:,:  ), POINTER     :: T_base_window                 ! Running window to store the history of T_ocean_base
-    INTEGER :: wS_ocean_base, wM_ocean_base, wT_base_ave, wT_base_window
+    INTEGER :: wS_ocean_base, wM_ocean_base, wT_base_inv, wT_base_ave, wT_base_window
 
     ! Additional data fields
     !=======================

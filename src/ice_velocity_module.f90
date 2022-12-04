@@ -150,15 +150,20 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_SSA'
-    INTEGER                                            :: ti
+    INTEGER                                            :: vi, ti
     LOGICAL                                            :: set_velocities_to_zero
     LOGICAL                                            :: has_converged
     INTEGER                                            :: viscosity_iteration_i
     REAL(dp)                                           :: resid_UV
     REAL(dp)                                           :: umax_analytical, tauc_analytical
+    REAL(dp), DIMENSION(:), POINTER                    :: f_grnd
+    INTEGER                                            :: wf_grnd
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Allocate GL grounded fractions
+    CALL allocate_shared_dp_1D( mesh%nV, f_grnd, wf_grnd)
 
     ! =========
     ! == Safety
@@ -196,6 +201,15 @@ CONTAINS
     ! Determine sub-mesh grounded fractions for scaling the basal friction
     CALL determine_grounded_fractions( mesh, ice)
 
+    ! Use only grounded fractions at the grounding line
+    f_grnd(mesh%vi1:mesh%vi2) = ice%f_grndx_a( mesh%vi1:mesh%vi2)
+
+    DO vi = mesh%vi1, mesh%vi2
+      IF (ice%mask_sheet_a( vi) == 1 .AND. ice%mask_gl_a( vi) == 0) THEN
+        f_grnd( vi) = 1._dp
+      END IF
+    END DO
+
     ! Find analytical solution for the SSA icestream experiment (used only to print numerical error to screen)
     CALL SSA_Schoof2006_analytical_solution( 0.001_dp, 2000._dp, ice%A_flow_vav_a( 1), 0._dp, umax_analytical, tauc_analytical)
 
@@ -219,11 +233,11 @@ CONTAINS
       CALL map_a_to_b_2D( mesh, ice%beta_eff_a, ice%beta_eff_b)
 
       ! Map sub-grid grounded fraction from the a-grid to the b-grid
-      CALL map_a_to_b_2D( mesh, ice%f_grndx_a, ice%f_grndx_b)
+      CALL map_a_to_b_2D( mesh, f_grnd, ice%f_grndx_b)
 
       ! Apply the sub-grid grounded fraction
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**1.5_dp
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**1.0_dp
       END DO
       CALL sync
 
@@ -259,6 +273,9 @@ CONTAINS
 
     ! Calculate secondary velocities (surface, base, etc.)
     CALL calc_secondary_velocities( mesh, ice)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wf_grnd)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1000,7 +1017,7 @@ CONTAINS
     ! Apply the sub-grid grounded fraction
     IF (C%do_GL_subgrid_friction) THEN
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**1.5_dp
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**1.0_dp
       END DO
       CALL sync
     END IF

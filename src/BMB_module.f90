@@ -158,12 +158,13 @@ CONTAINS
         ! the melt rates needed at ocean points). Thus, no need for masks here.
         BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
       ELSE
-        ! Different sub-grid schemes for sub-shelf melt. BMB_shelf can be non-zero
-        ! only at ice shelf points, so no need for masks here.
+        ! Different sub-grid schemes for sub-shelf melt.
         IF     (C%choice_BMB_subgrid == 'FCMP') THEN
-          IF (ice%mask_shelf_a( vi) == 1) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
+          IF (ice%mask_ocean_a( vi) == 1) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
         ELSEIF (C%choice_BMB_subgrid == 'PMP') THEN
-          BMB%BMB( vi) = BMB%BMB( vi) + (1._dp - ice%f_grndx_a( vi)) * BMB%BMB_shelf( vi)
+          IF (ice%mask_ocean_a( vi) == 1 .OR. ice%mask_gl_a( vi) == 1) THEN
+            BMB%BMB( vi) = BMB%BMB( vi) + (1._dp - ice%f_grndx_a( vi)**0.1_dp) * BMB%BMB_shelf( vi)
+          END IF
         ELSEIF (C%choice_BMB_subgrid == 'NMP') THEN
           IF (ice%f_grndx_a( vi) == 0._dp) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
         ELSE
@@ -2373,9 +2374,11 @@ CONTAINS
     CALL calc_ocean_salinity_at_shelf_base( mesh, ice, ocean, BMB)
 
     IF (C%do_ocean_inv) THEN
+      CALL allocate_shared_dp_1D( mesh%nV, BMB%T_base_inv, BMB%wT_base_inv)
       CALL allocate_shared_dp_1D( mesh%nV, BMB%T_base_ave, BMB%wT_base_ave)
       CALL allocate_shared_dp_2D( mesh%nV, C%ocean_inv_window_size, BMB%T_base_window, BMB%wT_base_window)
 
+      BMB%T_base_inv( mesh%vi1:mesh%vi2) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
       BMB%T_base_ave( mesh%vi1:mesh%vi2) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
 
       DO k = 1, C%ocean_inv_window_size
@@ -2421,6 +2424,10 @@ CONTAINS
 
         ! Find ocean temperature at this depth
         CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, BMB%T_ocean_base( vi))
+
+        ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
+        !   BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + 1._dp
+        ! END IF
 
       END IF
 
@@ -2805,6 +2812,8 @@ CONTAINS
            ( ice%mask_cf_a(  vi) == 0 .OR. &
              ice%mask_glf_a( vi) == 1 ) ) THEN
 
+    ! IF ( ice%mask_shelf_a( vi) == 1) THEN
+
         ! Add this vertex to mask of inverted ocean temperatures
         BMB%M_ocean_base( vi) = 1
 
@@ -2814,32 +2823,36 @@ CONTAINS
         IF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
 
           IF (t_scale < .9_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
+            BMB%T_base_inv( vi) = BMB%T_base_inv( vi) + a_scale * (1._dp - EXP( -ABS( h_delta * MIN( .1_dp, ice%dHi_dt_a( vi)) )))
           ELSE
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + C%ocean_inv_hi_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+            BMB%T_base_inv( vi) = BMB%T_base_inv( vi) + C%ocean_inv_hi_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi))))
           END IF
 
         ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
 
           IF (t_scale < .9_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
+            BMB%T_base_inv( vi) = BMB%T_base_inv( vi) - a_scale * (1._dp - EXP( -ABS( h_delta * MIN( .1_dp, ice%dHi_dt_a( vi)) )))
           ELSE
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - C%ocean_inv_hi_scale/20._dp * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+            BMB%T_base_inv( vi) = BMB%T_base_inv( vi) - C%ocean_inv_hi_scale/20._dp * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi))))
           END IF
 
         ELSEIF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
 
           IF (t_scale < .9_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+            BMB%T_base_inv( vi) = BMB%T_base_inv( vi) - m_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi))))
           END IF
 
         ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
 
           IF (t_scale < .9_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+            BMB%T_base_inv( vi) = BMB%T_base_inv( vi) + m_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi))))
           END IF
 
         END IF
+
+      ! IF ( ice%dHi_dt_a( vi) >= .0_dp ) THEN
+      !   BMB%T_base_inv( vi) = BMB%T_base_inv( vi) + C%ocean_inv_hi_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi) )))
+      ! END IF
 
       ELSE
 
@@ -2862,8 +2875,8 @@ CONTAINS
         t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
                  7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
-        BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt)
-        BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi),  5._dp)
+        BMB%T_base_inv( vi) = MAX( BMB%T_base_inv( vi), t_melt)
+        BMB%T_base_inv( vi) = MIN( BMB%T_base_inv( vi),  5._dp)
 
       END IF
 
@@ -2875,7 +2888,7 @@ CONTAINS
 
     ! Perform the extrapolation
     IF (par%master) THEN
-      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, BMB%T_ocean_base, 40000._dp, mask_filled)
+      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, BMB%T_base_inv, 40000._dp, mask_filled)
     END IF
     CALL sync
 
@@ -2886,7 +2899,7 @@ CONTAINS
       ! Smooth the resulting field
 
       ! Store the inverted parameters in a local variable
-      ocean_smoothed( mesh%vi1:mesh%vi2) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
+      ocean_smoothed( mesh%vi1:mesh%vi2) = BMB%T_base_inv( mesh%vi1:mesh%vi2)
       CALL sync
 
       ! Smooth the local variable
@@ -2894,9 +2907,15 @@ CONTAINS
 
       ! Combined the smoothed and raw inverted parameter through a weighed average
       DO vi = mesh%vi1, mesh%vi2
-          BMB%T_ocean_base( vi) = (1._dp - C%ocean_inv_smooth_w) * BMB%T_ocean_base( vi) + C%ocean_inv_smooth_w * ocean_smoothed( vi)
+          BMB%T_ocean_base( vi) = (1._dp - C%ocean_inv_smooth_w) * BMB%T_base_inv( vi) + C%ocean_inv_smooth_w * ocean_smoothed( vi)
       END DO
-      CALL sync
+
+    ELSE
+
+      ! Simply copy the inverted ocean temps
+      DO vi = mesh%vi1, mesh%vi2
+          BMB%T_ocean_base( vi) = BMB%T_base_inv( vi)
+      END DO
 
     END IF ! (C%do_ocean_inv_smooth)
     CALL sync

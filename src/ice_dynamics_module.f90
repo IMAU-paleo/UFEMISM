@@ -537,6 +537,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256),    PARAMETER                           :: routine_name = 'update_ice_thickness'
     INTEGER                                                    :: vi
+    REAL(dp)                                                   :: dH_dt_max, dH_dt_sum
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -568,6 +569,20 @@ CONTAINS
     ! Compute ice thickness/elevation difference w.r.t PD
     ice%dHi_a( mesh%vi1:mesh%vi2) = ice%Hi_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hi( mesh%vi1:mesh%vi2)
     ice%dHs_a( mesh%vi1:mesh%vi2) = ice%Hs_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hs( mesh%vi1:mesh%vi2)
+    CALL sync
+
+    dH_dt_max = 0._dp
+    dH_dt_sum = 0._dp
+    IF (par%master) THEN
+      DO vi = 1, mesh%nV
+        IF (ice%mask_shelf_a( vi) == 1 .AND. ice%dHi_dt_a( vi) >= 0._dp) THEN
+          dH_dt_max = MAX( dH_dt_max, ice%dHi_dt_a( vi))
+          dH_dt_sum = dH_dt_sum + ABS( ice%dHi_dt_a( vi))
+        END IF
+      END DO
+      print*, dH_dt_max, dH_dt_sum, SUM(ABS(ice%dHi_a))
+    END IF
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

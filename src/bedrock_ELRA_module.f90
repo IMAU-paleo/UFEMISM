@@ -38,7 +38,7 @@ CONTAINS
     ! Use the ELRA model to update bedrock elevation. Once every (dt_bedrock_ELRA) years,
     ! update deformation rates. In all other time steps, just incrementally add deformation.
 
-    IMPLICIT NONE  
+    IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_model_region),         INTENT(INOUT)     :: region
@@ -59,7 +59,7 @@ CONTAINS
     ! Update bedrock with last calculated deformation rate
     DO vi = region%mesh%vi1, region%mesh%vi2
       region%ice%Hb_a(  vi) = region%ice%Hb_a( vi) + region%ice%dHb_dt_a( vi) * region%dt
-      region%ice%dHb_a( vi) = region%ice%Hb_a( vi) - region%refgeo_PD%Hb( vi)
+      region%ice%dHb_a( vi) = region%ice%Hb_a( vi) - region%refgeo_GIAeq%Hb( vi)
     END DO
     CALL sync
 
@@ -69,28 +69,28 @@ CONTAINS
   END SUBROUTINE run_ELRA_model
   SUBROUTINE calculate_ELRA_bedrock_deformation_rate( mesh, grid, ice)
     ! Use the ELRA model to update bedrock deformation rates.
-  
-    IMPLICIT NONE  
-    
+
+    IMPLICIT NONE
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_ELRA_bedrock_deformation_rate'
     INTEGER                                            :: vi,i,j,n,k,l
     REAL(dp)                                           :: Lr
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Influence radius of the lithospheric rigidity
     Lr = (C%ELRA_lithosphere_flex_rigidity / (C%ELRA_mantle_density * grav))**0.25_dp
-    
+
     ! Calculate the absolute and relative surface loads on the mesh
     DO vi = mesh%vi1, mesh%vi2
-    
+
       ! Absolute surface load
       IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
         ice%surface_load_mesh( vi) = (ice%SL_a( vi) - ice%Hb_a( vi)) * grid%dx**2 * seawater_density
@@ -99,20 +99,20 @@ CONTAINS
       ELSE
         ice%surface_load_mesh( vi) = 0._dp
       END IF
-      
+
       ! Relative surface load
       ice%surface_load_rel_mesh( vi) = ice%surface_load_mesh( vi) - ice%surface_load_PD_mesh( vi)
-      
+
     END DO
     CALL sync
-    
+
     ! Map relative surface load to the GIA grid
     CALL map_mesh2grid_2D( mesh, grid, ice%surface_load_rel_mesh, ice%surface_load_rel_grid)
-    
+
     ! Fill in the "extended" relative surface load (extrapolating the domain so we can do the 2D convolution)
-    
+
     n = ice%flex_prof_rad
-    
+
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
       ice%surface_load_rel_ext_grid( i+n,j+n) = ice%surface_load_rel_grid( i,j)
@@ -129,30 +129,30 @@ CONTAINS
       ice%surface_load_rel_ext_grid( grid%nx+n+1:grid%nx+2*n, j) = ice%surface_load_rel_grid( grid%nx,j)
     END DO
     CALL sync
-    
+
     ! Calculate the equilibrium bedrock deformation for this surface load
     ! ( = convolute([surface load],[flexural profile]))
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
-      
+
       ice%dHb_eq_grid( i,j) = 0._dp
-      
+
       DO k = -n,n
       DO l = -n,n
-        
+
         ice%dHb_eq_grid( i,j) = ice%dHb_eq_grid( i,j) + &
           (0.5_dp * grav * Lr**2 /(pi * C%ELRA_lithosphere_flex_rigidity) * ice%surface_load_rel_ext_grid( i+n+l, j+n+k) * ice%flex_prof_grid( k+n+1,l+n+1))
-        
+
       END DO
       END DO
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the actual bedrock deformation to the grid
     CALL map_mesh2grid_2D( mesh, grid, ice%dHb_a, ice%dHb_grid)
-    
+
     ! Calculate the bedrock deformation rate from the difference between the current and the equilibrium deformation
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -160,16 +160,16 @@ CONTAINS
     END DO
     END DO
     CALL sync
-    
+
     ! Map the deformation rate back to the model mesh
     CALL map_grid2mesh_2D( grid, mesh, ice%dHb_dt_grid, ice%dHb_dt_a)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calculate_ELRA_bedrock_deformation_rate
 
-  SUBROUTINE initialise_ELRA_model( mesh, grid, ice, refgeo_PD)
+  SUBROUTINE initialise_ELRA_model( mesh, grid, ice, refgeo_GIAeq)
     ! Allocate and initialise the ELRA GIA model
 
     IMPLICIT NONE
@@ -178,7 +178,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_GIAeq
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ELRA_model'
@@ -231,44 +231,44 @@ CONTAINS
     ! Calculate the PD reference load
     ! ===============================
 
-    CALL initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
+    CALL initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_GIAeq)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=10)
 
   END SUBROUTINE initialise_ELRA_model
-  SUBROUTINE initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
-      
+  SUBROUTINE initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_GIAeq)
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
-    
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_GIAeq
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ELRA_PD_reference_load'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Calculate PD reference load on the mesh
     DO vi = mesh%vi1, mesh%vi2
-      IF (is_floating( refgeo_PD%Hi( vi), refgeo_PD%Hb( vi), 0._dp)) THEN
-        ice%surface_load_PD_mesh( vi) = -refgeo_PD%Hb( vi) * grid%dx**2 * seawater_density
-      ELSEIF (refgeo_PD%Hi( vi) > 0._dp) THEN
-        ice%surface_load_PD_mesh( vi) =  refgeo_PD%Hi( vi) * grid%dx**2 * ice_density
+      IF (is_floating( refgeo_GIAeq%Hi( vi), refgeo_GIAeq%Hb( vi), 0._dp)) THEN
+        ice%surface_load_PD_mesh( vi) = -refgeo_GIAeq%Hb( vi) * grid%dx**2 * seawater_density
+      ELSEIF (refgeo_GIAeq%Hi( vi) > 0._dp) THEN
+        ice%surface_load_PD_mesh( vi) =  refgeo_GIAeq%Hi( vi) * grid%dx**2 * ice_density
       END IF
     END DO
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE initialise_ELRA_PD_reference_load
-  SUBROUTINE remap_ELRA_model( mesh_old, mesh_new, map, ice, refgeo_PD, grid)
+  SUBROUTINE remap_ELRA_model( mesh_old, mesh_new, map, ice, refgeo_GIAeq, grid)
     ! Remap or reallocate all the data fields
 
     ! In/output variables:
@@ -276,7 +276,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_GIAeq
     TYPE(type_grid),                     INTENT(IN)    :: grid
 
     ! Local variables:
@@ -294,7 +294,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_rel_mesh, ice%wsurface_load_rel_mesh)
 
     ! Recalculate the PD reference load on the GIA grid
-    CALL initialise_ELRA_PD_reference_load( mesh_new, grid, ice, refgeo_PD)
+    CALL initialise_ELRA_PD_reference_load( mesh_new, grid, ice, refgeo_GIAeq)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -303,25 +303,25 @@ CONTAINS
 
   ! The Kelvin function (just a wrapper for the Zhang & Jin "klvna" subroutine)
   FUNCTION kelvin(x) RESULT(kei)
-    ! Evaluate the Kelvin function in a given point at a distance x from the load. Currently this is implemented 
+    ! Evaluate the Kelvin function in a given point at a distance x from the load. Currently this is implemented
     ! using the klvna routine in mklvna.f (see that routine for details).
-    
+
     IMPLICIT NONE
 
     ! Input variables:
     ! x is the distance between a considered load and the point in which we want to know the deformation, x is in units Lr
-    REAL(dp), INTENT(IN) :: x  
- 
+    REAL(dp), INTENT(IN) :: x
+
     ! Result variables:
     REAL(dp)             :: kei
- 
+
     ! Local variables:
     REAL(dp)     :: xdp,berdp,beidp,gerdp,geidp,derdp,deidp,herdp,heidp
 
     xdp = x
     CALL klvna( xdp,berdp,beidp,gerdp,geidp,derdp,deidp,herdp,heidp)
     kei = geidp
-    
+
   END FUNCTION kelvin
   SUBROUTINE klvna ( x, ber, bei, ger, gei, der, dei, her, hei )
 
@@ -331,8 +331,8 @@ CONTAINS
 !
 !  Licensing:
 !
-!    This routine is copyrighted by Shanjie Zhang and Jianming Jin.  However, 
-!    they give permission to incorporate this routine into a user program 
+!    This routine is copyrighted by Shanjie Zhang and Jianming Jin.  However,
+!    they give permission to incorporate this routine into a user program
 !    provided that the copyright is acknowledged.
 !
 !  Modified:
@@ -355,14 +355,14 @@ CONTAINS
 !
 !    Input, real (dp) X, the argument.
 !
-!    Output, real (dp) BER, BEI, GER, GEI, DER, DEI, HER, HEI, 
+!    Output, real (dp) BER, BEI, GER, GEI, DER, DEI, HER, HEI,
 !    the values of ber x, bei x, ker x, kei x, ber'x, bei'x, ker'x, kei'x.
 !
 
   USE parameters_module, ONLY: pi
-  
+
   IMPLICIT NONE
-  
+
   ! In/output variables:
   REAL(dp), INTENT(IN )   :: x
   REAL(dp), INTENT(OUT)   :: ber
@@ -523,7 +523,7 @@ CONTAINS
       gs = gs + 1.0_dp / ( 2.0_dp * m ) + 1.0_dp &
         / ( 2 * m + 1.0_dp )
       hei = hei + r * gs
-      if ( abs ( r * gs ) < abs ( hei ) * eps ) then 
+      if ( abs ( r * gs ) < abs ( hei ) * eps ) then
         return
       end if
     end do

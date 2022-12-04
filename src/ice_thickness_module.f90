@@ -9,7 +9,7 @@ MODULE ice_thickness_module
 
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  USE parameters_module
+  USE parameters_module,               ONLY: pi, ice_density, seawater_density
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
@@ -97,7 +97,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dHi_dt_explicit'
     REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c,  up_c,  uo_c
     INTEGER                                            :: wu_c, wv_c, wup_c, wuo_c
-    INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj
+    INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj, n_ocn
     REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
     REAL(dp), DIMENSION(mesh%nV)                       :: Vi_MB
 
@@ -110,9 +110,10 @@ CONTAINS
     CALL sync
 
     Vi_in          = 0._dp
+    Vi_out         = 0._dp
     Vi_available   = 0._dp
     rescale_factor = 0._dp
-    Vi_MB         = 0._dp
+    Vi_MB          = 0._dp
 
     ! Calculate vertically averaged ice velocities along vertex connections
     CALL allocate_shared_dp_1D( mesh%nAc, u_c , wu_c )
@@ -176,13 +177,37 @@ CONTAINS
       ! Ice volume added to each grid cell through the (surface + basal) mass balance
       ! => With an exception for the calving front, where we only apply
       !    the mass balance to the floating fraction
+      ! => Plus a term accounting for the lateral melt at the calving front
       ! => And for ice-free ocean, where no accumulation is allowed
       IF (ice%mask_cf_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 1) THEN
-        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi))  * mesh%A( vi) * dt * ice%float_margin_frac_a( vi)
+
+        ! Basal melt propotional to the floating area fraction
+        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi))  * mesh%A( vi) * dt * MAX( .1_dp, ice%float_margin_frac_a( vi))
+
+        ! Count number of ice-free ocean neighbours
+        n_ocn = 0
+        DO ci = 1, mesh%nC( vi)
+          IF (ice%mask_ocean_a( ci) == 1 .AND. ice%mask_shelf_a( ci) == 0) THEN
+            n_ocn = n_ocn + 1
+          END IF
+        END DO
+
+        ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
+
+          ! Additional lateral mass balance proportional to the length of the ice column underwater and
+          ! an approximation to the fraction of the Voronoi cell perimeter in contact with ocean neighbours
+          Vi_MB( vi) = Vi_MB( vi) + BMB%BMB_shelf( vi) * dt * &
+                                    (ice%Hi_eff_cf_a( vi) * ice_density / seawater_density) * &
+                                    (2._dp * pi * mesh%R( vi) * REAL(n_ocn,dp) / REAL(mesh%nC( vi),dp))
+
+        ! END IF
+
       ELSEIF (ice%mask_ocean_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 0) THEN
+        ! No mass balance for ice-free ocean vertices
         Vi_MB( vi) = 0._dp
       ELSE
-        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi))  * mesh%A( vi) * dt
+        ! Any other point
+        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi)) * mesh%A( vi) * dt
       END IF
 
       ! Check how much ice is available for melting or removing (in m^3)
@@ -200,19 +225,30 @@ CONTAINS
         END IF
       END DO
 
+      ! Default value
       rescale_factor = 1._dp
 
       ! If all the ice already present melts away, there can be no outflux.
       IF (-Vi_MB( vi) >= Vi_available) THEN
         ! All ice in this vertex melts, nothing remains to move around. Rescale outfluxes to zero.
-        Vi_MB( vi) = -Vi_available
         rescale_factor = 0._dp
+        ! Limit the (negative, we know from the IF condition) magnitude of the mass balance to be
+        ! at most equal to the mass already there plus the incoming flux
+        Vi_MB( vi) = MAX( Vi_MB( vi), -(Vi_available + Vi_in))
       END IF
 
       ! If the total outflux exceeds the available ice plus SMB plus total influx, rescale outfluxes
       IF (Vi_out > Vi_available + Vi_MB( vi)) THEN
         ! Total outflux plus melt exceeds available ice volume. Rescale outfluxes to correct for this.
-        rescale_factor = (Vi_available + Vi_MB( vi)) / Vi_out
+        rescale_factor = MIN( 1._dp, MAX( 0._dp, (Vi_available + Vi_MB( vi)) / Vi_out))
+      END IF
+
+      ! If this vertex is a sub-grid calving front, don't allow for outfluxes until it is full
+      IF (ice%mask_cf_a( vi) == 1 .AND. &
+          ice%mask_shelf_a( vi) == 1 .AND. &
+          ice%float_margin_frac_a( vi) < 1._dp) THEN
+        ! Rescale outfluxes to zero
+        rescale_factor = 0._dp
       END IF
 
       ! Rescale ice outfluxes out of vi and into vi's neighbours
@@ -230,11 +266,11 @@ CONTAINS
               END IF
             END DO
 
-          END IF ! IF (ice%dVi_in( vi,ci) < 0._dp) THEN
-        END DO ! DO ci = 1, mesh%nC( vi)
-      END IF ! IF (rescale_factor < 1._dp) THEN
+          END IF ! (ice%dVi_in( vi,ci) < 0._dp)
+        END DO ! ci = 1, mesh%nC( vi)
+      END IF ! (rescale_factor < 1._dp)
 
-    END DO ! DO vi = mesh%vi1, mesh%vi2
+    END DO ! vi = mesh%vi1, mesh%vi2
     CALL sync
 
     ! Calculate change in ice thickness over time at every vertex

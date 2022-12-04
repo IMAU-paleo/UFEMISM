@@ -429,12 +429,12 @@ CONTAINS
 
         IF (C%do_SMB_IMAUITM_inversion) THEN
 
-          SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts_inv( vi)         * MAX(0._dp, climate%T2m( vi,m) - T0) + &
+          SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts_inv( vi)         * (climate%T2m( vi,m) - T0) + &
                                          SMB%C_abl_Q_inv( vi)          * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
                                          SMB%C_abl_constant_inv( vi))  * sec_per_year / (L_fusion * 1000._dp * 12._dp))
         ELSE
 
-          SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts                  * MAX(0._dp, climate%T2m( vi,m) - T0) + &
+          SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts                  * (climate%T2m( vi,m) - T0) + &
                                          SMB%C_abl_Q                   * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
                                          SMB%C_abl_constant)           * sec_per_year / (L_fusion * 1000._dp * 12._dp))
         END IF

@@ -116,6 +116,11 @@ CONTAINS
       IF (par%master) WRITE(0,*) '  Initialising present-day     reference geometry from file ', TRIM( filename_refgeo_PD), '...'
       CALL initialise_reference_geometry_from_file( refgeo_PD, filename_refgeo_PD, region_name)
 
+    ELSEIF (choice_refgeo_PD == 'restart') THEN
+
+      IF (par%master) WRITE(0,*) '  Initialising present-day     reference geometry from restart data...'
+      ! CALL initialise_reference_geometry_from_mesh( refgeo_PD, refgeo_PD, mesh, restart, region_name)
+
     ELSE
       CALL crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
     END IF
@@ -132,6 +137,11 @@ CONTAINS
 
       IF (par%master) WRITE(0,*) '  Initialising GIA equilibrium reference geometry from file ', TRIM( filename_refgeo_GIAeq), '...'
       CALL initialise_reference_geometry_from_file( refgeo_GIAeq, filename_refgeo_GIAeq, region_name)
+
+    ELSEIF (choice_refgeo_GIAeq == 'restart') THEN
+
+      IF (par%master) WRITE(0,*) '  Initialising GIA equilibrium reference geometry from restart data...'
+      ! CALL initialise_reference_geometry_from_mesh( refgeo_GIAeq, refgeo_PD, mesh, restart, region_name)
 
     ELSE
       CALL crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')
@@ -152,7 +162,8 @@ CONTAINS
 
     ELSEIF (choice_refgeo_init == 'restart') THEN
 
-      CALL initialise_reference_geometry_from_mesh( refgeo_init, refgeo_PD, mesh, restart, region_name)
+      IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from restart data...'
+      ! CALL initialise_reference_geometry_from_mesh( refgeo_init, refgeo_PD, mesh, restart, region_name)
 
     ELSE
       CALL crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
@@ -173,9 +184,9 @@ CONTAINS
     ! ==============
 
     ! Fill in secondary data for the reference geometries (used during mesh creation)
-    CALL calc_reference_geometry_secondary_data( refgeo_init%grid , refgeo_init )
-    CALL calc_reference_geometry_secondary_data( refgeo_PD%grid   , refgeo_PD   )
-    CALL calc_reference_geometry_secondary_data( refgeo_GIAeq%grid, refgeo_GIAeq)
+    IF (.NOT. choice_refgeo_init  == 'restart') CALL calc_reference_geometry_secondary_data( refgeo_init%grid , refgeo_init )
+    IF (.NOT. choice_refgeo_PD    == 'restart') CALL calc_reference_geometry_secondary_data( refgeo_PD%grid   , refgeo_PD   )
+    IF (.NOT. choice_refgeo_GIAeq == 'restart') CALL calc_reference_geometry_secondary_data( refgeo_GIAeq%grid, refgeo_GIAeq)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 78)
@@ -385,8 +396,6 @@ CONTAINS
     CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hi_grid, refgeo%wHi_grid)
     CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hb_grid, refgeo%wHb_grid)
     CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hs_grid, refgeo%wHs_grid)
-
-    IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from restart data...'
 
     ! CALL calc_remapping_operator_mesh2grid( mesh, refgeo%grid)
 
@@ -1996,7 +2005,7 @@ CONTAINS
       ! was created from the same data of the model, but since we already have
       ! that data on the restart mesh, simply copy them from the restart data.
       ! If this routine is called during a mesh update, use the already gridded
-      ! initial geomtery data to do the usual mapping from grid to mesh.
+      ! initial geometry data to do the usual mapping from grid to mesh.
 
       IF (region%time == C%start_time_of_run) THEN
         ! Initialisation of the model
@@ -2064,6 +2073,38 @@ CONTAINS
       CALL map_reference_geometry_to_mesh( mesh, region%refgeo_PD)
       did_remap_PD = .TRUE.
 
+    ELSEIF (choice_refgeo_PD == 'restart') THEN
+      ! During initialisation, a grid version of the restart initial geometry
+      ! was created from the same data of the model, but since we already have
+      ! that data on the restart mesh, simply copy them from the restart data.
+      ! If this routine is called during a mesh update, use the already gridded
+      ! initial geometry data to do the usual mapping from grid to mesh.
+
+      IF (region%time == C%start_time_of_run) THEN
+        ! Initialisation of the model
+
+        IF (par%master) WRITE(0,*) '   Copying present-day reference geometry from the restart mesh...'
+
+        ! Get initial geometry from restart data
+        DO vi = mesh%vi1, mesh%vi2
+          region%refgeo_PD%Hi( vi) = region%restart%Hi( vi)
+          region%refgeo_PD%Hb( vi) = region%restart%Hb( vi)
+          region%refgeo_PD%Hs( vi) = region%restart%Hs( vi)
+        END DO
+        CALL sync
+
+      ELSE
+        ! Mesh update
+
+        IF (par%master) WRITE(0,*) '   Mapping present-day reference geometry to the mesh...'
+
+        ! Remap initial geometry data from the grid
+        CALL calc_remapping_operator_grid2mesh( region%refgeo_PD%grid, mesh)
+        CALL map_reference_geometry_to_mesh( mesh, region%refgeo_PD)
+        did_remap_PD = .TRUE.
+
+      END IF
+
     ELSE
       CALL crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
     END IF
@@ -2118,6 +2159,38 @@ CONTAINS
 
       CALL map_reference_geometry_to_mesh( mesh, region%refgeo_GIAeq)
       did_remap_GIAeq = .TRUE.
+
+    ELSEIF (choice_refgeo_GIAeq == 'restart') THEN
+      ! During initialisation, a grid version of the restart initial geometry
+      ! was created from the same data of the model, but since we already have
+      ! that data on the restart mesh, simply copy them from the restart data.
+      ! If this routine is called during a mesh update, use the already gridded
+      ! initial geometry data to do the usual mapping from grid to mesh.
+
+      IF (region%time == C%start_time_of_run) THEN
+        ! Initialisation of the model
+
+        IF (par%master) WRITE(0,*) '   Copying GIA equilibrium reference geometry from the restart mesh...'
+
+        ! Get initial geometry from restart data
+        DO vi = mesh%vi1, mesh%vi2
+          region%refgeo_GIAeq%Hi( vi) = region%restart%Hi( vi)
+          region%refgeo_GIAeq%Hb( vi) = region%restart%Hb( vi)
+          region%refgeo_GIAeq%Hs( vi) = region%restart%Hs( vi)
+        END DO
+        CALL sync
+
+      ELSE
+        ! Mesh update
+
+        IF (par%master) WRITE(0,*) '   Mapping GIA equilibrium reference geometry to the mesh...'
+
+        ! Remap initial geometry data from the grid
+        CALL calc_remapping_operator_grid2mesh( region%refgeo_GIAeq%grid, mesh)
+        CALL map_reference_geometry_to_mesh( mesh, region%refgeo_GIAeq)
+        did_remap_GIAeq = .TRUE.
+
+      END IF
 
     ELSE
       CALL crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')

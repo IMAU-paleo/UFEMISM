@@ -133,7 +133,8 @@ CONTAINS
 
     ! Find out how many iterations it took
     CALL KSPGetIterationNumber( KSP_solver, its, perr)
-    !IF (par%master) WRITE(0,*) '   PETSc solved Ax=b in ', its, ' iterations'
+    ! IF (par%master) WRITE(0,*) '   PETSc solved Ax=b in ', its, ' iterations'
+    IF (par%master .AND. its < 5) WRITE(0,*) '   PETSc solved Ax=b in ', its, ' iterations! WTF'
 
     ! Get the solution back to the native UFEMISM storage structure
     CALL vec_petsc2double( x, xx)

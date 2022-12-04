@@ -119,12 +119,14 @@ CONTAINS
         ! If its effective (shelf) or modelled (sheet) thickness is below the threshold
         IF ( (ice%mask_shelf_a( vi) == 1 .AND. ice%Hi_eff_cf_a( vi) < C%calving_threshold_thickness_shelf) .OR. &
              (ice%mask_sheet_a( vi) == 1 .AND. ice%Hi_eff_cf_a( vi) < C%calving_threshold_thickness_sheet) ) THEN
-          ! Remove ice from this vertex
-          ice%Hi_a( vi) = 0._dp
-          ! Calving event occurred. This will cause the calving loop to
-          ! do a whole another check over the entire (new) calving front
-          ! after this iteration.
-          calving_event(par%i+1) = .TRUE.
+          ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
+            ! Remove ice from this vertex
+            ice%Hi_a( vi) = 0._dp
+            ! Calving event occurred. This will cause the calving loop to
+            ! do a whole another check over the entire (new) calving front
+            ! after this iteration.
+            calving_event(par%i+1) = .TRUE.
+          ! END IF
         END IF
       END IF
     END DO

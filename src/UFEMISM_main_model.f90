@@ -455,7 +455,7 @@ CONTAINS
     IF (C%choice_GIA_model == 'none') THEN
       ! Do nothing
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
-      CALL remap_ELRA_model(   region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
+      CALL remap_ELRA_model(   region%mesh, region%mesh_new, map, region%ice, region%refgeo_GIAeq, region%grid_GIA)
     ELSEIF (C%choice_GIA_model == 'SELEN') THEN
 #     if (defined(DO_SELEN))
       CALL remap_SELEN_model(  region%mesh_new, region%SELEN)
@@ -706,7 +706,7 @@ CONTAINS
     IF     (C%choice_GIA_model == 'none') THEN
       ! Nothing to be done
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
-      CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%refgeo_PD)
+      CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%refgeo_GIAeq)
     ELSEIF (C%choice_GIA_model == 'SELEN') THEN
       ! Nothing to be done; SELEN is initialised globally by UFEMISM_program.
     ELSE

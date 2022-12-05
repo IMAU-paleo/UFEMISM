@@ -238,8 +238,7 @@ CONTAINS
         IF (.NOT. region%output_file_exists) THEN
           CALL create_output_files_mesh( region)
           CALL create_debug_file( region)
-          CALL sync
-          region%output_file_exists = .TRUE.
+          IF (par%master) region%output_file_exists = .TRUE.
         END IF
         ! Write to regional NetCDF output files
         CALL write_to_output_files( region)
@@ -280,8 +279,7 @@ CONTAINS
       IF (.NOT. region%output_file_exists) THEN
         CALL create_output_files_mesh( region)
         CALL create_debug_file( region)
-        CALL sync
-        region%output_file_exists = .TRUE.
+        IF (par%master) region%output_file_exists = .TRUE.
       END IF
       CALL write_to_output_files( region)
       IF (C%choice_SMB_model == 'IMAU-ITM') THEN
@@ -388,7 +386,7 @@ CONTAINS
     region%mesh = region%mesh_new
 
     ! When the next output is written, new output files must be created.
-    region%output_file_exists = .FALSE.
+    IF (par%master) region%output_file_exists = .FALSE.
 
     ! Reallocate the debug fields for the new mesh, create a new debug file
     CALL reallocate_debug_fields( region)
@@ -791,6 +789,10 @@ CONTAINS
       region%t_next_output  = C%start_time_of_run
       region%do_output      = .TRUE.
     END IF
+
+    ! Output file flag
+    CALL allocate_shared_bool_0D( region%output_file_exists, region%woutput_file_exists)
+    IF (par%master) region%output_file_exists = .FALSE.
 
     ! ===== Scalars =====
     ! ===================

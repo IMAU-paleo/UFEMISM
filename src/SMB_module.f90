@@ -199,6 +199,7 @@ CONTAINS
   END SUBROUTINE run_SMB_model_idealised
 
   SUBROUTINE run_SMB_model_idealised_EISMINT1( mesh, SMB, time, mask_noice)
+    ! SMB for the EISMINT1 experiments (Huybrechts et al., 1996)
 
     IMPLICIT NONE
 
@@ -211,111 +212,103 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_SMB_model_idealised_EISMINT1'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: E               ! Radius of circle where accumulation is M_max
-    REAL(dp)                                           :: dist            ! distance to centre of circle
-    REAL(dp)                                           :: S_b             ! Gradient of accumulation-rate change with horizontal distance
-    REAL(dp)                                           :: M_max           ! Maximum accumulation rate
+    REAL(dp), PARAMETER                                :: x_summit = 0._dp      ! x-coordinate of ice divide [m]
+    REAL(dp), PARAMETER                                :: y_summit = 0._dp      ! y-coordinate of ice divide [m]
+    REAL(dp), PARAMETER                                :: s        = 1E-2_dp    ! Mass balance change with distance from divide [m yr^-1 km^-1]
+    REAL(dp)                                           :: x, y, d, R_el, T
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF     (C%choice_idealised_SMB == 'EISMINT1_A') THEN ! Moving margin, steady state
-      ! Steady state
+    IF     (C%choice_idealised_SMB == 'EISMINT1_A' ) THEN
+      ! Moving margin, no cyclicity
 
-      E         = 450000._dp
-      S_b       = 0.01_dp / 1000._dp
-      M_max     = 0.5_dp
+      DO vi = mesh%vi1, mesh%vi2
 
-    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_B') THEN ! Moving margin, 20 kyr
+        ! Calculate distance from ice divide (for moving margin experiments, use Euclidean distance)
+        x = mesh%V( vi,1)
+        y = mesh%V( vi,2)
+        d = SQRT( (x - x_summit)**2 + (y - y_summit)**2) / 1E3_dp  ! [km]
 
-      IF (time < 0._dp) THEN
-        ! Steady state, identical to EISMINT1_A
+        ! Calculate distance from equilibrium line to ice divide
+        R_el = 450._dp
 
-        E         = 450000._dp
-        S_b       = 0.01_dp / 1000._dp
-        M_max     = 0.5_dp
+        ! Calculate SMB (Huybrechts et al., Eq. 10)
+        SMB%SMB_year( vi) = MIN( 0.5_dp, s * (R_el - d))
 
-      ELSE
-        ! 20-kyr sinusoid
+      END DO
 
-        E         = 450000._dp + 100000._dp * SIN( 2._dp * pi * time / 20000._dp)
-        S_b       = 0.01_dp / 1000._dp
-        M_max     = 0.5_dp
+    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_B' ) THEN
+      ! Moving margin, 20,000-yr cyclicity
 
-      END IF
+      T = 20E3_dp
 
-    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_C') THEN ! Moving margin, 40 kyr
+      DO vi = mesh%vi1, mesh%vi2
 
-      IF (time < 0._dp) THEN
-        ! Steady state, identical to EISMINT1_A
+        ! Calculate distance from ice divide (for moving margin experiments, use Euclidean distance)
+        x = mesh%V( vi,1)
+        y = mesh%V( vi,2)
+        d = SQRT( (x - x_summit)**2 + (y - y_summit)**2) / 1E3_dp  ! [km]
 
-        E         = 450000._dp
-        S_b       = 0.01_dp / 1000._dp
-        M_max     = 0.5_dp
+        ! Calculate distance from equilibrium line to ice divide (Huybrechts et al., Eq. 14)
+        R_el = 450._dp + 100._dp * SIN( 2 * pi * time / T)
 
-      ELSE
-        ! 40-kyr sinusoid
+        ! Calculate SMB (Huybrechts et al., Eq. 10)
+        SMB%SMB_year( vi) = MIN( 0.5_dp, s * (R_el - d))
 
-        E         = 450000._dp + 100000._dp * SIN( 2._dp * pi * time / 40000._dp)
-        S_b       = 0.01_dp / 1000._dp
-        M_max     = 0.5_dp
+      END DO
 
-      END IF
+    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_C' ) THEN
+      ! Moving margin, 40,000-yr cyclicity
 
-    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_D') THEN ! Fixed margin, steady state
-      ! Steady state
+      T = 40E3_dp
 
-      M_max       = 0.3_dp
-      S_b         = 0.01_dp / 1000._dp
-      E           = 999000._dp
+      DO vi = mesh%vi1, mesh%vi2
 
-    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_E') THEN ! Fixed margin, 20 kyr
+        ! Calculate distance from ice divide (for moving margin experiments, use Euclidean distance)
+        x = mesh%V( vi,1)
+        y = mesh%V( vi,2)
+        d = SQRT( (x - x_summit)**2 + (y - y_summit)**2) / 1E3_dp  ! [km]
 
-      IF (time < 0._dp) THEN
-        ! Steady state, identical to EISMINT1_D
+        ! Calculate distance from equilibrium line to ice divide (Huybrechts et al., Eq. 14)
+        R_el = 450._dp + 100._dp * SIN( 2._dp * pi * time / T)
 
-        M_max     = 0.3_dp
-        S_b       = 0.01_dp / 1000._dp
-        E         = 999000._dp
+        ! Calculate SMB (Huybrechts et al., Eq. 10)
+        SMB%SMB_year( vi) = MIN( 0.5_dp, s * (R_el - d))
 
-      ELSE
-        ! 20-kyr sinusoid
+      END DO
 
-        M_max     = 0.3_dp + 0.2_dp * SIN( 2._dp * pi * time / 20000._dp)
-        S_b       = 0.01_dp / 1000._dp
-        E         = 999000._dp
+    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_D' ) THEN
+      ! Fixed margin, no cyclicity
 
-      END IF
+      ! Calculate SMB (Huybrechts et al., Eq. 8)
+      DO vi = mesh%vi1, mesh%vi2
+        SMB%SMB_year( vi) = 0.3_dp
+      END DO
 
-    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_F') THEN ! Fixed margin, 40 kyr
+    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_E' ) THEN
+      ! Fixed margin, 20,000-yr cyclicity
 
-      IF (time < 0._dp) THEN
-        ! Steady state, identical to EISMINT1_D
+      T = 20E3_dp
 
-        M_max     = 0.3_dp
-        S_b       = 0.01_dp / 1000._dp
-        E         = 999000._dp
+      ! Calculate SMB (Huybrechts et al., Eq. 13)
+      DO vi = mesh%vi1, mesh%vi2
+        SMB%SMB_year( vi) = 0.3_dp + 0.2_dp * SIN( 2._dp * pi * time / T)
+      END DO
 
-      ELSE
-        ! 40-kyr sinusoid
+    ELSEIF (C%choice_idealised_SMB == 'EISMINT1_F' ) THEN
+      ! Fixed margin, 40,000-yr cyclicity
 
-        M_max     = 0.3_dp + 0.2_dp * SIN( 2._dp * pi * time / 40000._dp)
-        S_b       = 0.01_dp / 1000._dp
-        E         = 999000._dp
+      T = 40E3_dp
 
-      END IF
+      ! Calculate SMB (Huybrechts et al., Eq. 13)
+      DO vi = mesh%vi1, mesh%vi2
+        SMB%SMB_year( vi) = 0.3_dp + 0.2_dp * SIN( 2._dp * pi * time / T)
+      END DO
 
+    ELSE
+      CALL crash('unknown choice_idealised_SMB "' // TRIM( C%choice_idealised_SMB) // '"!')
     END IF
-
-    DO vi = mesh%vi1, mesh%vi2
-      IF (mask_noice( vi) == 0) THEN
-        dist = NORM2( mesh%V( vi,:))
-        SMB%SMB_year( vi) = MIN( M_max, S_b * (E - dist))
-      ELSE
-        SMB%SMB_year( vi) = 0._dp
-      END IF
-    END DO
-    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

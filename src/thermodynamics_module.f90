@@ -30,10 +30,9 @@ MODULE thermodynamics_module
                                                  write_PETSc_matrix_to_NetCDF, write_CSR_matrix_to_NetCDF
 
   ! Import specific functionality
-  USE data_types_module,                   ONLY: type_mesh, type_ice_model, type_BMB_model, &
-                                                 type_climate_snapshot_regional, type_ocean_snapshot_regional, &
+  USE data_types_module,                   ONLY: type_mesh, type_ice_model, type_BMB_model, type_climate_snapshot_regional, &
                                                  type_SMB_model, type_restart_data
-  USE utilities_module,                    ONLY: tridiagonal_solve, vertical_average, interpolate_ocean_depth
+  USE utilities_module,                    ONLY: tridiagonal_solve, vertical_average
   USE mesh_operators_module,               ONLY: ddx_a_to_b_3D, ddy_a_to_b_3D, calc_zeta_gradients
   USE mesh_help_functions_module,          ONLY: CROSS2
   USE mesh_mapping_module,                 ONLY: remap_field_dp_3D
@@ -44,7 +43,7 @@ MODULE thermodynamics_module
 CONTAINS
 
 ! == Run the chosen thermodynamics model
-  SUBROUTINE run_thermo_model( mesh, ice, climate, ocean, SMB, BMB, time, do_solve_heat_equation)
+  SUBROUTINE run_thermo_model( mesh, ice, climate, SMB, BMB, time, do_solve_heat_equation)
     ! Run the thermodynamics model. If so specified, solve the heat equation;
     ! if not, only prescribe a vertically uniform temperature to newly ice-covered grid cells.
 
@@ -54,7 +53,6 @@ CONTAINS
     TYPE(type_mesh),                      INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     TYPE(type_BMB_model),                 INTENT(IN)    :: BMB
     REAL(dp),                             INTENT(IN)    :: time
@@ -85,7 +83,7 @@ CONTAINS
       ! Prescribe a simple temperature profile to newly ice-covered grid cells.
       DO vi = mesh%vi1, mesh%vi2
 
-        T_surf_annual = SUM( climate%T2m( vi,:)) / REAL( SIZE( climate%T2m( vi,:),1),dp)
+        T_surf_annual = SUM( climate%T2m( vi,:)) / REAL( SIZE( climate%T2m,2),dp)
 
         IF (ice%mask_ice_a( vi) == 1) THEN
           ! This grid cell is now ice-covered
@@ -115,7 +113,7 @@ CONTAINS
       CALL calc_pressure_melting_point( mesh, ice)
 
       ! If so specified, solve the heat equation
-      IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, ocean, SMB, BMB, C%dt_thermo)
+      IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, SMB, BMB, C%dt_thermo)
 
       ! Safety
       CALL check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a')
@@ -133,7 +131,7 @@ CONTAINS
   END SUBROUTINE run_thermo_model
 
 ! == Solve the 3-D heat equation
-  SUBROUTINE solve_3D_heat_equation( mesh, ice, climate, ocean, SMB, BMB, dt)
+  SUBROUTINE solve_3D_heat_equation( mesh, ice, climate, SMB, BMB, dt)
     ! Solve the three-dimensional heat equation
     !
     ! (See solve_1D_heat_equation for the derivation)
@@ -144,7 +142,6 @@ CONTAINS
     TYPE(type_mesh),                      INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     TYPE(type_BMB_model),                 INTENT(IN)    :: BMB
     REAL(dp),                             INTENT(IN)    :: dt
@@ -154,7 +151,6 @@ CONTAINS
     INTEGER                                            :: vi, k
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  u_times_dTdxp_upwind,  v_times_dTdyp_upwind
     INTEGER                                            :: wu_times_dTdxp_upwind, wv_times_dTdyp_upwind
-    REAL(dp)                                           :: depth
     REAL(dp), DIMENSION(:    ), POINTER                ::  T_surf_annual,  Q_base_grnd,  T_base_float
     INTEGER                                            :: wT_surf_annual, wQ_base_grnd, wT_base_float
     REAL(dp)                                           :: dt_applied
@@ -209,34 +205,15 @@ CONTAINS
 
     ! Calculate annual mean surface temperature
     DO vi = mesh%vi1, mesh%vi2
-      T_surf_annual( vi) = SUM( climate%T2m( vi,:)) / REAL( SIZE( climate%T2m( vi,:),1),dp)
+      T_surf_annual( vi) = SUM( climate%T2m( vi,:)) / REAL( SIZE( climate%T2m,2),dp)
     END DO
 
-    ! Calculate ocean temperature at the shelf base
-    IF (C%choice_ocean_model == 'none') THEN
-      ! No ocean data available; use constant PD value
-
-      T_base_float( mesh%vi1:mesh%vi2) = T0 + C%T_ocean_mean_PD_ANT
-      CALL sync
-
-    ELSE
-      ! Calculate shelf base temperature from ocean data
-
-      DO vi = mesh%vi1, mesh%vi2
-
-       IF (ice%mask_shelf_a( vi) == 1) THEN
-         depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
-         CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_base_float( vi))
-       ELSE
-         T_base_float( vi) = 0._dp
-       END IF
-
-       ! NOTE: ocean data gives temperature in Celsius, thermodynamics wants Kelvin!
-       T_base_float( vi) = T_base_float( vi) + T0
-
-      END DO
-
-    END IF ! IF (C%choice_ocean_model == 'none') THEN
+    ! For floating ice, basal temperatures are assumed to be always at
+    ! the pressure melting point (since ocean water cannot be colder than
+    ! this, and the ice itself cannot be warmer than this).
+    DO vi = mesh%vi1, mesh%vi2
+     T_base_float( vi) = ice%Ti_pmp_a( vi,C%nz)
+    END DO
 
     ! Calculate heat flux at the base of the grounded ice
     DO vi = mesh%vi1, mesh%vi2
@@ -284,9 +261,6 @@ CONTAINS
       found_stable_solution = .FALSE.
       it_dt = 0
       DO WHILE ((.NOT. found_stable_solution) .AND. it_dt < 10)
-
-!        ! DENK DROM
-!        IF (it_dt > 0) CALL warning('instability in thermodynamics for vertex {int_01}; reducing time step and trying again', int_01 = vi)
 
         it_dt = it_dt + 1
         dt_applied = dt * (0.5_dp**(REAL( it_dt-1,dp)))   ! When it_dt = 0, dt_applied = dt; when it_dt = 1, dt_applied = dt/2, etc.
@@ -351,7 +325,7 @@ CONTAINS
       ! replace the temperature profile in those cells with the Robin solution
 
       DO vi = mesh%vi1, mesh%vi2
-        IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti_tplusdt, vi)
+        IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, SMB, Ti_tplusdt, vi)
       END DO
       CALL sync
 
@@ -578,7 +552,7 @@ CONTAINS
   END SUBROUTINE solve_1D_heat_equation
 
 ! == The Robin temperature solution
-  SUBROUTINE replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti, vi)
+  SUBROUTINE replace_Ti_with_robin_solution( ice, climate, SMB, Ti, vi)
     ! This function calculates for one horizontal grid point the temperature profiles
     ! using the surface temperature and the geothermal heat flux as boundary conditions.
     ! See Robin solution in: Cuffey & Paterson 2010, 4th ed, chapter 9, eq. (9.13) - (9.22).
@@ -590,7 +564,6 @@ CONTAINS
     ! In/output variables:
     TYPE(type_ice_model),                 INTENT(IN)    :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     REAL(dp), DIMENSION(:,:  ),           INTENT(INOUT) :: Ti
     INTEGER,                              INTENT(IN)    :: vi
@@ -611,14 +584,11 @@ CONTAINS
     REAL(dp), PARAMETER                                :: kappa_e_ice_conductivity     = 0.0057_dp                  ! The exponent constant in the thermal conductivity of ice [K^-1], see equation (12.6), Ritz (1987), Cuffey & Paterson (2010, p. 400), Zwinger (2007)
     REAL(dp), PARAMETER                                :: c_0_specific_heat            = 2127.5_dp                  ! The constant in the specific heat capacity of ice [J kg^-1 K^-1], see equation (12.5), Zwinger (2007), Cuffey & Paterson (2010, p. 400)
 
-    REAL(dp)                                            :: depth
-    REAL(dp)                                            :: T_ocean_at_shelf_base
-
     thermal_conductivity_robin        = kappa_0_ice_conductivity * sec_per_year * EXP(-kappa_e_ice_conductivity * T0) ! Thermal conductivity            [J m^-1 K^-1 y^-1]
     thermal_diffusivity_robin         = thermal_conductivity_robin / (ice_density * c_0_specific_heat)                ! Thermal diffusivity             [m^2 y^-1]
     bottom_temperature_gradient_robin = - ice%GHF_a( vi) / thermal_conductivity_robin                                 ! Temperature gradient at bedrock
 
-    Ts = MIN( T0, SUM(climate%T2m( vi,:)) / 12._dp)
+    Ts = MIN( T0, SUM( climate%T2m( vi,:)) / REAL( SIZE( climate%T2m,2),dp))
 
     IF (ice%mask_sheet_a( vi) == 1 ) THEN
 
@@ -641,22 +611,9 @@ CONTAINS
       END IF
 
     ELSEIF( ice%mask_shelf_a(vi) == 1) THEN
-      ! Use a linear profile between Ts and seawater temperature:
+      ! Use a linear profile between T_surf and Ti_pmp_base
 
-      IF (C%choice_ocean_model == 'none') THEN
-        ! No ocean data available; use constant PD value
-
-        T_ocean_at_shelf_base = T0 + C%T_ocean_mean_PD_ANT
-
-      ELSE
-        ! Calculate shelf base temperature from ocean data
-
-        depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
-        CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base)
-
-      END IF
-
-      Ti( vi,:) = Ts + C%zeta(:) * (T0 + T_ocean_at_shelf_base - Ts)
+      Ti( vi,:) = Ts + C%zeta * (ice%Ti_pmp_a( vi,C%nz) - Ts)
 
     ELSE
 

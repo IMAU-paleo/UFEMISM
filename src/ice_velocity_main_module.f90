@@ -38,7 +38,7 @@ MODULE ice_velocity_main_module
   USE ice_velocity_BPA_module,             ONLY: initialise_BPA_solver , solve_BPA , remap_BPA_solver
   USE utilities_module,                    ONLY: vertical_average
   USE mesh_operators_module,               ONLY: map_b_to_a_2D, map_b_to_a_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
-                                                 field2vec_ak, field2vec_bk, vec2field_ak, vec2field_bk
+                                                 field2vec_ak, field2vec_bk, vec2field_ak, vec2field_bk, ddx_b_to_a_3D, ddy_b_to_a_3D
   USE petsc_module,                        ONLY: multiply_PETSc_matrix_with_vector_1D
   USE mesh_help_functions_module,          ONLY: rotate_xy_to_po_stag_3D
 
@@ -200,6 +200,43 @@ CONTAINS
     ! NOTE: since the vertical velocities for floating ice depend on
     !       the thinning rate dH/dt, this routine must be called
     !       after having calculated dHi_dt!
+    !
+    ! Derivation:
+    !
+    ! Conservation of mass, combined with the incompressibility
+    ! condition (i.e. constant density) of ice, is described by:
+    !
+    !   du/dx + dv/dy + dw/dz = 0
+    !
+    ! Applying the zeta coordinate transformation yields:
+    !
+    !   du/dxp + dzeta/dx du/dzeta + dv/dxp + dzeta/dy dv/dzeta + dzeta/dz dw/dzeta = 0
+    !
+    ! The terms du/dxp + dv/dyp describe the two-dimensional divergence in scaled coordinates:
+    !
+    !   grad uv = du/dxp + dv/dyp
+    !
+    ! The average value over a single grid cell (Voronoi cell) of this divergence is:
+    !
+    !   grad uv = intint_Voronoi (grad uv) dA / intint dA = 1/A intint_Voronoi (grad uv) dA
+    !
+    ! By applying the divergence theorem, the surface integral over the Voronoi cell
+    ! can be transformed into a loop integral over the boundary of that Voronoi cell:
+    !
+    !   grad uv = 1/A cint (uv * n_hat) dS
+    !
+    ! Here, n_hat is the outward unit normal to the Voronoi cell boundary. Substituting
+    ! this into the equation for conservation of mass yields:
+    !
+    !   dw/dzeta = =1 / dzeta/dz [ 1/A cint (uv * n_hat) dS + dzeta/dx du/zeta + dzeta/dy dv/dzeta]
+    !
+    ! The vertical velocity w at the ice base is equal to the horizontal motion along
+    ! the sloping ice base, plus the vertical motion of the ice base itself, plus the
+    ! vertical motion of an ice particle with respect to the ice base (i.e. the basal melt rate):
+    !
+    !   w( z=b) = u( z=b) * dH_base/dx + v( z=b) * dH_base/dy + dH_base/dt + M_base
+    !
+    ! With this boundary condition, dw/dzeta can be integrated over zeta to yield w( z).
 
     IMPLICIT NONE
 
@@ -210,18 +247,22 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_vertical_velocities'
-    INTEGER                                            :: vi,k,ci,vj,aci
+    INTEGER                                            :: vi,k,ks,ci,vj,aci
     REAL(dp), DIMENSION(:    ), POINTER                :: H_base_a
+    INTEGER                                            :: wH_base_a
     REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dx_a
     REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dy_a
     REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dt_a
-    INTEGER                                            :: wH_base_a, wdH_base_dx_a, wdH_base_dy_a, wdH_base_dt_a
+    INTEGER                                            :: wdH_base_dx_a, wdH_base_dy_a, wdH_base_dt_a
+    REAL(dp)                                           :: dzeta
     REAL(dp), DIMENSION(:,:  ), POINTER                :: u_3D_c
     REAL(dp), DIMENSION(:,:  ), POINTER                :: v_3D_c
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: p_3D_c
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: o_3D_c
-    INTEGER                                            :: wu_3D_c, wv_3D_c, wp_3D_c, wo_3D_c
-    REAL(dp)                                           :: dzeta, up, Q_hor, w_base, Q_base, Q_top
+    INTEGER                                            :: wu_3D_c, wv_3D_c
+    REAL(dp)                                           :: cint_un_dS, dS, u_ks, v_ks, un_dS, grad_uv_ks
+    REAL(dp), DIMENSION(2)                             :: n_hat
+    REAL(dp)                                           :: du_dzeta_ks, dv_dzeta_ks
+    REAL(dp)                                           :: dzeta_dx_ks, dzeta_dy_ks, dzeta_dz_ks
+    REAL(dp)                                           :: dw_dzeta_ks
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -233,8 +274,6 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV  ,         dH_base_dt_a   , wdH_base_dt_a   )
     CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , u_3D_c         , wu_3D_c         )
     CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , v_3D_c         , wv_3D_c         )
-    CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , p_3D_c         , wp_3D_c         )
-    CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , o_3D_c         , wo_3D_c         )
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -259,11 +298,8 @@ CONTAINS
     CALL ddx_a_to_a_2D( mesh, H_base_a, dH_base_dx_a)
     CALL ddy_a_to_a_2D( mesh, H_base_a, dH_base_dy_a)
 
-    ! Calculate 3-D ice velocities on the c-grid
+    ! Calculate u,v on the c-grid (edges)
     CALL map_velocities_from_b_to_c_3D( mesh, ice%u_3D_b, ice%v_3D_b, u_3D_c, v_3D_c)
-
-    ! Calculate 3-D velocity components parallel to mesh edges on the c-grid
-    CALL rotate_xy_to_po_stag_3D( mesh, u_3D_c, v_3D_c, p_3D_c, o_3D_c)
 
     ! Calculate vertical velocities by solving conservation of mass in each 3-D cell
     DO vi = mesh%vi1, mesh%vi2
@@ -274,10 +310,7 @@ CONTAINS
         CYCLE
       END IF
 
-      ! Calculate the vertical velocity at the ice base, which is equal to
-      ! the horizontal motion along the sloping ice base, plus the vertical
-      ! motion of the ice base itself, plus the vertical motion of an ice
-      ! particle with respect to the ice base (i.e. the basal melt rate).
+      ! Calculate the vertical velocity at the ice base
       !
       ! NOTE: BMB is defined so that a positive number means accumulation of ice;
       !       at the ice base, that means that a positive BMB means a positive
@@ -287,476 +320,73 @@ CONTAINS
                              (ice%v_3D_a( vi,C%nz) * dH_base_dy_a( vi)) + &
                               dH_base_dt_a( vi) + BMB%BMB( vi)
 
-      DO k = C%nz-1, 1, -1
+      ! Exception for very thin ice / ice margin: assume horizontal stretching
+      ! is negligible, so that w( z) = w( z = b)
+      IF (ice%Hi_a( vi) < 10._dp) THEN
+        ice%w_3D_a( vi,:) = ice%w_3D_a( vi,C%nz)
+        CYCLE
+      END IF ! IF (ice%mask_margin_a( vi) == 1 .OR. ice%Hi_a( vi) < 10._dp) THEN
 
-        dzeta = C%zeta( k) - C%zeta( k+1)
+      ! Calculate vertical velocities by integrating dw/dz over the vertical column
 
-        ! Calculate net horizontal ice flux into this 3-D grid box
-        Q_hor = 0._dp
+      DO ks = C%nz-1, 1, -1
+
+        dzeta = C%zeta( ks+1) - C%zeta( ks)
+
+        ! Integrate u*n_hat around the Voronoi cell boundary
+        cint_un_dS = 0._dp
         DO ci = 1, mesh%nC( vi)
           vj  = mesh%C(    vi,ci)
           aci = mesh%iAci( vi,ci)
-          up  = 0.5_dp * (p_3D_c( aci,k) + p_3D_c( aci,k+1))
-          IF (p_3D_c( aci,k) > 0._dp) THEN
-            ! Ice moves from vi to vj
-            Q_hor = Q_hor - up * dzeta * ice%Hi_a( vi) * mesh%Cw( vi,ci)   ! m^3/yr
-          ELSE
-            ! Ice moves from vj to vi
-            Q_hor = Q_hor + up * dzeta * ice%Hi_a( vj) * mesh%Cw( vi,ci)   ! m^3/yr
-          END IF
+          ! Velocities at this section of the boundary
+          u_ks = 0.5_dp * (u_3D_c( aci,ks) + u_3D_c( aci,ks+1))
+          v_ks = 0.5_dp * (v_3D_c( aci,ks) + v_3D_c( aci,ks+1))
+          ! Length of this section of the boundary
+          dS = mesh%Cw( vi,ci)
+          ! Outward normal vector to this section of the boundary
+          n_hat = mesh%V( vj,:) - mesh%V( vi,:)
+          n_hat = n_hat / NORM2( n_hat)
+          ! Line integral over this section of the boundary
+          un_dS = (u_ks * n_hat( 1) + v_ks * n_hat( 2)) * dS
+          ! Add to loop integral
+          cint_un_dS = cint_un_dS + un_dS
         END DO
 
-        ! Calculate vertical ice flux at the base of this 3-D grid box
-        Q_base = ice%w_3D_a( vi,k+1) * mesh%A( vi)
+        ! Calculate grad uv from the divergence theorem
+        grad_uv_ks = cint_un_dS / mesh%A( vi)
 
-        ! Calculate vertical ice flux through the top of this 3-D grid box,
-        ! such that conservation of mass is satisfied
-        Q_top = -(Q_hor + Q_base)
+        ! Calculate du/dzeta, dv/dzeta
+        du_dzeta_ks = (ice%u_3D_a( vi,ks+1) - ice%u_3D_a( vi,ks)) / dzeta
+        dv_dzeta_ks = (ice%v_3D_a( vi,ks+1) - ice%v_3D_a( vi,ks)) / dzeta
 
-        ! Calculate vertical ice velocity at the top of this 3-D grid box
-        ice%w_3D_a( vi,k) = Q_top / mesh%A( vi)
+        ! Calculate dzeta/dx, dzeta/dy, dzeta/dz
+        dzeta_dx_ks = 0.5_dp * (ice%dzeta_dx_ak( vi,ks) + ice%dzeta_dx_ak( vi,ks+1))
+        dzeta_dy_ks = 0.5_dp * (ice%dzeta_dy_ak( vi,ks) + ice%dzeta_dy_ak( vi,ks+1))
+        dzeta_dz_ks = 0.5_dp * (ice%dzeta_dz_ak( vi,ks) + ice%dzeta_dz_ak( vi,ks+1))
+
+        ! Calculate dw/dzeta
+        dw_dzeta_ks = -1._dp / dzeta_dz_ks * (grad_uv_ks + dzeta_dx_ks * du_dzeta_ks + dzeta_dy_ks * dv_dzeta_ks)
+
+        ! Calculate w
+        ice%w_3D_a( vi,ks) = ice%w_3D_a( vi,ks+1) - dzeta * dw_dzeta_ks
 
       END DO ! DO k = C%nz-1, 1, -1
 
     END DO ! DO vi = mesh%vi1, mesh%vi2
+    CALL sync
 
     ! Clean up after yourself
-    CALL deallocate_shared( wH_base_a       )
-    CALL deallocate_shared( wdH_base_dx_a   )
-    CALL deallocate_shared( wdH_base_dy_a   )
-    CALL deallocate_shared( wdH_base_dt_a   )
-    CALL deallocate_shared( wu_3D_c         )
-    CALL deallocate_shared( wv_3D_c         )
-    CALL deallocate_shared( wp_3D_c         )
-    CALL deallocate_shared( wo_3D_c         )
+    CALL deallocate_shared( wH_base_a    )
+    CALL deallocate_shared( wdH_base_dx_a)
+    CALL deallocate_shared( wdH_base_dy_a)
+    CALL deallocate_shared( wdH_base_dt_a)
+    CALL deallocate_shared( wu_3D_c      )
+    CALL deallocate_shared( wv_3D_c      )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_vertical_velocities
-
-  SUBROUTINE calc_vertical_velocities2( mesh, ice, BMB)
-    ! Calculate vertical velocity w from conservation of mass
-    !
-    ! NOTE: since the vertical velocities for floating ice depend on
-    !       the thinning rate dH/dt, this routine must be called
-    !       after having calculated dHi_dt!
-
-    IMPLICIT NONE
-
-    ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_BMB_model),                INTENT(IN)    :: BMB
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_vertical_velocities'
-    INTEGER                                            :: vi,k,ci,vj,aci
-    REAL(dp), DIMENSION(:    ), POINTER                :: H_base_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dt_a
-    INTEGER                                            :: wH_base_a, wdH_base_dx_a, wdH_base_dy_a, wdH_base_dt_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: u_3D_c
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: v_3D_c
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: p_3D_c
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: o_3D_c
-    INTEGER                                            :: wu_3D_c, wv_3D_c, wp_3D_c, wo_3D_c
-    REAL(dp), DIMENSION(:    ), POINTER                :: w_base_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: w_surf_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: w_3D_aks
-    INTEGER                                            :: ww_base_a, ww_surf_a, ww_3D_aks
-    REAL(dp)                                           :: zeta_top, zeta_bottom, dzeta
-    REAL(dp)                                           :: Q_hor, w_base, Q_base, Q_top, w_top
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV  ,         H_base_a       , wH_base_a       )
-    CALL allocate_shared_dp_1D( mesh%nV  ,         dH_base_dx_a   , wdH_base_dx_a   )
-    CALL allocate_shared_dp_1D( mesh%nV  ,         dH_base_dy_a   , wdH_base_dy_a   )
-    CALL allocate_shared_dp_1D( mesh%nV  ,         dH_base_dt_a   , wdH_base_dt_a   )
-    CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , u_3D_c         , wu_3D_c         )
-    CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , v_3D_c         , wv_3D_c         )
-    CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , p_3D_c         , wp_3D_c         )
-    CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , o_3D_c         , wo_3D_c         )
-    CALL allocate_shared_dp_1D( mesh%nV  ,         w_base_a       , ww_base_a       )
-    CALL allocate_shared_dp_1D( mesh%nV  ,         w_surf_a       , ww_surf_a       )
-    CALL allocate_shared_dp_2D( mesh%nV  , C%nz-1, w_3D_aks       , ww_3D_aks       )
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Calculate elevation of the ice base
-      H_base_a( vi) = ice%Hs_a( vi) - ice%Hi_a( vi)
-
-      ! Calculate rate of change of ice base elevation
-      IF     (ice%mask_sheet_a( vi) == 1) THEN
-        ! For grounded ice, the ice base simply moves with the bedrock
-        dH_base_dt_a( vi) =  ice%dHb_dt_a( vi)
-      ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
-        ! For floating ice, the ice base moves according to the thinning rate times the density fraction
-        dH_base_dt_a( vi) = -ice%dHi_dt_a( vi) * ice_density / seawater_density
-      ELSE
-        ! No ice, so no vertical velocity
-        dH_base_dt_a( vi) = 0._dp
-      END IF
-
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-
-    ! Calculate slopes of the ice base
-    CALL ddx_a_to_a_2D( mesh, H_base_a, dH_base_dx_a)
-    CALL ddy_a_to_a_2D( mesh, H_base_a, dH_base_dy_a)
-
-    ! Calculate 3-D ice velocities on the c-grid
-    CALL map_velocities_from_b_to_c_3D( mesh, ice%u_3D_b, ice%v_3D_b, u_3D_c, v_3D_c)
-
-    ! Calculate 3-D velocity components parallel to mesh edges on the c-grid
-    CALL rotate_xy_to_po_stag_3D( mesh, u_3D_c, v_3D_c, p_3D_c, o_3D_c)
-
-    ! Calculate vertical velocities by solving conservation of mass in each 3-D cell
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! No ice means no velocity
-      IF (ice%mask_ice_a( vi) == 0) THEN
-        ice%w_3D_a( vi,:) = 0._dp
-        CYCLE
-      END IF
-
-      ! Calculate the vertical velocity at the ice base, which is equal to
-      ! the horizontal motion along the sloping ice base, plus the vertical
-      ! motion of the ice base itself, plus the vertical motion of an ice
-      ! particle with respect to the ice base (i.e. the basal melt rate).
-      !
-      ! NOTE: BMB is defined so that a positive number means accumulation of ice;
-      !       at the ice base, that means that a positive BMB means a positive
-      !       value of w
-
-      w_base_a( vi) = (ice%u_3D_a( vi,C%nz) * dH_base_dx_a( vi)) + &
-                      (ice%v_3D_a( vi,C%nz) * dH_base_dy_a( vi)) + &
-                       dH_base_dt_a( vi) + BMB%BMB( vi)
-
-      DO k = C%nz-1, 1, -1
-
-        ! Height of this grid cell
-        IF     (k == 1) THEN
-          ! Ice surface
-          zeta_top    = 0._dp
-          zeta_bottom = (C%zeta( k+1) + C%zeta( k)) / 2._dp
-        ELSEIF (k == C%nz) THEN
-          ! Ice base
-          zeta_top    = (C%zeta( k-1) + C%zeta( k)) / 2._dp
-          zeta_bottom = 1._dp
-        ELSE
-          ! Ice column
-          zeta_top    = (C%zeta( k-1) + C%zeta( k)) / 2._dp
-          zeta_bottom = (C%zeta( k+1) + C%zeta( k)) / 2._dp
-        END IF
-
-        dzeta = zeta_top - zeta_bottom
-
-        ! Calculate net horizontal ice flux into this 3-D grid cell
-        Q_hor = 0._dp
-        DO ci = 1, mesh%nC( vi)
-          vj  = mesh%C(    vi,ci)
-          aci = mesh%iAci( vi,ci)
-          IF (p_3D_c( aci,k) > 0._dp) THEN
-            ! Ice moves from vi to vj
-            Q_hor = Q_hor - p_3D_c( aci,k) * dzeta * ice%Hi_a( vi) * mesh%Cw( vi,ci)   ! m^3/yr
-          ELSE
-            ! Ice moves from vj to vi
-            Q_hor = Q_hor + p_3D_c( aci,k) * dzeta * ice%Hi_a( vj) * mesh%Cw( vi,ci)   ! m^3/yr
-          END IF
-        END DO
-
-        ! Calculate vertical ice flux at the base of this 3-D grid cell
-        IF (k == C%nz) THEN
-          ! Ice base
-          w_base = w_base_a( vi)
-        ELSE
-          ! Ice column
-          w_base = w_3D_aks( vi,k)
-        END IF
-        Q_base = w_base * mesh%A( vi)
-
-        ! Calculate vertical ice flux through the top of this 3-D grid cell,
-        ! such that conservation of mass is satisfied
-        Q_top = -(Q_hor + Q_base)
-
-        ! Calculate vertical ice velocity at the top of this 3-D grid cell
-        w_top = Q_top / mesh%A( vi)
-
-        ! Fill into arrays
-        IF (k == 1) THEN
-          ! Ice surface
-          w_surf_a( vi) = w_top
-        ELSE
-          ! Ice column
-          w_3D_aks( vi,k-1) = w_top
-        END IF
-
-      END DO ! DO k = C%nz-1, 1, -1
-
-      ! Un-stagger vertical velocities
-      ice%w_3D_a( vi,1   ) = w_surf_a( vi)
-      ice%w_3D_a( vi,C%nz) = w_base_a( vi)
-      DO k = 2, C%nz-1
-        ice%w_3D_a( vi,k) = (w_3D_aks( vi,k-1) + w_3D_aks( vi,k)) / 2._dp
-      END DO
-
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wH_base_a       )
-    CALL deallocate_shared( wdH_base_dx_a   )
-    CALL deallocate_shared( wdH_base_dy_a   )
-    CALL deallocate_shared( wdH_base_dt_a   )
-    CALL deallocate_shared( wu_3D_c         )
-    CALL deallocate_shared( wv_3D_c         )
-    CALL deallocate_shared( wp_3D_c         )
-    CALL deallocate_shared( wo_3D_c         )
-    CALL deallocate_shared( ww_base_a       )
-    CALL deallocate_shared( ww_surf_a       )
-    CALL deallocate_shared( ww_3D_aks       )
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE calc_vertical_velocities2
-
-  SUBROUTINE calc_vertical_velocities_old( mesh, ice, BMB)
-    ! Calculate vertical velocity w from conservation of mass
-    !
-    ! NOTE: since the vertical velocities for floating ice depend on
-    !       the thinning rate dH/dt, this routine must be called
-    !       after having calculated dHi_dt!
-
-    IMPLICIT NONE
-
-    ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_BMB_model),                INTENT(IN)    :: BMB
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_vertical_velocities'
-    INTEGER                                            :: vi,ti,k,n
-    REAL(dp), DIMENSION(:    ), POINTER                :: H_base_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dt_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: u_bk_vec
-    REAL(dp), DIMENSION(:    ), POINTER                :: v_bk_vec
-    REAL(dp), DIMENSION(:    ), POINTER                :: du_dxp_ak_vec
-    REAL(dp), DIMENSION(:    ), POINTER                :: dv_dyp_ak_vec
-    REAL(dp), DIMENSION(:    ), POINTER                :: du_dzeta_ak_vec
-    REAL(dp), DIMENSION(:    ), POINTER                :: dv_dzeta_ak_vec
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: du_dxp_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: dv_dyp_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: du_dzeta_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: dv_dzeta_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: du_dx_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: dv_dy_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: dw_dz_3D_a
-    INTEGER                                            :: wH_base_a, wdH_base_dx_a, wdH_base_dy_a, wdH_base_dt_a
-    INTEGER                                            :: wu_bk_vec, wv_bk_vec, wdu_dxp_ak_vec, wdv_dyp_ak_vec, wdu_dzeta_ak_vec, wdv_dzeta_ak_vec
-    INTEGER                                            :: wdu_dxp_3D_a, wdu_dzeta_3D_a, wdv_dyp_3D_a, wdv_dzeta_3D_a, wdu_dx_3D_a, wdv_dy_3D_a, wdw_dz_3D_a
-    REAL(dp)                                           :: dw_dz, dz
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV  ,       H_base_a       , wH_base_a       )
-    CALL allocate_shared_dp_1D( mesh%nV  ,       dH_base_dx_a   , wdH_base_dx_a   )
-    CALL allocate_shared_dp_1D( mesh%nV  ,       dH_base_dy_a   , wdH_base_dy_a   )
-    CALL allocate_shared_dp_1D( mesh%nV  ,       dH_base_dt_a   , wdH_base_dt_a   )
-    CALL allocate_shared_dp_1D( mesh%nnbk,       u_bk_vec       , wu_bk_vec       )
-    CALL allocate_shared_dp_1D( mesh%nnbk,       v_bk_vec       , wv_bk_vec       )
-    CALL allocate_shared_dp_1D( mesh%nnak,       du_dxp_ak_vec  , wdu_dxp_ak_vec  )
-    CALL allocate_shared_dp_1D( mesh%nnak,       du_dzeta_ak_vec, wdu_dzeta_ak_vec)
-    CALL allocate_shared_dp_1D( mesh%nnak,       dv_dyp_ak_vec  , wdv_dyp_ak_vec  )
-    CALL allocate_shared_dp_1D( mesh%nnak,       dv_dzeta_ak_vec, wdv_dzeta_ak_vec)
-    CALL allocate_shared_dp_2D( mesh%nV  , C%nz, du_dxp_3D_a    , wdu_dxp_3D_a    )
-    CALL allocate_shared_dp_2D( mesh%nV  , C%nz, du_dzeta_3D_a  , wdu_dzeta_3D_a  )
-    CALL allocate_shared_dp_2D( mesh%nV  , C%nz, dv_dyp_3D_a    , wdv_dyp_3D_a    )
-    CALL allocate_shared_dp_2D( mesh%nV  , C%nz, dv_dzeta_3D_a  , wdv_dzeta_3D_a  )
-    CALL allocate_shared_dp_2D( mesh%nV  , C%nz, du_dx_3D_a     , wdu_dx_3D_a     )
-    CALL allocate_shared_dp_2D( mesh%nV  , C%nz, dv_dy_3D_a     , wdv_dy_3D_a     )
-    CALL allocate_shared_dp_2D( mesh%nV  , C%nz, dw_dz_3D_a     , wdw_dz_3D_a     )
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Calculate elevation of the ice base
-      H_base_a( vi) = ice%Hs_a( vi) - ice%Hi_a( vi)
-
-      ! Calculate rate of change of ice base elevation
-      IF     (ice%mask_sheet_a( vi) == 1) THEN
-        ! For grounded ice, the ice base simply moves with the bedrock
-        dH_base_dt_a( vi) =  ice%dHb_dt_a( vi)
-      ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
-        ! For floating ice, the ice base moves according to the thinning rate times the density fraction
-        dH_base_dt_a( vi) = -ice%dHi_dt_a( vi) * ice_density / seawater_density
-      ELSE
-        ! No ice, so no vertical velocity
-        dH_base_dt_a( vi) = 0._dp
-      END IF
-
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-
-    ! Calculate slopes of the ice base
-    CALL ddx_a_to_a_2D( mesh, H_base_a, dH_base_dx_a)
-    CALL ddy_a_to_a_2D( mesh, H_base_a, dH_base_dy_a)
-
-    ! Transform 3-D horizontal velocities from field form to vector form
-    DO ti = mesh%ti1, mesh%ti2
-    DO k  = 1, C%nz
-      n = mesh%tik2n( ti,k)
-      u_bk_vec( n) = ice%u_3D_b( ti,k)
-      v_bk_vec( n) = ice%v_3D_b( ti,k)
-    END DO
-    END DO
-
-    ! Calculate du/dxp, du/dzeta, dv/dyp, and dv/dzeta in vector form
-    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddxp_bk_ak  , u_bk_vec, du_dxp_ak_vec  )
-    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddzeta_bk_ak, u_bk_vec, du_dzeta_ak_vec)
-    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddyp_bk_ak  , v_bk_vec, dv_dyp_ak_vec  )
-    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddzeta_bk_ak, v_bk_vec, dv_dzeta_ak_vec)
-
-    ! Convert du/dxp, du/dzeta, dv/dyp, and dv/dzeta from vector form to field form
-    DO vi = mesh%vi1, mesh%vi2
-    DO k  = 1, C%nz
-      n = mesh%vik2n( vi,k)
-      du_dxp_3D_a(   vi,k) = du_dxp_ak_vec(   n)
-      du_dzeta_3D_a( vi,k) = du_dzeta_ak_vec( n)
-      dv_dyp_3D_a(   vi,k) = dv_dyp_ak_vec(   n)
-      dv_dzeta_3D_a( vi,k) = dv_dzeta_ak_vec( n)
-    END DO
-    END DO
-
-    ! Calculate du/dx, dv/dy, dw/dz
-    DO vi = mesh%vi1, mesh%vi2
-    DO k  = 1, C%nz
-
-      ! Coordinate transformation
-      du_dx_3D_a( vi,k) = du_dxp_3D_a( vi,k) + ice%dzeta_dx_ak( vi,k) * du_dzeta_3D_a( vi,k)
-      dv_dy_3D_a( vi,k) = dv_dyp_3D_a( vi,k) + ice%dzeta_dy_ak( vi,k) * dv_dzeta_3D_a( vi,k)
-
-      ! Conservation of mass: du/dx + dv/dy + dw/dz = 0
-      dw_dz_3D_a( vi,k) = -1._dp * (du_dx_3D_a( vi,k) + dv_dy_3D_a( vi,k))
-
-    END DO
-    END DO
-
-    ! Integrate over the incompressibility condition to find the vertical velocity profiles
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Exception for ice-free grid cells
-      IF (ice%mask_ice_a( vi) == 0) THEN
-        ice%w_3D_a( vi,:) = 0._dp
-        CYCLE
-      END IF
-
-      ! Calculate the vertical velocity at the ice base, which is equal to
-      ! the horizontal motion along the sloping ice base, plus the vertical
-      ! motion of the ice base itself, plus the vertical motion of an ice
-      ! particle with respect to the ice base (i.e. the basal melt rate).
-      !
-      ! NOTE: BMB is defined so that a positive number means accumulation of ice;
-      !       at the ice base, that means that a positive BMB means a positive
-      !       value of w
-
-      ice%w_3D_a( vi,C%nz) = (ice%u_3D_a( vi,C%nz) * dH_base_dx_a( vi)) + &
-                             (ice%v_3D_a( vi,C%nz) * dH_base_dy_a( vi)) + &
-                             dH_base_dt_a( vi) + BMB%BMB( vi)
-
-      ! Conservation of mass: du/dx + dv/dy + dw/dz = 0
-      DO k = C%nz-1, 1, -1
-
-        ! w in the middle of the current layer (= w( k))
-        ! equals:
-        ! w in the middle of the layer below this one ( = w( k+1))
-        ! plus
-        ! dw/dz halfway between these layers (= dw/dz( k+1/2)) times the distance dz between these layers
-
-        ! Let dw/dz( k+1/2) = (dw/dz( k+1) + dw/dz( k)) / 2
-        dw_dz = (dw_dz_3D_a( vi,k+1) + dw_dz_3D_a( vi,k)) / 2._dp
-
-        ! Distance dz between these layers
-        dz = ice%Hi_a( vi) * (C%zeta( k+1) - C%zeta( k))
-
-        ! Calculate w in the current layer
-        ice%w_3D_a( vi,k) = ice%w_3D_a( vi,k+1) + dw_dz * dz
-
-      END DO ! DO k = C%nz-1, -1, 1
-
-    END DO ! DO vi = mesh%v1, mesh%v2
-    CALL sync
-
-    ! DENK DROM
-    IF (MAXVAL( ice%Hi_a) > 0.24900E04_dp) THEN
-      CALL save_variable_as_netcdf_int_1D( mesh%vi2n, 'vi2n')
-      CALL save_variable_as_netcdf_int_1D( mesh%ti2n, 'ti2n')
-      CALL save_variable_as_netcdf_int_2D( mesh%n2vi, 'n2vi')
-      CALL save_variable_as_netcdf_int_2D( mesh%vik2n, 'vik2n')
-      CALL save_variable_as_netcdf_int_2D( mesh%tik2n, 'tik2n')
-
-      CALL write_PETSc_matrix_to_NetCDF( mesh%M_map_b_a, 'M_map_b_a')
-      CALL write_PETSc_matrix_to_NetCDF( mesh%M_ddx_b_a, 'M_ddx_b_a')
-      CALL write_PETSc_matrix_to_NetCDF( mesh%M_ddy_b_a, 'M_ddy_b_a')
-      CALL write_PETSc_matrix_to_NetCDF( mesh%M_map_bk_ak, 'M_map_bk_ak')
-      CALL write_PETSc_matrix_to_NetCDF( mesh%M_ddxp_bk_ak, 'M_ddxp_bk_ak')
-      CALL write_PETSc_matrix_to_NetCDF( mesh%M_ddyp_bk_ak, 'M_ddyp_bk_ak')
-      CALL write_PETSc_matrix_to_NetCDF( mesh%M_ddzeta_bk_ak, 'M_ddzeta_bk_ak')
-
-      CALL save_variable_as_netcdf_dp_1D( C%zeta, 'zeta')
-      CALL save_variable_as_netcdf_dp_2D( ice%dzeta_dx_ak, 'dzeta_dx_ak')
-      CALL save_variable_as_netcdf_dp_2D( ice%dzeta_dy_ak, 'dzeta_dy_ak')
-      CALL save_variable_as_netcdf_dp_1D( ice%Hi_a, 'Hi_a')
-      CALL save_variable_as_netcdf_dp_1D( ice%Hb_a, 'Hb_a')
-      CALL save_variable_as_netcdf_dp_1D( ice%Hs_a, 'Hs_a')
-      CALL save_variable_as_netcdf_dp_1D( H_base_a, 'H_base_a')
-      CALL save_variable_as_netcdf_dp_1D( dH_base_dx_a, 'dH_base_dx_a')
-      CALL save_variable_as_netcdf_dp_1D( dH_base_dy_a, 'dH_base_dy_a')
-      CALL save_variable_as_netcdf_dp_1D( dH_base_dt_a, 'dH_base_dt_a')
-      CALL save_variable_as_netcdf_dp_2D( ice%u_3D_b, 'u_3D_b')
-      CALL save_variable_as_netcdf_dp_2D( ice%v_3D_b, 'v_3D_b')
-      CALL save_variable_as_netcdf_dp_2D( ice%u_3D_a, 'u_3D_a')
-      CALL save_variable_as_netcdf_dp_2D( ice%v_3D_a, 'v_3D_a')
-      CALL save_variable_as_netcdf_dp_1D( ice%u_vav_a, 'u_vav_a')
-      CALL save_variable_as_netcdf_dp_1D( ice%v_vav_a, 'v_vav_a')
-    END IF
-
-    ! Extract vertical velocities at the ice surface and base
-    DO vi = mesh%vi1, mesh%vi2
-      ice%w_surf_a( vi) = ice%w_3D_a( vi,1   )
-      ice%w_base_a( vi) = ice%w_3D_a( vi,C%nz)
-    END DO
-    CALL sync
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wH_base_a       )
-    CALL deallocate_shared( wdH_base_dx_a   )
-    CALL deallocate_shared( wdH_base_dy_a   )
-    CALL deallocate_shared( wdH_base_dt_a   )
-    CALL deallocate_shared( wu_bk_vec       )
-    CALL deallocate_shared( wv_bk_vec       )
-    CALL deallocate_shared( wdu_dxp_ak_vec  )
-    CALL deallocate_shared( wdu_dzeta_ak_vec)
-    CALL deallocate_shared( wdv_dyp_ak_vec  )
-    CALL deallocate_shared( wdv_dzeta_ak_vec)
-    CALL deallocate_shared( wdu_dxp_3D_a    )
-    CALL deallocate_shared( wdu_dzeta_3D_a  )
-    CALL deallocate_shared( wdv_dyp_3D_a    )
-    CALL deallocate_shared( wdv_dzeta_3D_a  )
-    CALL deallocate_shared( wdu_dx_3D_a     )
-    CALL deallocate_shared( wdv_dy_3D_a     )
-    CALL deallocate_shared( wdw_dz_3D_a     )
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE calc_vertical_velocities_old
 
   SUBROUTINE remap_velocity_solver( mesh_old, mesh_new, ice)
     ! Remap the velocity solver for the chosen stress balance approximation

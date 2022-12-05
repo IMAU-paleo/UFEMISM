@@ -123,7 +123,7 @@ CONTAINS
       time_to_restart_from = C%time_to_restart_from_ANT
     END IF
 
-    IF (par%master) WRITE(0,*) '  Reading data from restart file "', TRIM(region%restart%netcdf%filename), '"...'
+    IF (par%master) WRITE(0,*) '  Reading data from restart file "', TRIM( filename), '"...'
 
     ! Allocate memory
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hi,                 region%restart%wHi                )
@@ -131,7 +131,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hs,                 region%restart%wHs                )
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%beta_sq,            region%restart%wbeta_sq           )
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%phi_fric,           region%restart%wphi_fric          )
-    CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%restart%Ti,                 region%restart%wTi                )
+    CALL allocate_shared_dp_2D( region%mesh%nV, C%nz, region%restart%Ti,                 region%restart%wTi                )
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%MeltPreviousYear,   region%restart%wMeltPreviousYear  )
     CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%restart%FirnDepth,          region%restart%wFirnDepth         )
 
@@ -139,11 +139,11 @@ CONTAINS
     CALL read_field_from_file_2D(         filename, restart%name_var_Hi              , region%mesh, region%restart%Hi              , region%name, time_to_restart_from)
     CALL read_field_from_file_2D(         filename, restart%name_var_Hb              , region%mesh, region%restart%Hb              , region%name, time_to_restart_from)
     CALL read_field_from_file_2D(         filename, restart%name_var_Hs              , region%mesh, region%restart%Hs              , region%name, time_to_restart_from)
-    CALL read_field_from_file_2D(         filename, restart%name_var_beta_sq         , region%mesh, region%restart%beta_sq         , region%name, time_to_restart_from)
-    CALL read_field_from_file_2D(         filename, restart%name_var_phi_fric        , region%mesh, region%restart%phi_fric        , region%name, time_to_restart_from)
+!    CALL read_field_from_file_2D(         filename, restart%name_var_beta_sq         , region%mesh, region%restart%beta_sq         , region%name, time_to_restart_from)
+!    CALL read_field_from_file_2D(         filename, restart%name_var_phi_fric        , region%mesh, region%restart%phi_fric        , region%name, time_to_restart_from)
     CALL read_field_from_file_3D(         filename, restart%name_var_Ti              , region%mesh, region%restart%Ti              , region%name, time_to_restart_from)
-    CALL read_field_from_file_2D(         filename, restart%name_var_MeltPreviousYear, region%mesh, region%restart%MeltPreviousYear, region%name, time_to_restart_from)
-    CALL read_field_from_file_2D_monthly( filename, restart%name_var_FirnDepth       , region%mesh, region%restart%FirnDepth       , region%name, time_to_restart_from)
+!    CALL read_field_from_file_2D(         filename, restart%name_var_MeltPreviousYear, region%mesh, region%restart%MeltPreviousYear, region%name, time_to_restart_from)
+!    CALL read_field_from_file_2D_monthly( filename, restart%name_var_FirnDepth       , region%mesh, region%restart%FirnDepth       , region%name, time_to_restart_from)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 12)

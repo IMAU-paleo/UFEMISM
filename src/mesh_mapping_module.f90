@@ -752,11 +752,20 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_mesh_2D'
+    LOGICAL                                            :: are_identical
     INTEGER                                            :: mi, mi_valid
     LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! If the two meshes are identical, the remapping operation is trivial
+    CALL are_identical_meshes( mesh_src, mesh_dst, are_identical)
+    IF (are_identical) THEN
+      d_dst( mesh_src%vi1: mesh_src%vi2) = d_src( mesh_src%vi1: mesh_src%vi2)
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Browse the Atlas to see if an appropriate mapping object already exists.
     found_map = .FALSE.
@@ -819,11 +828,20 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_mesh_2D_monthly'
+    LOGICAL                                            :: are_identical
     INTEGER                                            :: mi, mi_valid
     LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! If the two meshes are identical, the remapping operation is trivial
+    CALL are_identical_meshes( mesh_src, mesh_dst, are_identical)
+    IF (are_identical) THEN
+      d_dst( mesh_src%vi1: mesh_src%vi2,:) = d_src( mesh_src%vi1: mesh_src%vi2,:)
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Browse the Atlas to see if an appropriate mapping object already exists.
     found_map = .FALSE.
@@ -886,11 +904,20 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_mesh_3D'
+    LOGICAL                                            :: are_identical
     INTEGER                                            :: mi, mi_valid
     LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! If the two meshes are identical, the remapping operation is trivial
+    CALL are_identical_meshes( mesh_src, mesh_dst, are_identical)
+    IF (are_identical) THEN
+      d_dst( mesh_src%vi1: mesh_src%vi2,:) = d_src( mesh_src%vi1: mesh_src%vi2,:)
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Browse the Atlas to see if an appropriate mapping object already exists.
     found_map = .FALSE.
@@ -953,11 +980,20 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_from_mesh_to_mesh_3D_ocean'
+    LOGICAL                                            :: are_identical
     INTEGER                                            :: mi, mi_valid
     LOGICAL                                            :: found_map, found_empty_page
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! If the two meshes are identical, the remapping operation is trivial
+    CALL are_identical_meshes( mesh_src, mesh_dst, are_identical)
+    IF (are_identical) THEN
+      d_dst( mesh_src%vi1: mesh_src%vi2,:) = d_src( mesh_src%vi1: mesh_src%vi2,:)
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Browse the Atlas to see if an appropriate mapping object already exists.
     found_map = .FALSE.
@@ -1228,6 +1264,48 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE clear_all_maps_involving_this_mesh
+
+  ! Check if two meshes are identical (if so, remapping is trivial)
+  SUBROUTINE are_identical_meshes( mesh1, mesh2, isso)
+    ! Check if two meshes are identical (if so, remapping is trivial)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh1
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh2
+    LOGICAL,                             INTENT(OUT)   :: isso
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'are_identical_meshes'
+    INTEGER                                            :: vi
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    isso = .TRUE.
+
+    ! If the number of vertices is different, of course they are different meshes
+    IF (mesh1%nV /= mesh2%nV) THEN
+      isso = .FALSE.
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Check if all vertices coincide
+    DO vi = mesh1%vi1, mesh1%vi2
+      IF (NORM2( mesh1%V( vi,:) - mesh2%V( vi,:)) > mesh1%tol_dist) THEN
+        isso = .FALSE.
+        EXIT
+      END IF
+    END DO
+
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, isso, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, ierr)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE are_identical_meshes
 
 ! == Smoothing operations on the mesh
 ! ===================================

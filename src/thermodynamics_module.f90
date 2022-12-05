@@ -1051,7 +1051,7 @@ CONTAINS
   END SUBROUTINE calc_ice_rheology
 
 ! == Initialise the englacial ice temperature at the start of a simulation
-  SUBROUTINE initialise_ice_temperature( mesh, ice, climate, ocean, SMB, region_name, restart)
+  SUBROUTINE initialise_ice_temperature( mesh, ice, climate, SMB, region_name, restart)
     ! Initialise the englacial ice temperature at the start of a simulation
 
     IMPLICIT NONE
@@ -1060,7 +1060,6 @@ CONTAINS
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
     TYPE(type_restart_data),              INTENT(IN)    :: restart
@@ -1082,7 +1081,7 @@ CONTAINS
       CALL initialise_ice_temperature_linear( mesh, ice, climate)
     ELSEIF (C%choice_initial_ice_temperature == 'Robin') THEN
       ! Initialise with the Robin solution
-      CALL initialise_ice_temperature_Robin( mesh, ice, climate, ocean, SMB)
+      CALL initialise_ice_temperature_Robin( mesh, ice, climate, SMB)
     ELSEIF (C%choice_initial_ice_temperature == 'restart') THEN
       ! Initialise with the temperature field from the provided restart file
       CALL initialise_ice_temperature_restart( mesh, ice, restart)
@@ -1179,7 +1178,7 @@ CONTAINS
 
   END SUBROUTINE initialise_ice_temperature_linear
 
-  SUBROUTINE initialise_ice_temperature_Robin( mesh, ice, climate, ocean, SMB)
+  SUBROUTINE initialise_ice_temperature_Robin( mesh, ice, climate, SMB)
     ! Initialise the englacial ice temperature at the start of a simulation
     !
     ! Initialise with the Robin solution
@@ -1190,7 +1189,6 @@ CONTAINS
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
 
     ! Local variables:
@@ -1205,7 +1203,7 @@ CONTAINS
 
     ! Initialise with the Robin solution
     DO vi = mesh%vi1, mesh%vi2
-      CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, ice%Ti_a, vi)
+      CALL replace_Ti_with_robin_solution( ice, climate, SMB, ice%Ti_a, vi)
     END DO
     CALL sync
 

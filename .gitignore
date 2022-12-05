@@ -16,6 +16,7 @@ UFEMISM_program
 result*/
 /benchmarks/MISMIP_mod/MISMIP_mod*
 /benchmarks/ISMIP-HOM/ISMIP_HOM_*
+/benchmarks/EISMINT1/EISMINT1_*
 
 # Ignore MacOS files
 .DS_Store

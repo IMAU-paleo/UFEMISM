@@ -172,99 +172,108 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! restart file (mesh)
-    ! ===================
+    IF (par%master) THEN
 
-    short_filename = 'restart_NAM_00001.nc'
-    short_filename(9:11) = region%name
-    n = 1
+      ! restart file (mesh)
+      ! ===================
 
-    INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+      short_filename = 'restart_NAM_00001.nc'
+      short_filename(9:11) = region%name
+      n = 1
 
-    DO WHILE (ex)
+      INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
-     n=n+1
+      DO WHILE (ex)
 
-     WRITE(ns,*) n
-     ns = ADJUSTL(ns)
+       n=n+1
 
-     IF (n<10) THEN
-       short_filename = short_filename(1:12) // '0000' // TRIM(ns) // '.nc'
-     ELSEIF (n<100) THEN
-       short_filename = short_filename(1:12) // '000' // TRIM(ns) // '.nc'
-     ELSEIF (n<1000) THEN
-       short_filename = short_filename(1:12) // '00' // TRIM(ns) // '.nc'
-     ELSEIF (n<10000) THEN
-       short_filename = short_filename(1:12) // '0' // TRIM(ns) // '.nc'
-     ELSE
-       short_filename = short_filename(1:12) // TRIM(ns) // '.nc'
-     END IF
+       WRITE(ns,*) n
+       ns = ADJUSTL(ns)
 
-     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+       IF (n<10) THEN
+         short_filename = short_filename(1:12) // '0000' // TRIM(ns) // '.nc'
+       ELSEIF (n<100) THEN
+         short_filename = short_filename(1:12) // '000' // TRIM(ns) // '.nc'
+       ELSEIF (n<1000) THEN
+         short_filename = short_filename(1:12) // '00' // TRIM(ns) // '.nc'
+       ELSEIF (n<10000) THEN
+         short_filename = short_filename(1:12) // '0' // TRIM(ns) // '.nc'
+       ELSE
+         short_filename = short_filename(1:12) // TRIM(ns) // '.nc'
+       END IF
 
-    END DO
+       INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
-    DO n = 1, 256
-      region%restart_mesh%filename(n:n) = ' '
-    END DO
-    region%restart_mesh%filename = TRIM(C%output_dir)//TRIM(short_filename)
+      END DO
 
-    ! help_fields file (mesh)
-    ! =======================
+      DO n = 1, 256
+        region%restart_mesh%filename(n:n) = ' '
+      END DO
+      region%restart_mesh%filename = TRIM(C%output_dir)//TRIM(short_filename)
 
-    short_filename = 'help_fields_NAM_00001.nc'
-    short_filename(13:15) = region%name
-    n = 1
+      ! help_fields file (mesh)
+      ! =======================
 
-    INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+      short_filename = 'help_fields_NAM_00001.nc'
+      short_filename(13:15) = region%name
+      n = 1
 
-    DO WHILE (ex)
+      INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
-     n=n+1
+      DO WHILE (ex)
 
-     WRITE(ns,*) n
-     ns = ADJUSTL(ns)
+       n=n+1
 
-     IF (n<10) THEN
-       short_filename = short_filename(1:16) // '0000' // TRIM(ns) // '.nc'
-     ELSEIF (n<100) THEN
-       short_filename = short_filename(1:16) // '000' // TRIM(ns) // '.nc'
-     ELSEIF (n<1000) THEN
-       short_filename = short_filename(1:16) // '00' // TRIM(ns) // '.nc'
-     ELSEIF (n<10000) THEN
-       short_filename = short_filename(1:16) // '0' // TRIM(ns) // '.nc'
-     ELSE
-       short_filename = short_filename(1:16) // TRIM(ns) // '.nc'
-     END IF
+       WRITE(ns,*) n
+       ns = ADJUSTL(ns)
 
-     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+       IF (n<10) THEN
+         short_filename = short_filename(1:16) // '0000' // TRIM(ns) // '.nc'
+       ELSEIF (n<100) THEN
+         short_filename = short_filename(1:16) // '000' // TRIM(ns) // '.nc'
+       ELSEIF (n<1000) THEN
+         short_filename = short_filename(1:16) // '00' // TRIM(ns) // '.nc'
+       ELSEIF (n<10000) THEN
+         short_filename = short_filename(1:16) // '0' // TRIM(ns) // '.nc'
+       ELSE
+         short_filename = short_filename(1:16) // TRIM(ns) // '.nc'
+       END IF
 
-    END DO
+       INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
-    DO n = 1, 256
-      region%help_fields_mesh%filename(n:n) = ' '
-    END DO
-    region%help_fields_mesh%filename = TRIM(C%output_dir)//TRIM(short_filename)
+      END DO
 
-    ! restart file (grid)
-    ! ===================
+      DO n = 1, 256
+        region%help_fields_mesh%filename(n:n) = ' '
+      END DO
+      region%help_fields_mesh%filename = TRIM(C%output_dir)//TRIM(short_filename)
 
-    short_filename = 'restart_grid_NAM.nc'
-    short_filename(14:16) = region%name
-    DO n = 1, 256
-      region%restart_grid%filename(n:n) = ' '
-    END DO
-    region%restart_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
+      ! restart file (grid)
+      ! ===================
 
-    ! help_fields file (grid)
-    ! =======================
+      short_filename = 'restart_grid_NAM.nc'
+      short_filename(14:16) = region%name
+      DO n = 1, 256
+        region%restart_grid%filename(n:n) = ' '
+      END DO
+      region%restart_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
 
-    short_filename = 'help_fields_grid_NAM.nc'
-    short_filename(18:20) = region%name
-    DO n = 1, 256
-      region%help_fields_grid%filename(n:n) = ' '
-    END DO
-    region%help_fields_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
+      ! help_fields file (grid)
+      ! =======================
+
+      short_filename = 'help_fields_grid_NAM.nc'
+      short_filename(18:20) = region%name
+      DO n = 1, 256
+        region%help_fields_grid%filename(n:n) = ' '
+      END DO
+      region%help_fields_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
+
+    END IF ! IF (par%master) THEN
+
+    CALL MPI_BCAST( region%restart_mesh%filename    , 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( region%restart_grid%filename    , 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( region%help_fields_mesh%filename, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( region%help_fields_grid%filename, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

@@ -1861,7 +1861,8 @@ MODULE data_types_module
     TYPE(type_SELEN_regional)               :: SELEN            ! SELEN input and output data for this model region
 
     ! Output netcdf files
-    LOGICAL                                 :: output_file_exists
+    LOGICAL,  POINTER                       ::  output_file_exists
+    INTEGER                                 :: woutput_file_exists
     TYPE(type_netcdf_restart)               :: restart_mesh
     TYPE(type_netcdf_restart)               :: restart_grid
     TYPE(type_netcdf_help_fields)           :: help_fields_mesh

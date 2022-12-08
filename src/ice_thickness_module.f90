@@ -98,7 +98,7 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c,  up_c,  uo_c
     INTEGER                                            :: wu_c, wv_c, wup_c, wuo_c
     INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj, n_ocn
-    REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
+    REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor, m_ocn
     REAL(dp), DIMENSION(mesh%nV)                       :: Vi_MB
 
     ! Add routine to path
@@ -182,7 +182,7 @@ CONTAINS
       IF (ice%mask_cf_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 1) THEN
 
         ! Basal melt propotional to the floating area fraction
-        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi))  * mesh%A( vi) * dt * MAX( .1_dp, ice%float_margin_frac_a( vi))
+        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi)) * mesh%A( vi) * dt * MAX( .1_dp, ice%float_margin_frac_a( vi))
 
         ! Count number of ice-free ocean neighbours
         n_ocn = 0
@@ -198,6 +198,31 @@ CONTAINS
           ! an approximation to the fraction of the Voronoi cell perimeter in contact with ocean neighbours
           Vi_MB( vi) = Vi_MB( vi) + BMB%BMB_shelf( vi) * dt * &
                                     (ice%Hi_eff_cf_a( vi) * ice_density / seawater_density) * &
+                                    (2._dp * pi * mesh%R( vi) * REAL(n_ocn,dp) / REAL(mesh%nC( vi),dp))
+
+        ! END IF
+
+      ELSEIF (ice%mask_cf_a( vi) == 1 .AND. ice%mask_sheet_a( vi) == 1) THEN
+
+        ! Basal melt propotional to ... nothing special for now
+        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi)) * mesh%A( vi) * dt
+
+        ! Count number of ice-free ocean neighbours and get the sum of their basal melt rates
+        n_ocn = 0
+        m_ocn = 0._dp
+        DO ci = 1, mesh%nC( vi)
+          IF (ice%mask_ocean_a( ci) == 1 .AND. ice%mask_shelf_a( ci) == 0) THEN
+            n_ocn = n_ocn + 1
+            m_ocn = m_ocn + BMB%BMB_shelf( ci)
+          END IF
+        END DO
+
+        ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
+
+          ! Additional lateral mass balance proportional to the length of the ice column underwater and
+          ! an approximation to the fraction of the Voronoi cell perimeter in contact with ocean neighbours
+          Vi_MB( vi) = Vi_MB( vi) + m_ocn / REAL(n_ocn,dp) * dt * &
+                                    ( MAX( 0._dp, ice%SL_a( vi) - ice%Hb_a(vi)) * ice_density / seawater_density) * &
                                     (2._dp * pi * mesh%R( vi) * REAL(n_ocn,dp) / REAL(mesh%nC( vi),dp))
 
         ! END IF

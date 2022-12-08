@@ -796,7 +796,7 @@ CONTAINS
         has_noncf_neighbours = .FALSE.
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
+          IF (ice%mask_shelf_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
             has_noncf_neighbours = .TRUE.
           END IF
         END DO
@@ -812,7 +812,7 @@ CONTAINS
         Hi_neighbour_max = 0._dp
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
+          IF (ice%mask_shelf_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
             Hi_neighbour_max = MAX( Hi_neighbour_max, ice%Hi_a( vc))
           END IF
         END DO
@@ -836,7 +836,7 @@ CONTAINS
         ! First check if any non-calving-front neighbours actually exist
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
+          IF (ice%mask_sheet_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
             has_noncf_neighbours = .TRUE.
           END IF
         END DO
@@ -851,7 +851,7 @@ CONTAINS
         Hi_neighbour_max = 0._dp
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
+          IF (ice%mask_sheet_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
             Hi_neighbour_max = MAX( Hi_neighbour_max, ice%Hi_a( vc))
           END IF
         END DO

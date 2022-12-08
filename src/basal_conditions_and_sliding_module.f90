@@ -1161,7 +1161,7 @@ CONTAINS
 
       ! Compute the modelled till yield stress
       ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
-      !   ice%tauc_a( vi) = TAN( (pi / 180._dp) * (ice%phi_fric_a( vi) + .0_dp) ) * ice%Neff_a( vi)
+      !   ice%tauc_a( vi) = TAN( (pi / 180._dp) * MAX( C%slid_inv_phi_min, ice%phi_fric_a( vi) - .5_dp) ) * ice%Neff_a( vi)
       ! ELSE
         ice%tauc_a( vi) = TAN((pi / 180._dp) * ice%phi_fric_a( vi)) * ice%Neff_a( vi)
       ! END IF
@@ -1169,24 +1169,24 @@ CONTAINS
       ! Weights
       ! =======
 
-      ! Compute ice basal temperature relative to the pressure melting point of ice
-      ti_diff = MAX( 0._dp, ice%Ti_pmp_a( vi,C%nz) - ice%Ti_a( vi,C%nz))
-      ! Compute weight based on temperature difference
-      w_ti = 1._dp - (ti_diff**5._dp / 10._dp**5._dp)
-      ! Limit weight to [0 1] interval, just in case
-      w_ti = MAX( 0._dp, MIN( 1._dp, w_ti))
+      ! ! Compute ice basal temperature relative to the pressure melting point of ice
+      ! ti_diff = MAX( 0._dp, ice%Ti_pmp_a( vi,C%nz) - ice%Ti_a( vi,C%nz))
+      ! ! Compute weight based on temperature difference
+      ! w_ti = 1._dp - (ti_diff**5._dp / 10._dp**5._dp)
+      ! ! Limit weight to [0 1] interval, just in case
+      ! w_ti = MAX( 0._dp, MIN( 1._dp, w_ti))
 
-      ! Compute cubic-root-of-complementary-weight based on pore water pressure
-      w_pwp = (ice%Hb_a( vi) - ice%SL_a( vi) - C%Martin2011_hydro_Hb_min) / (C%Martin2011_hydro_Hb_max - C%Martin2011_hydro_Hb_min)
-      ! Compute weight, where 1: saturated and 0: dry
-      w_pwp = 1._dp - w_pwp**3._dp
-      ! Limit weight to [0 1] interval (required)
-      w_pwp = MAX( 0._dp, MIN( 1._dp, w_pwp))
+      ! ! Compute cubic-root-of-complementary-weight based on pore water pressure
+      ! w_pwp = (ice%Hb_a( vi) - ice%SL_a( vi) - C%Martin2011_hydro_Hb_min) / (C%Martin2011_hydro_Hb_max - C%Martin2011_hydro_Hb_min)
+      ! ! Compute weight, where 1: saturated and 0: dry
+      ! w_pwp = 1._dp - w_pwp**3._dp
+      ! ! Limit weight to [0 1] interval (required)
+      ! w_pwp = MAX( 0._dp, MIN( 1._dp, w_pwp))
 
-      ! Compute weight based on runoff, as an estimator for percolation
-      w_run = (2.0_dp/pi) * ATAN( (SUM(SMB%Runoff( vi,:))**2.0_dp) / (.1_dp**2.0_dp) )
-      ! Limit weight to [0 1] interval, just in case
-      w_run = MAX( 0._dp, MIN( 1._dp, w_run))
+      ! ! Compute weight based on runoff, as an estimator for percolation
+      ! w_run = (2.0_dp/pi) * ATAN( (SUM(SMB%Runoff( vi,:))**2.0_dp) / (.1_dp**2.0_dp) )
+      ! ! Limit weight to [0 1] interval, just in case
+      ! w_run = MAX( 0._dp, MIN( 1._dp, w_run))
 
       ! Compute final weight
       w_tot = 1._dp!MAX( w_ti, w_pwp, w_run)

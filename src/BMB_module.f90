@@ -2426,7 +2426,7 @@ CONTAINS
         CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, BMB%T_ocean_base( vi))
 
         ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
-        !   BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + 1._dp
+          ! BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + 3._dp
         ! END IF
 
       END IF
@@ -2812,7 +2812,7 @@ CONTAINS
            ( ice%mask_cf_a(  vi) == 0 .OR. &
              ice%mask_glf_a( vi) == 1 ) ) THEN
 
-    ! IF ( ice%mask_shelf_a( vi) == 1) THEN
+      ! IF ( ice%mask_shelf_a( vi) == 1) THEN
 
         ! Add this vertex to mask of inverted ocean temperatures
         BMB%M_ocean_base( vi) = 1
@@ -2850,9 +2850,9 @@ CONTAINS
 
         END IF
 
-      ! IF ( ice%dHi_dt_a( vi) >= .0_dp ) THEN
-      !   BMB%T_base_inv( vi) = BMB%T_base_inv( vi) + C%ocean_inv_hi_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi) )))
-      ! END IF
+        ! IF ( ice%dHi_dt_a( vi) >= .0_dp ) THEN
+        !   BMB%T_base_inv( vi) = BMB%T_base_inv( vi) + C%ocean_inv_hi_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi) )))
+        ! END IF
 
       ELSE
 

@@ -844,9 +844,20 @@ CONTAINS
     ! Allocate shared memory for timeframe-interpolated lat-month-only insolation
     CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, Q_TOA_int, wQ_TOA_int)
 
-    ! Calculate timeframe interpolation weights
-    wt0 = (forcing%ins_t1 - time_applied) / (forcing%ins_t1 - forcing%ins_t0)
-    wt1 = 1._dp - wt0
+    ! Calculate timeframe interpolation weights + safety net
+    IF (time_applied <= forcing%ins_t0) THEN
+      ! If applied time is still before the first timeframe (out of data record)
+      wt0 = 1.0_dp
+      wt1 = 0.0_dp
+    ELSEIF (time_applied >= forcing%ins_t1) THEN
+      ! If applied time is still after the second timeframe (out of data record)
+      wt0 = 0.0_dp
+      wt1 = 1.0_dp
+    ELSE
+      ! If applied time is within the timeframes (within total record)
+      wt0 = (forcing%ins_t1 - time_applied) / (forcing%ins_t1 - forcing%ins_t0)
+      wt1 = 1._dp - wt0
+    END IF
 
     ! Interpolate the two timeframes
     IF (par%master) THEN
@@ -959,8 +970,7 @@ CONTAINS
     CALL init_routine( routine_name)
 
     IF     (C%choice_insolation_forcing == 'none') THEN
-      IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: choice_insolation_forcing = "none"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('update_insolation_timeframes_from_file - ERROR: choice_insolation_forcing = "none"!')
     ELSEIF (C%choice_insolation_forcing == 'static' .OR. &
             C%choice_insolation_forcing == 'realistic') THEN
       ! Update insolation
@@ -972,25 +982,23 @@ CONTAINS
       END IF
 
       ! Find time indices to be read
-      IF (par%master) THEN
-        IF (time <= forcing%ins_time( forcing%ins_nyears)) THEN
-          ti1 = 1
-          DO WHILE (forcing%ins_time(ti1) < time)
-            ti1 = ti1 + 1
-          END DO
-          ti0 = ti1 - 1
+      IF (time <= forcing%ins_time( forcing%ins_nyears)) THEN
+        ti1 = 1
+        DO WHILE (forcing%ins_time(ti1) < time)
+          ti1 = ti1 + 1
+        END DO
+        ti0 = ti1 - 1
 
-          forcing%ins_t0 = forcing%ins_time(ti0)
-          forcing%ins_t1 = forcing%ins_time(ti1)
-        ELSE
-          CALL warning('using constant PD insolation for future projections!')
-          ti0 = forcing%ins_nyears
-          ti1 = forcing%ins_nyears
+        forcing%ins_t0 = forcing%ins_time(ti0)
+        forcing%ins_t1 = forcing%ins_time(ti1)
+      ELSE
+        ! Constant PD insolation for future projections
+        ti0 = forcing%ins_nyears
+        ti1 = forcing%ins_nyears
 
-          forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
-          forcing%ins_t1 = forcing%ins_time(ti1)
-        END IF
-      END IF ! IF (par%master) THEN
+        forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
+        forcing%ins_t1 = forcing%ins_time(ti1)
+      END IF
 
       ! Read new insolation fields from the NetCDF file
       CALL read_insolation_data_file_timeframes( forcing, ti0, ti1, forcing%ins_Q_TOA0, forcing%ins_Q_TOA1)
@@ -1046,13 +1054,23 @@ CONTAINS
       CALL inquire_insolation_data_file( forcing)
 
       ! Insolation
-      CALL allocate_shared_dp_1D( forcing%ins_nyears,   forcing%ins_time,    forcing%wins_time   )
-      CALL allocate_shared_dp_1D( forcing%ins_nlat,     forcing%ins_lat,     forcing%wins_lat    )
-      CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA0,  forcing%wins_Q_TOA0 )
-      CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA1,  forcing%wins_Q_TOA1 )
+      CALL allocate_shared_dp_1D( forcing%ins_nyears,   forcing%ins_time,   forcing%wins_time   )
+      CALL allocate_shared_dp_1D( forcing%ins_nlat,     forcing%ins_lat,    forcing%wins_lat    )
+      CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA0, forcing%wins_Q_TOA0 )
+      CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA1, forcing%wins_Q_TOA1 )
 
       ! Read time and latitude data
       CALL read_insolation_data_file_time_lat( forcing)
+
+      IF (par%master) THEN
+        IF (C%start_time_of_run < forcing%ins_time(1)) THEN
+          CALL warning('Model time starts before start of insolation record; the model will crash lol')
+        END IF
+        IF (C%end_time_of_run > forcing%ins_time(forcing%ins_nyears)) THEN
+          CALL warning('Model time will reach beyond end of insolation record; constant extrapolation will be used in that case!')
+        END IF
+      END IF
+      CALL sync
 
     ELSE
       CALL crash('unknown choice_insolation_forcing "' // TRIM( C%choice_insolation_forcing) // '"!')

@@ -88,11 +88,6 @@ CONTAINS
 
       CALL run_SMB_model_IMAUITM( mesh, ice, climate_matrix%applied, SMB, mask_noice)
 
-    ELSEIF (C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN
-      ! Run the IMAU-ITM SMB model with the old wrong refreezing parameterisation from ANICE
-
-      CALL run_SMB_model_IMAUITM_wrongrefreezing( mesh, ice, climate_matrix%applied, SMB, mask_noice)
-
     ELSEIF (C%choice_SMB_model == 'direct_global' .OR. &
             C%choice_SMB_model == 'direct_regional') THEN
       ! Use a directly prescribed global/regional SMB
@@ -143,8 +138,7 @@ CONTAINS
 
       CALL allocate_shared_dp_1D( mesh%nV, SMB%SMB_year, SMB%wSMB_year)
 
-    ELSEIF (C%choice_SMB_model == 'IMAU-ITM' .OR. &
-            C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN
+    ELSEIF (C%choice_SMB_model == 'IMAU-ITM') THEN
       ! Allocate memory and initialise some fields for the IMAU-ITM SMB model
 
       CALL initialise_SMB_model_IMAU_ITM( mesh, ice, SMB, region_name, restart)
@@ -579,120 +573,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_SMB_model_IMAUITM
-
-  SUBROUTINE run_SMB_model_IMAUITM_wrongrefreezing( mesh, ice, climate, SMB, mask_noice)
-    ! Run the IMAU-ITM SMB model. Old version, exactly as it was in ANICE2.1 (so with the "wrong" refreezing)
-
-    ! NOTE: all the SMB components and the total are in meters of water equivalent
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_mesh),                      INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                 INTENT(IN)    :: ice
-    TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-    TYPE(type_SMB_model),                 INTENT(INOUT) :: SMB
-    INTEGER,  DIMENSION(:    ),           INTENT(IN)    :: mask_noice
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'run_SMB_model_IMAUITM_wrongrefreezing'
-    INTEGER                                             :: vi, m
-    INTEGER                                             :: mprev
-    REAL(dp)                                            :: snowfrac, liquid_water, sup_imp_wat
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Make sure this routine is called correctly
-    IF (.NOT. C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN
-      CALL crash('should only be called when choice_SMB_model == "IMAU-ITM_wrongrefreezing"!')
-    END IF
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! "Background" albedo (= surface without any firn, so either ice, soil, or water)
-      SMB%AlbedoSurf( vi) = albedo_soil
-      IF ((ice%mask_ocean_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 0) .OR. mask_noice( vi) == 1) SMB%AlbedoSurf( vi) = albedo_water
-      IF (ice%mask_ice_a(    vi) == 1) SMB%AlbedoSurf( vi) = albedo_ice
-
-      DO m = 1, 12  ! Month loop
-
-        mprev = m - 1
-        IF (mprev == 0) mprev = 12
-
-        SMB%Albedo( vi,m) = MIN(albedo_snow, MAX( SMB%AlbedoSurf( vi), albedo_snow - (albedo_snow - SMB%AlbedoSurf( vi))  * &
-                             EXP(-15._dp * SMB%FirnDepth( vi,mprev)) - 0.015_dp * SMB%MeltPreviousYear( vi)))
-        IF ((ice%mask_ocean_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 0) .OR. mask_noice( vi) == 1) SMB%Albedo( vi,m) = albedo_water
-
-        ! Determine ablation as function af surface temperature and albedo/insolation
-        ! according to Bintanja et al. (2002)
-
-        SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts         * (climate%T2m( vi,m) - T0) + &
-                                       SMB%C_abl_Q          * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
-                                       SMB%C_abl_constant)  * sec_per_year / (L_fusion * 1000._dp * 12._dp))
-
-        ! Determine accumulation with snow/rain fraction from Ohmura et al. (1999),
-        ! liquid water content (rain and melt water) and snowdepth
-        snowfrac = MAX(0._dp, MIN(1._dp, 0.5_dp   * (1 - ATAN((climate%T2m( vi,m) - T0) / 3.5_dp)  / 1.25664_dp)))
-
-        SMB%Snowfall( vi,m) = climate%Precip( vi,m) *          snowfrac
-        SMB%Rainfall( vi,m) = climate%Precip( vi,m) * (1._dp - snowfrac)
-
-        ! Refreezing, according to Janssens & Huybrechts, 2000)
-        ! The refreezing (=effective retention) is the minimum value of the amount of super imposed
-        ! water and the available liquid water, with a maximum value of the total precipitation.
-        ! (see also Huybrechts & de Wolde, 1999)
-        sup_imp_wat  = 0.012_dp * MAX(0._dp, T0 - climate%T2m( vi,m))
-        liquid_water = SMB%Rainfall( vi,m) + SMB%Melt( vi,m)
-        SMB%Refreezing( vi,m) = MIN( MIN( sup_imp_wat, liquid_water), climate%Precip( vi,m))
-        IF (ice%mask_ice_a( vi) == 0 .OR. mask_noice( vi) == 1) SMB%Refreezing( vi,m) = 0._dp
-
-        ! Calculate runoff and total SMB
-        SMB%Runoff( vi,m) = SMB%Melt(     vi,m) + SMB%Rainfall(   vi,m) - SMB%Refreezing( vi,m)
-        SMB%SMB(    vi,m) = SMB%Snowfall( vi,m) + SMB%Refreezing( vi,m) - SMB%Melt(       vi,m)
-
-        ! Add this month's snow accumulation to next month's initial snow depth.
-        SMB%AddedFirn( vi,m) = SMB%Snowfall( vi,m) - SMB%Melt( vi,m)
-        SMB%FirnDepth( vi,m) = MIN(10._dp, MAX(0._dp, SMB%FirnDepth( vi,mprev) + SMB%AddedFirn( vi,m) ))
-
-      END DO ! DO m = 1, 12
-
-      ! Calculate total SMB for the entire year
-      SMB%SMB_year( vi) = SUM(SMB%SMB( vi,:))
-
-      ! Calculate total melt over this year, to be used for determining next year's albedo
-      SMB%MeltPreviousYear( vi) = SUM(SMB%Melt( vi,:))
-
-      ! Calculate yearly mean albedo (diagnostic only)
-      SMB%Albedo_year( vi) = SUM(SMB%Albedo( vi,:)) / 12._dp
-
-    END DO
-    CALL sync
-
-    ! Convert final SMB from water to ice equivalent
-    SMB%SMB(      mesh%vi1:mesh%vi2,:) = SMB%SMB(      mesh%vi1:mesh%vi1,:) * 1000._dp / ice_density
-    SMB%SMB_year( mesh%vi1:mesh%vi2  ) = SMB%SMB_year( mesh%vi1:mesh%vi2  ) * 1000._dp / ice_density
-    CALL sync
-
-    ! Safety
-    CALL check_for_NaN_dp_1D( SMB%AlbedoSurf      , 'SMB%AlbedoSurf'      )
-    CALL check_for_NaN_dp_2D( SMB%Albedo          , 'SMB%Albedo'          )
-    CALL check_for_NaN_dp_2D( SMB%Melt            , 'SMB%Melt'            )
-    CALL check_for_NaN_dp_2D( SMB%Snowfall        , 'SMB%Snowfall'        )
-    CALL check_for_NaN_dp_2D( SMB%Rainfall        , 'SMB%Rainfall'        )
-    CALL check_for_NaN_dp_2D( SMB%Refreezing      , 'SMB%Refreezing'      )
-    CALL check_for_NaN_dp_2D( SMB%Runoff          , 'SMB%Runoff'          )
-    CALL check_for_NaN_dp_2D( SMB%SMB             , 'SMB%SMB'             )
-    CALL check_for_NaN_dp_2D( SMB%AddedFirn       , 'SMB%AddedFirn'       )
-    CALL check_for_NaN_dp_2D( SMB%FirnDepth       , 'SMB%FirnDepth'       )
-    CALL check_for_NaN_dp_1D( SMB%SMB_year        , 'SMB%SMB_year'        )
-    CALL check_for_NaN_dp_1D( SMB%MeltPreviousYear, 'SMB%MeltPreviousYear')
-    CALL check_for_NaN_dp_1D( SMB%Albedo_year     , 'SMB%Albedo_year'     )
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE run_SMB_model_IMAUITM_wrongrefreezing
 
   SUBROUTINE initialise_SMB_model_IMAU_ITM( mesh, ice, SMB, region_name, restart)
     ! Allocate memory for the data fields of the SMB model.

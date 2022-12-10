@@ -374,7 +374,7 @@ CONTAINS
 
     ! Remap all other submodels
     CALL remap_ice_model(      region%mesh, region%mesh_new, region%ice, region%refgeo_PD, region%time)
-    CALL remap_climate_model(  region%mesh, region%mesh_new, region%climate_matrix, climate_matrix_global, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name, region%time)
+    CALL remap_climate_model(  region%mesh, region%mesh_new, region%ice, region%climate_matrix, climate_matrix_global, region%grid_smooth, region%mask_noice, region%name, region%time)
     CALL remap_ocean_model(    region%mesh, region%mesh_new, region%ocean_matrix)
     CALL remap_SMB_model(      region%mesh, region%mesh_new, region%SMB)
     CALL remap_BMB_model(      region%mesh, region%mesh_new, region%BMB)

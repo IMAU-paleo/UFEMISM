@@ -29,3 +29,10 @@ slurm-*.out
 /documentation/*.log
 /documentation/*.gz
 /documentation/*.toc
+
+# Ignore depend file
+src/.depend
+
+# Ignore Matlab files
+/*.m
+/*.asv

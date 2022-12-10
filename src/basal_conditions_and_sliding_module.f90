@@ -34,8 +34,8 @@ MODULE basal_conditions_and_sliding_module
   USE netcdf_basic_module,             ONLY: open_existing_netcdf_file_for_reading, close_netcdf_file
   USE netcdf_input_module,             ONLY: read_field_from_xy_file_2D
   USE netcdf_output_module,            ONLY: create_new_netcdf_file_for_writing, setup_mesh_in_netcdf_file, setup_xy_grid_in_netcdf_file, &
-                                             add_field_mesh_int_2D, add_field_grid_int_2D, write_to_field_multiple_options_mesh_dp_2D, &
-                                             write_to_field_multiple_options_grid_dp_2D
+                                             add_field_mesh_dp_2D_notime, add_field_grid_dp_2D_notime, write_to_field_multiple_options_mesh_dp_2D_notime, &
+                                             write_to_field_multiple_options_grid_dp_2D_notime
   USE mesh_operators_module,           ONLY: map_b_to_a_2D, map_a_to_b_2D
 
   IMPLICIT NONE
@@ -2231,7 +2231,7 @@ CONTAINS
 
   END SUBROUTINE trace_flowline_downstream
 
-  SUBROUTINE write_inverted_bed_roughness_to_file( mesh, grid, ice)
+  SUBROUTINE write_inverted_bed_roughness_to_file( mesh, grid, ice, region_name)
     ! Create a new NetCDF file and write the inverted bed roughness to it
 
     IMPLICIT NONE
@@ -2240,6 +2240,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_inverted_bed_roughness_to_file'
@@ -2251,8 +2252,8 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! File names
-    filename_mesh = TRIM( C%BIVgeo_filename_output)
-    filename_grid = TRIM( C%BIVgeo_filename_output)
+    filename_mesh = TRIM(C%output_dir) // TRIM( C%BIVgeo_filename_output)
+    filename_grid = TRIM(C%output_dir) // TRIM( C%BIVgeo_filename_output)
     i = INDEX( filename_grid,'.nc')
     filename_grid = filename_grid( 1:i-1) // '_grid.nc'
 
@@ -2265,13 +2266,28 @@ CONTAINS
     CALL setup_xy_grid_in_netcdf_file( filename_grid, ncid_grid, grid)
 
     ! Add variables and write data
-    IF     (C%choice_sliding_law == 'Weertman') THEN
+    IF (C%choice_sliding_law == 'Weertman' .OR. &
+        C%choice_sliding_law == 'Tsai2015' .OR. &
+        C%choice_sliding_law == 'Schoof2005') THEN
+
       ! Add variables
-      CALL add_field_mesh_int_2D( filename_mesh, ncid_mesh, 'beta_sq', long_name = 'beta_sq', units = 'Pa m^−1/3 yr^1/3')
-      CALL add_field_grid_int_2D( filename_grid, ncid_grid, 'beta_sq', long_name = 'beta_sq', units = 'Pa m^−1/3 yr^1/3')
+      CALL add_field_mesh_dp_2D_notime( filename_mesh, ncid_mesh, 'beta_sq', long_name = 'beta_sq', units = 'Pa m^−1/3 yr^1/3')
+      CALL add_field_grid_dp_2D_notime( filename_grid, ncid_grid, 'beta_sq', long_name = 'beta_sq', units = 'Pa m^−1/3 yr^1/3')
       ! Write data
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename_mesh, ncid_mesh,              'beta_sq', ice%beta_sq_a)
-      CALL write_to_field_multiple_options_grid_dp_2D( filename_grid, ncid_grid, mesh, 'ANT', 'beta_sq', ice%beta_sq_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename_mesh, ncid_mesh,                    'beta_sq', ice%beta_sq_a)
+      CALL write_to_field_multiple_options_grid_dp_2D_notime( filename_grid, ncid_grid, mesh, region_name, 'beta_sq', ice%beta_sq_a)
+
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+            C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+      ! Add variables
+      CALL add_field_mesh_dp_2D_notime( filename_mesh, ncid_mesh, 'phi_fric', long_name = 'phi_fric', units = 'degrees')
+      CALL add_field_grid_dp_2D_notime( filename_grid, ncid_grid, 'phi_fric', long_name = 'phi_fric', units = 'degrees')
+      ! Write data
+      CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename_mesh, ncid_mesh,                    'phi_fric', ice%phi_fric_a)
+      CALL write_to_field_multiple_options_grid_dp_2D_notime( filename_grid, ncid_grid, mesh, region_name, 'phi_fric', ice%phi_fric_a)
+
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF

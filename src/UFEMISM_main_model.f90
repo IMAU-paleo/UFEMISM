@@ -285,7 +285,7 @@ CONTAINS
       IF (C%choice_SMB_model == 'IMAU-ITM') THEN
         CALL write_regional_text_output( region)
       END IF
-      IF (C%do_BIVgeo) CALL write_inverted_bed_roughness_to_file( region%mesh, region%grid_output, region%ice)
+      IF (C%do_BIVgeo) CALL write_inverted_bed_roughness_to_file( region%mesh, region%grid_output, region%ice, region%name)
     END IF
 
     ! Determine total ice sheet area, volume, volume-above-flotation and GMSL contribution,

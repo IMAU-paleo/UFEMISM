@@ -3622,7 +3622,7 @@ CONTAINS
 
   END SUBROUTINE setup_mesh_in_netcdf_file
 
-  SUBROUTINE add_field_mesh_int_2D(               filename, ncid, var_name, long_name, units)
+  SUBROUTINE add_field_mesh_int_2D( filename, ncid, var_name, long_name, units)
     ! Add a 2-D variable to an existing NetCDF file with a mesh
 
     IMPLICIT NONE

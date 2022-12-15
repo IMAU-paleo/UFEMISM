@@ -1736,6 +1736,9 @@ CONTAINS
     INTEGER,  DIMENSION(:    ), POINTER                ::  mask,  mask_filled
     INTEGER                                            :: wmask, wmask_filled
 
+    ! === Initialisation ===
+    ! ======================
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1743,8 +1746,14 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nV, mask,        wmask       )
     CALL allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
 
+    ! === Inversion scaling ===
+    ! =========================
+
     ! Define the ice thickness factor for scaling of inversion
     h_scale = 1.0_dp/C%BIVgeo_Bernales_scale
+
+    ! === Inversion ===
+    ! =================
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -1823,8 +1832,8 @@ CONTAINS
     END DO
     CALL sync
 
-    ! Smoothing
-    ! =========
+    ! === Smoothing ===
+    ! =================
 
     IF (C%BIVgeo_Bernales_do_smooth) THEN
       ! Smooth the resulting field
@@ -1895,14 +1904,32 @@ CONTAINS
     END IF ! (C%BIVgeo_Bernales_do_smooth)
     CALL sync
 
-    ! Extrapolate the resulting field
-    ! ===============================
+    ! === Extrapolation ===
+    ! =====================
 
     ! Perform the extrapolation
     IF (par%master) THEN
-      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%phi_fric_a, 10000._dp, mask_filled)
+      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%phi_fric_a, 40000._dp, mask_filled)
     END IF
     CALL sync
+
+    ! === Finalisation ===
+
+    IF (C%choice_sliding_law == 'Weertman' .OR. &
+        C%choice_sliding_law == 'Tsai2015' .OR. &
+        C%choice_sliding_law == 'Schoof2005') THEN
+
+      ! Safety
+      CALL check_for_NaN_dp_1D( ice%beta_sq_a, 'beta_sq_a')
+
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+            C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+      ! Safety
+      CALL check_for_NaN_dp_1D( ice%phi_fric_a, 'phi_fric_a')
+
+    END IF
 
     ! Clean up after yourself
     CALL deallocate_shared( wmask_filled)

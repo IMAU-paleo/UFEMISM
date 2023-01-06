@@ -5,38 +5,38 @@ MODULE ice_velocity_module
 
   ! Import basic functionality
   USE mpi
-  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  USE parameters_module
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
-  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE configuration_module,                ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  USE parameters_module,                   ONLY: pi, grav, ice_density, seawater_density
+  USE parallel_module,                     ONLY: par, sync, ierr, cerr, partition_list, &
+                                                 allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                                 allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                                 allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                                 allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                                 allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                                 reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                                 reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                                 reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                                 reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                                 deallocate_shared
+  USE utilities_module,                    ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                                 check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_module,                       ONLY: debug, write_to_debug_file
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, &
-                                             type_remapping_mesh_mesh, type_SMB_model
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D
-  USE mesh_operators_module,           ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
-                                             ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
-                                             ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D, &
-                                             map_a_to_b_3D, map_b_to_c_3D, apply_Neumann_BC_direct_a_2D
-  USE utilities_module,                ONLY: vertical_integration_from_bottom_to_zeta, vertical_average, &
-                                             vertical_integrate
-  USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
+  USE data_types_module,                   ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, &
+                                                 type_remapping_mesh_mesh, type_BMB_model
+  USE mesh_mapping_module,                 ONLY: remap_field_dp_2D
+  USE mesh_operators_module,               ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
+                                                 ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
+                                                 ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D, &
+                                                 map_a_to_b_3D, map_b_to_c_3D, apply_Neumann_BC_direct_a_2D
+  USE utilities_module,                    ONLY: vertical_integration_from_bottom_to_zeta, vertical_average, &
+                                                 vertical_integrate
+  USE sparse_matrix_module,                ONLY: allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
   USE basal_conditions_and_sliding_module, ONLY: calc_basal_conditions, calc_sliding_law
-  USE netcdf_module,                   ONLY: write_CSR_matrix_to_NetCDF
-  USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
-  USE general_ice_model_data_module,   ONLY: determine_grounded_fractions
+  USE netcdf_module,                       ONLY: write_CSR_matrix_to_NetCDF
+  USE utilities_module,                    ONLY: SSA_Schoof2006_analytical_solution
+  USE general_ice_model_data_module,       ONLY: determine_grounded_fractions
 
   IMPLICIT NONE
 
@@ -138,7 +138,8 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE solve_SIA
-  SUBROUTINE solve_SSA(  mesh, ice, SMB)
+
+  SUBROUTINE solve_SSA(  mesh, ice)
     ! Calculate ice velocities using the SSA
 
     IMPLICIT NONE
@@ -146,7 +147,6 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_SSA'
@@ -156,14 +156,10 @@ CONTAINS
     INTEGER                                            :: viscosity_iteration_i
     REAL(dp)                                           :: resid_UV
     REAL(dp)                                           :: umax_analytical, tauc_analytical
-    REAL(dp), DIMENSION(:), POINTER                    :: f_grnd
-    INTEGER                                            :: wf_grnd
+    REAL(dp)                                           :: fg_exp_mod, fg_exp_mod_slop, fg_exp_mod_peak
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! Allocate GL grounded fractions
-    CALL allocate_shared_dp_1D( mesh%nV, f_grnd, wf_grnd)
 
     ! =========
     ! == Safety
@@ -201,15 +197,6 @@ CONTAINS
     ! Determine sub-mesh grounded fractions for scaling the basal friction
     CALL determine_grounded_fractions( mesh, ice)
 
-    ! Use only grounded fractions at the grounding line
-    f_grnd(mesh%vi1:mesh%vi2) = ice%f_grndx_a( mesh%vi1:mesh%vi2)
-
-    DO vi = mesh%vi1, mesh%vi2
-      IF (ice%mask_sheet_a( vi) == 1 .AND. ice%mask_gl_a( vi) == 0) THEN
-        f_grnd( vi) = 1._dp
-      END IF
-    END DO
-
     ! Find analytical solution for the SSA icestream experiment (used only to print numerical error to screen)
     CALL SSA_Schoof2006_analytical_solution( 0.001_dp, 2000._dp, ice%A_flow_vav_a( 1), 0._dp, umax_analytical, tauc_analytical)
 
@@ -223,23 +210,50 @@ CONTAINS
       CALL calc_effective_viscosity( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
 
       ! Calculate the sliding term beta
-      CALL calc_sliding_term_beta( mesh, ice, SMB, ice%u_base_SSA_b, ice%v_base_SSA_b)
+      CALL calc_sliding_term_beta( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
 
       ! Set beta_eff equal to beta; this turns the DIVA into the SSA
       ice%beta_eff_a( mesh%vi1:mesh%vi2) = ice%beta_a( mesh%vi1:mesh%vi2)
       CALL sync
 
-      ! Map beta_eff from the a-grid to the b-grid
-      CALL map_a_to_b_2D( mesh, ice%beta_eff_a, ice%beta_eff_b)
-
-      ! Map sub-grid grounded fraction from the a-grid to the b-grid
-      CALL map_a_to_b_2D( mesh, f_grnd, ice%f_grndx_b)
-
       ! Apply the sub-grid grounded fraction
-      DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**1.0_dp
+      DO vi = mesh%vi1, mesh%vi2
+
+        ! Ice shelves: strong grounded fraction influence
+        IF (ice%mask_shelf_a( vi) == 1) THEN
+
+          ! Weaken the effect of grounded fractions for steep slopes
+          fg_exp_mod_slop = MIN( 2.0_dp, MAX( 0._dp, ice%surf_slop(vi)-1e-2_dp) / (3e-2_dp-1e-2_dp))
+          fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi)-5e-7_dp) / (1e-6_dp-5e-7_dp))
+          fg_exp_mod = MAX( fg_exp_mod_slop, fg_exp_mod_peak)
+          ! Reduce friction based on grounded fractions
+          ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** (2._dp-fg_exp_mod)
+
+        ! Grounded boundaries: strong grounded fraction influence
+        ELSEIF (ice%mask_sheet_a( vi) == 1 .AND. (ice%mask_gl_a( vi) == 1 .OR. ice%mask_cf_a( vi) == 1 .OR. ice%mask_margin_a( vi) == 1)) THEN
+
+          ! Weaken the effect of grounded fractions for steep slopes
+          fg_exp_mod_slop = MIN( 2.0_dp, MAX( 0._dp, ice%surf_slop(vi)-1e-2_dp) / (3e-2_dp-1e-2_dp))
+          fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi)-5e-7_dp) / (1e-6_dp-5e-7_dp))
+          fg_exp_mod = MAX( fg_exp_mod_slop, fg_exp_mod_peak)
+          ! Reduce friction based on grounded fractions
+          ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** (2._dp-fg_exp_mod)
+
+        ! Ice sheet interior: softer grounded fraction influence
+        ELSEIF (ice%mask_sheet_a( vi) == 1) THEN
+
+          ! Weaken the effect of grounded fractions for steep slopes
+          fg_exp_mod = MIN( 1.0_dp, MAX( 0._dp, ice%surf_slop(vi)-.01_dp) / (.03_dp-.01_dp))
+          ! Reduce friction based on grounded fractions
+          ice%beta_eff_a( vi) = ice%beta_eff_a( vi)! * ice%f_grnd_a( vi) ** (1._dp-fg_exp_mod)
+
+        END IF
+
       END DO
       CALL sync
+
+      ! Map beta_eff from the a-grid to the b-grid
+      CALL map_a_to_b_2D( mesh, ice%beta_eff_a, ice%beta_eff_b)
 
       ! Store the previous solution so we can check for convergence later
       ice%u_prev_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
@@ -250,38 +264,66 @@ CONTAINS
       CALL solve_SSADIVA_linearised( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
 
       ! Apply velocity limits (both overflow and underflow) for improved stability
-      CALL apply_velocity_limits( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b)
+      CALL apply_velocity_limits( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%DIVA_vel_max)
 
       ! "relax" subsequent viscosity iterations for improved stability
-      CALL relax_DIVA_visc_iterations( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_base_SSA_b, ice%v_base_SSA_b, C%DIVA_visc_it_relax)
+      CALL relax_DIVA_visc_iterations( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%DIVA_visc_it_relax)
 
       ! Check if the viscosity iteration has converged
       CALL calc_visc_iter_UV_resid( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_base_SSA_b, ice%v_base_SSA_b, resid_UV)
-      !IF (par%master) WRITE(0,*) '    SSA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_base_SSA_b), ' - ', MAXVAL(ice%u_base_SSA_b), ']'
-
-      IF (par%master .AND. C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'SSA_icestream') &
-        WRITE(0,*) '    SSA - viscosity iteration ', viscosity_iteration_i, ': err = ', ABS(1._dp - MAXVAL(ice%u_base_SSA_b) / umax_analytical), ': resid_UV = ', resid_UV
 
       has_converged = .FALSE.
-      IF     (resid_UV < C%DIVA_visc_it_norm_dUV_tol) THEN
+      IF     (resid_UV < ice%DIVA_visc_it_norm_dUV_tol) THEN
         has_converged = .TRUE.
-      ELSEIF (viscosity_iteration_i >= C%DIVA_visc_it_nit) THEN
+      ELSEIF (viscosity_iteration_i >= ice%DIVA_visc_it_nit) THEN
         has_converged = .TRUE.
       END IF
+
+      IF (par%master) THEN
+
+        IF (C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'SSA_icestream') THEN
+
+          ! Print message
+          WRITE(0,*) '    SSA - viscosity iteration ', viscosity_iteration_i, &
+                     ': err = ', ABS(1._dp - MAXVAL(ice%u_base_SSA_b) / umax_analytical), &
+                     ': resid_UV = ', resid_UV
+
+        ELSEIF (viscosity_iteration_i >= 2) THEN
+
+          ! Give message some space
+          IF (C%do_time_display .AND. viscosity_iteration_i == 2) THEN
+            print*, ''
+            print*, ''
+          END IF
+
+          ! Print message
+          write(*,"(A,I2,A,F6.4,A,F8.1,A,F8.1,2A,F8.1,A,F8.1,A)") &
+                  '          SSA - visc_iter ', viscosity_iteration_i, &
+                  ': resid_UV = ', resid_UV, &
+                  ', u = [', MINVAL(ice%u_base_SSA_b), ' - ', MAXVAL(ice%u_base_SSA_b), ']', &
+                  ', v = [', MINVAL(ice%v_base_SSA_b), ' - ', MAXVAL(ice%v_base_SSA_b), ']'
+
+          ! Give message some space
+          IF (has_converged) THEN
+            print*, ''
+          END IF
+
+        END IF
+
+      END IF
+      CALL sync
 
     END DO viscosity_iteration
 
     ! Calculate secondary velocities (surface, base, etc.)
     CALL calc_secondary_velocities( mesh, ice)
 
-    ! Clean up after yourself
-    CALL deallocate_shared( wf_grnd)
-
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE solve_SSA
-  SUBROUTINE solve_DIVA(  mesh, ice, SMB)
+
+  SUBROUTINE solve_DIVA(  mesh, ice)
     ! Calculate ice velocities using the DIVA
 
     IMPLICIT NONE
@@ -289,7 +331,6 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_DIVA'
@@ -351,7 +392,7 @@ CONTAINS
       CALL calc_effective_viscosity( mesh, ice, ice%u_vav_b, ice%v_vav_b)
 
       ! Calculate the sliding term beta
-      CALL calc_sliding_term_beta( mesh, ice, SMB, ice%u_vav_b, ice%v_vav_b)
+      CALL calc_sliding_term_beta( mesh, ice, ice%u_vav_b, ice%v_vav_b)
 
       ! Calculate the F-integral F2
       CALL calc_F_integral( mesh, ice, n = 2._dp)
@@ -368,7 +409,7 @@ CONTAINS
       CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_b, ice%v_vav_b)
 
       ! Apply velocity limits (both overflow and underflow) for improved stability
-      CALL apply_velocity_limits( mesh, ice%u_vav_b, ice%v_vav_b)
+      CALL apply_velocity_limits( mesh, ice%u_vav_b, ice%v_vav_b, ice%DIVA_vel_max)
 
       ! "relax" subsequent viscosity iterations for improved stability
       CALL relax_DIVA_visc_iterations( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_vav_b, ice%v_vav_b, C%DIVA_visc_it_relax)
@@ -415,6 +456,8 @@ CONTAINS
     INTEGER                                            :: ti, vi, k
     REAL(dp), DIMENSION(C%nz)                          :: prof
     REAL(dp)                                           :: w_sia_u, w_sia_v
+    REAL(dp), DIMENSION(:    ), POINTER                ::  surf_slop
+    INTEGER                                            :: wsurf_slop
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -474,6 +517,10 @@ CONTAINS
 
       IF (C%do_hybrid_Bernales2017) THEN
 
+        ! Map surface curvature to the b-grid
+        CALL allocate_shared_dp_1D( mesh%nTri, surf_slop, wsurf_slop)
+        CALL map_a_to_b_2D( mesh, ice%surf_slop, surf_slop)
+
         ! Set basal velocity equal to SSA solution
         ice%u_base_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
         ice%v_base_b( mesh%ti1:mesh%ti2) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
@@ -488,14 +535,27 @@ CONTAINS
 
         DO ti = mesh%ti1, mesh%ti2
 
-          ! Compute the SIA fraction that will be added to the SSA solution
-          w_sia_u = (2.0_dp/pi) * ATAN( (ABS(ice%u_base_SSA_b( ti))**2.0_dp) / (C%vel_ref_Bernales2017**2.0_dp) )
-          w_sia_v = (2.0_dp/pi) * ATAN( (ABS(ice%v_base_SSA_b( ti))**2.0_dp) / (C%vel_ref_Bernales2017**2.0_dp) )
+          IF (ice%f_grnd_b( ti) < 1._dp) THEN
+            ! Skip if not fully grounded, since SIA has nothing to do there
+            CYCLE
+          END IF
+
+          ! ! Compute the SIA fraction that will be added to the SSA solution
+          ! w_sia_u = 1._dp - (2.0_dp/pi) * ATAN( (ABS(ice%u_base_SSA_b( ti))**2.0_dp) / (C%vel_ref_Bernales2017**2.0_dp) )
+          ! w_sia_v = 1._dp - (2.0_dp/pi) * ATAN( (ABS(ice%v_base_SSA_b( ti))**2.0_dp) / (C%vel_ref_Bernales2017**2.0_dp) )
+
+          ! ! Add a reduction of the SIA contribution in areas with steep surface slopes
+          ! w_sia_u = w_sia_u * (1._dp - MIN( 1._dp, MAX( 0._dp, surf_slop( ti)**3._dp / .01_dp**3._dp)) )
+          ! w_sia_v = w_sia_v * (1._dp - MIN( 1._dp, MAX( 0._dp, surf_slop( ti)**3._dp / .01_dp**3._dp)) )
+
+          ! Add a reduction of the SIA contribution in areas with steep surface slopes
+          w_sia_u = 1._dp - MIN( 1._dp, MAX( 0._dp, MAX( 0._dp, surf_slop( ti)-.01_dp) / (.03_dp-.01_dp)))
+          w_sia_v = 1._dp - MIN( 1._dp, MAX( 0._dp, MAX( 0._dp, surf_slop( ti)-.01_dp) / (.03_dp-.01_dp)))
 
           ! Add the SIA fractions to the 3-D velocities
           DO k = 1, C%nz
-            ice%u_3D_b( ti,k) = ice%u_3D_b( ti,k) + (1._dp - w_sia_u) * ice%u_3D_SIA_b( ti,k)
-            ice%v_3D_b( ti,k) = ice%v_3D_b( ti,k) + (1._dp - w_sia_v) * ice%v_3D_SIA_b( ti,k)
+            ice%u_3D_b( ti,k) = ice%u_3D_b( ti,k) + w_sia_u * ice%u_3D_SIA_b( ti,k)
+            ice%v_3D_b( ti,k) = ice%v_3D_b( ti,k) + w_sia_v * ice%v_3D_SIA_b( ti,k)
           END DO
 
         END DO
@@ -517,6 +577,9 @@ CONTAINS
           CALL vertical_average( prof, ice%v_vav_b( ti))
         END DO
         CALL sync
+
+        ! Clean up after yourself
+        CALL deallocate_shared( wsurf_slop)
 
       ELSE
 
@@ -600,6 +663,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_secondary_velocities
+
   SUBROUTINE calc_3D_vertical_velocities( mesh, ice)
     ! Use simple conservation of mass to calculate the vertical velocity w_3D
 
@@ -705,6 +769,200 @@ CONTAINS
 
   END SUBROUTINE calc_3D_vertical_velocities
 
+  SUBROUTINE calc_vertical_velocities_new( mesh, ice, BMB)
+    ! Calculate vertical velocity w from conservation of mass
+    !
+    ! NOTE: since the vertical velocities for floating ice depend on
+    !       the thinning rate dH/dt, this routine must be called
+    !       after having calculated dHi_dt!
+    !
+    ! Derivation:
+    !
+    ! Conservation of mass, combined with the incompressibility
+    ! condition (i.e. constant density) of ice, is described by:
+    !
+    !   du/dx + dv/dy + dw/dz = 0
+    !
+    ! Applying the zeta coordinate transformation yields:
+    !
+    !   du/dxp + dzeta/dx du/dzeta + dv/dxp + dzeta/dy dv/dzeta + dzeta/dz dw/dzeta = 0
+    !
+    ! The terms du/dxp + dv/dyp describe the two-dimensional divergence in scaled coordinates:
+    !
+    !   grad uv = du/dxp + dv/dyp
+    !
+    ! The average value over a single grid cell (Voronoi cell) of this divergence is:
+    !
+    !   grad uv = intint_Voronoi (grad uv) dA / intint dA = 1/A intint_Voronoi (grad uv) dA
+    !
+    ! By applying the divergence theorem, the surface integral over the Voronoi cell
+    ! can be transformed into a loop integral over the boundary of that Voronoi cell:
+    !
+    !   grad uv = 1/A cint (uv * n_hat) dS
+    !
+    ! Here, n_hat is the outward unit normal to the Voronoi cell boundary. Substituting
+    ! this into the equation for conservation of mass yields:
+    !
+    !   dw/dzeta = =1 / dzeta/dz [ 1/A cint (uv * n_hat) dS + dzeta/dx du/zeta + dzeta/dy dv/dzeta]
+    !
+    ! The vertical velocity w at the ice base is equal to the horizontal motion along
+    ! the sloping ice base, plus the vertical motion of the ice base itself, plus the
+    ! vertical motion of an ice particle with respect to the ice base (i.e. the basal melt rate):
+    !
+    !   w( z=b) = u( z=b) * dH_base/dx + v( z=b) * dH_base/dy + dH_base/dt + M_base
+    !
+    ! With this boundary condition, dw/dzeta can be integrated over zeta to yield w( z).
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_BMB_model),                INTENT(IN)    :: BMB
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_vertical_velocities_new'
+    INTEGER                                            :: vi,k,ks,ci,vj,aci
+    REAL(dp), DIMENSION(:    ), POINTER                :: H_base_a
+    INTEGER                                            :: wH_base_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dx_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dy_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: dH_base_dt_a
+    INTEGER                                            :: wdH_base_dx_a, wdH_base_dy_a, wdH_base_dt_a
+    REAL(dp)                                           :: dzeta
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: u_3D_c
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: v_3D_c
+    INTEGER                                            :: wu_3D_c, wv_3D_c
+    REAL(dp)                                           :: cint_un_dS, dS, u_ks, v_ks, un_dS, grad_uv_ks
+    REAL(dp), DIMENSION(2)                             :: n_hat
+    REAL(dp)                                           :: du_dzeta_ks, dv_dzeta_ks
+    REAL(dp)                                           :: dzeta_dx_ks, dzeta_dy_ks, dzeta_dz_ks
+    REAL(dp)                                           :: dw_dzeta_ks
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV  ,         H_base_a       , wH_base_a       )
+    CALL allocate_shared_dp_1D( mesh%nV  ,         dH_base_dx_a   , wdH_base_dx_a   )
+    CALL allocate_shared_dp_1D( mesh%nV  ,         dH_base_dy_a   , wdH_base_dy_a   )
+    CALL allocate_shared_dp_1D( mesh%nV  ,         dH_base_dt_a   , wdH_base_dt_a   )
+    CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , u_3D_c         , wu_3D_c         )
+    CALL allocate_shared_dp_2D( mesh%nAc , C%nz  , v_3D_c         , wv_3D_c         )
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Calculate elevation of the ice base
+      H_base_a( vi) = ice%Hs_a( vi) - ice%Hi_a( vi)
+
+      ! Calculate rate of change of ice base elevation
+      IF     (ice%mask_sheet_a( vi) == 1) THEN
+        ! For grounded ice, the ice base simply moves with the bedrock
+        dH_base_dt_a( vi) =  ice%dHb_dt_a( vi)
+      ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
+        ! For floating ice, the ice base moves according to the thinning rate times the density fraction
+        dH_base_dt_a( vi) = -ice%dHi_dt_a( vi) * ice_density / seawater_density
+      ELSE
+        ! No ice, so no vertical velocity
+        dH_base_dt_a( vi) = 0._dp
+      END IF
+
+    END DO ! DO vi = mesh%vi1, mesh%vi2
+
+    ! Calculate slopes of the ice base
+    CALL ddx_a_to_a_2D( mesh, H_base_a, dH_base_dx_a)
+    CALL ddy_a_to_a_2D( mesh, H_base_a, dH_base_dy_a)
+
+    ! Calculate u,v on the c-grid (edges)
+    CALL map_velocities_from_b_to_c_3D( mesh, ice%u_3D_b, ice%v_3D_b, u_3D_c, v_3D_c)
+
+    ! Calculate vertical velocities by solving conservation of mass in each 3-D cell
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! No ice means no velocity
+      IF (ice%mask_ice_a( vi) == 0) THEN
+        ice%w_3D_a( vi,:) = 0._dp
+        CYCLE
+      END IF
+
+      ! Calculate the vertical velocity at the ice base
+      !
+      ! NOTE: BMB is defined so that a positive number means accumulation of ice;
+      !       at the ice base, that means that a positive BMB means a positive
+      !       value of w
+
+      ice%w_3D_a( vi,C%nz) = (ice%u_3D_a( vi,C%nz) * dH_base_dx_a( vi)) + &
+                             (ice%v_3D_a( vi,C%nz) * dH_base_dy_a( vi)) + &
+                              dH_base_dt_a( vi) + BMB%BMB( vi)
+
+      ! Exception for very thin ice / ice margin: assume horizontal stretching
+      ! is negligible, so that w( z) = w( z = b)
+      IF (ice%Hi_a( vi) < 10._dp) THEN
+        ice%w_3D_a( vi,:) = ice%w_3D_a( vi,C%nz)
+        CYCLE
+      END IF ! IF (ice%mask_margin_a( vi) == 1 .OR. ice%Hi_a( vi) < 10._dp) THEN
+
+      ! Calculate vertical velocities by integrating dw/dz over the vertical column
+
+      DO ks = C%nz-1, 1, -1
+
+        dzeta = C%zeta( ks+1) - C%zeta( ks)
+
+        ! Integrate u*n_hat around the Voronoi cell boundary
+        cint_un_dS = 0._dp
+        DO ci = 1, mesh%nC( vi)
+          vj  = mesh%C(    vi,ci)
+          aci = mesh%iAci( vi,ci)
+          ! Velocities at this section of the boundary
+          u_ks = 0.5_dp * (u_3D_c( aci,ks) + u_3D_c( aci,ks+1))
+          v_ks = 0.5_dp * (v_3D_c( aci,ks) + v_3D_c( aci,ks+1))
+          ! Length of this section of the boundary
+          dS = mesh%Cw( vi,ci)
+          ! Outward normal vector to this section of the boundary
+          n_hat = mesh%V( vj,:) - mesh%V( vi,:)
+          n_hat = n_hat / NORM2( n_hat)
+          ! Line integral over this section of the boundary
+          un_dS = (u_ks * n_hat( 1) + v_ks * n_hat( 2)) * dS
+          ! Add to loop integral
+          cint_un_dS = cint_un_dS + un_dS
+        END DO
+
+        ! Calculate grad uv from the divergence theorem
+        grad_uv_ks = cint_un_dS / mesh%A( vi)
+
+        ! Calculate du/dzeta, dv/dzeta
+        du_dzeta_ks = (ice%u_3D_a( vi,ks+1) - ice%u_3D_a( vi,ks)) / dzeta
+        dv_dzeta_ks = (ice%v_3D_a( vi,ks+1) - ice%v_3D_a( vi,ks)) / dzeta
+
+        ! Calculate dzeta/dx, dzeta/dy, dzeta/dz
+        dzeta_dx_ks = 0.5_dp * (ice%dzeta_dx_a( vi,ks) + ice%dzeta_dx_a( vi,ks+1))
+        dzeta_dy_ks = 0.5_dp * (ice%dzeta_dy_a( vi,ks) + ice%dzeta_dy_a( vi,ks+1))
+        dzeta_dz_ks = 0.5_dp * (ice%dzeta_dz_a(    ks) + ice%dzeta_dz_a(    ks+1))
+
+        ! Calculate dw/dzeta
+        dw_dzeta_ks = -1._dp / dzeta_dz_ks * (grad_uv_ks + dzeta_dx_ks * du_dzeta_ks + dzeta_dy_ks * dv_dzeta_ks)
+
+        ! Calculate w
+        ice%w_3D_a( vi,ks) = ice%w_3D_a( vi,ks+1) - dzeta * dw_dzeta_ks
+
+      END DO ! DO k = C%nz-1, 1, -1
+
+    END DO ! DO vi = mesh%vi1, mesh%vi2
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wH_base_a    )
+    CALL deallocate_shared( wdH_base_dx_a)
+    CALL deallocate_shared( wdH_base_dy_a)
+    CALL deallocate_shared( wdH_base_dt_a)
+    CALL deallocate_shared( wu_3D_c      )
+    CALL deallocate_shared( wv_3D_c      )
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calc_vertical_velocities_new
+
   ! Calculate some physical terms (basal yield stress, effective viscosity, etc.)
   SUBROUTINE calculate_driving_stress( mesh, ice)
     ! Calculate the driving stress taud (in both x and y) on the b-grid
@@ -712,14 +970,14 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_mesh),      INTENT(IN)    :: mesh
+    TYPE(type_ice_model), INTENT(IN)    :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_driving_stress'
-    INTEGER                                            :: ti
-    REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx_b,  dHs_dy_b,  Hi_b
-    INTEGER                                            :: wdHs_dx_b, wdHs_dy_b, wHi_b
+    CHARACTER(LEN=256), PARAMETER       :: routine_name = 'calculate_driving_stress'
+    INTEGER                             :: ti
+    REAL(dp), DIMENSION(:    ), POINTER ::  dHs_dx_b,  dHs_dy_b,  Hi_b
+    INTEGER                             :: wdHs_dx_b, wdHs_dy_b, wHi_b
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -752,6 +1010,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calculate_driving_stress
+
   SUBROUTINE calc_vertical_shear_strain_rates( mesh, ice)
     ! Calculate vertical shear rates (Lipscomb et al. 2019, Eq. 36)
 
@@ -796,6 +1055,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_vertical_shear_strain_rates
+
   SUBROUTINE calc_effective_viscosity( mesh, ice, u_b, v_b)
     ! Calculate 3D effective viscosity following Lipscomb et al. (2019), Eq. 2
 
@@ -876,23 +1136,24 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_effective_viscosity
-  SUBROUTINE calc_sliding_term_beta( mesh, ice, SMB, u_b, v_b)
+
+  SUBROUTINE calc_sliding_term_beta( mesh, ice, u_b, v_b)
     ! Calculate the sliding term beta in the SSA/DIVA using the specified sliding law
 
     IMPLICIT NONE
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
+    TYPE(type_mesh),            INTENT(IN)    :: mesh
+    TYPE(type_ice_model),       INTENT(INOUT) :: ice
+    REAL(dp), DIMENSION(:    ), INTENT(IN)    :: u_b
+    REAL(dp), DIMENSION(:    ), INTENT(IN)    :: v_b
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_term_beta'
-    INTEGER                                            :: vi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
-    INTEGER                                            :: wu_a, wv_a
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'calc_sliding_term_beta'
+    INTEGER                                   :: vi
+    REAL(dp), DIMENSION(:    ), POINTER       ::  u_a,  v_a
+    INTEGER                                   :: wu_a, wv_a
+    REAL(dp)                                  :: beta_mod
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -906,11 +1167,21 @@ CONTAINS
     CALL map_b_to_a_2D( mesh, v_b, v_a)
 
     ! Calculate the basal friction coefficients beta on the a-grid
-    CALL calc_sliding_law( mesh, ice, SMB, u_a, v_a, ice%beta_a)
+    CALL calc_sliding_law( mesh, ice, u_a, v_a, ice%beta_a)
 
     ! Limit beta to improve stability
     DO vi = mesh%vi1, mesh%vi2
+
+      ! Prevent small values over steep slopes (e.g. mountain walls and cliffs)
+      beta_mod = MAX( (ice%surf_slop( vi)-1e-2_dp) / (3e-2_dp-1e-2_dp), &
+                      (ice%surf_peak( vi)-5e-7_dp) / (1e-6_dp-5e-7_dp) )
+
+      ! Limit beta based on slopeness
+      ice%beta_a( vi) = MAX( ice%beta_a( vi), 1000._dp * MIN( 1._dp, MAX( 0._dp, beta_mod)) )
+
+      ! Apply maximum value limit
       ice%beta_a( vi) = MIN( C%DIVA_beta_max, ice%beta_a( vi))
+
     END DO
     CALL sync
 
@@ -933,6 +1204,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_term_beta
+
   SUBROUTINE calc_F_integral( mesh, ice, n)
     ! Calculate the integral F2 in Lipscomb et al. (2019), Eq. 30
 
@@ -972,6 +1244,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_F_integral
+
   SUBROUTINE calc_beta_eff( mesh, ice)
     ! Calculate the "effective basal friction" beta_eff, used in the DIVA
 
@@ -1011,13 +1284,10 @@ CONTAINS
     ! Map beta_eff from the a-grid to the b-grid
     CALL map_a_to_b_2D( mesh, ice%beta_eff_a, ice%beta_eff_b)
 
-    ! Map sub-grid grounded fraction from the a-grid to the b-grid
-    CALL map_a_to_b_2D( mesh, ice%f_grndx_a, ice%f_grndx_b)
-
     ! Apply the sub-grid grounded fraction
     IF (C%do_GL_subgrid_friction) THEN
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**1.0_dp
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * MAX( 0._dp, MIN( 1._dp, ice%f_grnd_b( ti)))**2.0_dp
       END DO
       CALL sync
     END IF
@@ -1030,6 +1300,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_beta_eff
+
   SUBROUTINE calc_basal_stress_DIVA( mesh, ice, u_b, v_b)
     ! Calculate the basal stress resulting from sliding (friction times velocity)
 
@@ -1061,6 +1332,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_basal_stress_DIVA
+
   SUBROUTINE calc_basal_velocities_DIVA( mesh, ice)
     ! Calculate basal sliding following Goldberg (2011), Eq. 34
     ! (or it can also be obtained from L19, Eq. 32 given ub*beta=taub)
@@ -1114,6 +1386,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_basal_velocities_DIVA
+
   SUBROUTINE calc_3D_horizontal_velocities_DIVA( mesh, ice)
     ! Calculate the 3D horizontal velocity field (following Lipscomb et al., 2019, Eq. 29)
 
@@ -1232,8 +1505,8 @@ CONTAINS
     CALL ddx_a_to_b_2D( mesh, ice%N_a, dN_dx_b)
     CALL ddy_a_to_b_2D( mesh, ice%N_a, dN_dy_b)
 
-  ! Fill in the coefficients of the stiffness matrix
-  ! ================================================
+    ! Fill in the coefficients of the stiffness matrix
+    ! ================================================
 
     DO ti = mesh%ti1, mesh%ti2
 
@@ -1255,8 +1528,8 @@ CONTAINS
     END DO
     CALL sync
 
-  ! Solve the matrix equation
-  ! =========================
+    ! Solve the matrix equation
+    ! =========================
 
     CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv, uv_buv, &
       C%DIVA_choice_matrix_solver, &
@@ -1266,8 +1539,8 @@ CONTAINS
       ice%DIVA_PETSc_rtol        , &
       ice%DIVA_PETSc_abstol)
 
-  ! Get solution back on the b-grid
-  ! ================================
+    ! Get solution back on the b-grid
+    ! ================================
 
     DO ti = mesh%ti1, mesh%ti2
 
@@ -1291,6 +1564,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE solve_SSADIVA_linearised
+
   SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_free(      mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
     !
@@ -1344,6 +1618,7 @@ CONTAINS
     uv_buv( nu) = u_b( ti)
 
   END SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_free
+
   SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_free(      mesh, ice, v_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
     !
@@ -1397,6 +1672,7 @@ CONTAINS
     uv_buv( nv) = v_b( ti)
 
   END SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_free
+
   SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
     !
@@ -1445,6 +1721,7 @@ CONTAINS
     uv_buv( nu) = u_b( ti)
 
   END SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_free_sans
+
   SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, v_b, ti, N_b, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
     !
@@ -1493,6 +1770,7 @@ CONTAINS
     uv_buv( nv) = v_b( ti)
 
   END SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_free_sans
+
   SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_boundary(  mesh, ice, u_b, ti, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
 
@@ -1616,6 +1894,7 @@ CONTAINS
     END IF
 
   END SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_boundary
+
   SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_boundary(  mesh, ice, v_b, ti, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
 
@@ -1741,7 +2020,7 @@ CONTAINS
   END SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_boundary
 
   ! Some "administration" routines that help speed up and stabilise the SSA/DIVA solver
-  SUBROUTINE apply_velocity_limits( mesh, u_b, v_b)
+  SUBROUTINE apply_velocity_limits( mesh, u_b, v_b, lim)
     ! Apply a velocity limit (for stability)
 
     IMPLICIT NONE
@@ -1749,6 +2028,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b, v_b
+    REAL(dp),                            INTENT(IN)    :: lim
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_velocity_limits'
@@ -1770,9 +2050,9 @@ CONTAINS
 
     ! Scale velocities accordingly
     DO ti = mesh%ti1, mesh%ti2
-      IF (uabs_b( ti) > C%DIVA_vel_max) THEN
-        u_b( ti) = u_b( ti) * C%DIVA_vel_max / uabs_b( ti)
-        v_b( ti) = v_b( ti) * C%DIVA_vel_max / uabs_b( ti)
+      IF (uabs_b( ti) > lim) THEN
+        u_b( ti) = u_b( ti) * lim / uabs_b( ti)
+        v_b( ti) = v_b( ti) * lim / uabs_b( ti)
       END IF
     END DO
     CALL sync
@@ -1784,6 +2064,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE apply_velocity_limits
+
   SUBROUTINE relax_DIVA_visc_iterations( mesh, u_prev_b, v_prev_b, u_b, v_b, rel)
     ! Relax velocity solution with results of the previous viscosity iteration
 
@@ -1814,6 +2095,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE relax_DIVA_visc_iterations
+
   SUBROUTINE calc_visc_iter_UV_resid( mesh, u_prev_b, v_prev_b, u_b, v_b, resid_UV)
     ! Check if the viscosity iteration has converged to a stable solution
 
@@ -1916,6 +2198,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_velocities_b_to_a_2D
+
   SUBROUTINE map_velocities_b_to_a_3D( mesh, u_b, v_b, u_a, v_a)
     ! Map velocity fields from the b-grid to the a-grid
 
@@ -1951,6 +2234,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_velocities_b_to_a_3D
+
   SUBROUTINE map_velocities_b_to_c_2D( mesh, u_b, v_b, u_c, v_c)
     ! Map velocity fields from the b-grid to the c-grid
 
@@ -2004,6 +2288,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_velocities_b_to_c_2D
+
   SUBROUTINE map_velocities_b_to_c_3D( mesh, u_b, v_b, u_c, v_c)
     ! Map velocity fields from the b-grid to the c-grid
 
@@ -2325,6 +2610,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
 
   END SUBROUTINE initialise_velocity_solver
+
   SUBROUTINE initialise_matrix_conversion_lists( mesh, ice)
     ! Initialise lists for converting triangle indices to stiffness matrix rows and vice versa
 
@@ -2359,6 +2645,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_matrix_conversion_lists
+
   SUBROUTINE initialise_SSADIVA_stiffness_matrix( mesh, ice)
     ! Initialise the non-zero structure template of the SSA/DIVA stiffness matrix
 
@@ -2498,6 +2785,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 7)
 
   END SUBROUTINE initialise_SSADIVA_stiffness_matrix
+
   SUBROUTINE remap_velocities( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2531,6 +2819,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities
+
   SUBROUTINE remap_velocities_SIA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2594,6 +2883,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities_SIA
+
   SUBROUTINE remap_velocities_SSA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2613,8 +2903,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  ! == Remap SSA velocities
-  ! =======================
+    ! == Remap SSA velocities
+    ! =======================
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
@@ -2640,8 +2930,8 @@ CONTAINS
     CALL deallocate_shared( wu_a)
     CALL deallocate_shared( wv_a)
 
-  ! == Reallocate everything else
-  ! =============================
+    ! == Reallocate everything else
+    ! =============================
 
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
@@ -2711,6 +3001,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities_SSA
+
   SUBROUTINE remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2730,8 +3021,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  ! == Remap SSA velocities
-  ! =======================
+    ! == Remap SSA velocities
+    ! =======================
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
@@ -2757,8 +3048,8 @@ CONTAINS
     CALL deallocate_shared( wu_a)
     CALL deallocate_shared( wv_a)
 
-  ! == Reallocate everything else
-  ! =============================
+    ! == Reallocate everything else
+    ! =============================
 
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
@@ -2828,6 +3119,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities_SIASSA
+
   SUBROUTINE remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2847,8 +3139,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  ! == Remap SSA velocities
-  ! =======================
+    ! == Remap SSA velocities
+    ! =======================
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
@@ -2874,8 +3166,8 @@ CONTAINS
     CALL deallocate_shared( wu_a)
     CALL deallocate_shared( wv_a)
 
-  ! == Reallocate everything else
-  ! =============================
+    ! == Reallocate everything else
+    ! =============================
 
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
@@ -2945,5 +3237,102 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities_DIVA
+
+  ! == Calculate velocities on the c-grid for solving the ice thickness equation
+  ! ============================================================================
+
+  SUBROUTINE map_velocities_from_b_to_c_2D( mesh, u_b, v_b, u_c, v_c)
+    ! Calculate velocities on the c-grid for solving the ice thickness equation
+    !
+    ! Uses a different scheme then the standard mapping operator, as that one is too diffusive
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_c
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: v_c
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_from_b_to_c_2D'
+    INTEGER                                            :: aci, til, tir
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO aci = mesh%ci1, mesh%ci2
+
+      til = mesh%Aci( aci,5)
+      tir = mesh%Aci( aci,6)
+
+      IF     (til == 0 .AND. tir > 0) THEN
+        u_c( aci) = u_b( tir)
+        v_c( aci) = v_b( tir)
+      ELSEIF (tir == 0 .AND. til > 0) THEN
+        u_c( aci) = u_b( til)
+        v_c( aci) = v_b( til)
+      ELSEIF (til >  0 .AND. tir > 0) THEN
+        u_c( aci) = (u_b( til) + u_b( tir)) / 2._dp
+        v_c( aci) = (v_b( til) + v_b( tir)) / 2._dp
+      ELSE
+        CALL crash('something is seriously wrong with the Aci array of this mesh!')
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_velocities_from_b_to_c_2D
+
+  SUBROUTINE map_velocities_from_b_to_c_3D( mesh, u_b, v_b, u_c, v_c)
+    ! Calculate velocities on the c-grid for solving the ice thickness equation
+    !
+    ! Uses a different scheme then the standard mapping operator, as that one is too diffusive
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_b
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: v_b
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_c
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: v_c
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_from_b_to_c_2D'
+    INTEGER                                            :: aci, til, tir
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO aci = mesh%ci1, mesh%ci2
+
+      til = mesh%Aci( aci,5)
+      tir = mesh%Aci( aci,6)
+
+      IF     (til == 0 .AND. tir > 0) THEN
+        u_c( aci,:) = u_b( tir,:)
+        v_c( aci,:) = v_b( tir,:)
+      ELSEIF (tir == 0 .AND. til > 0) THEN
+        u_c( aci,:) = u_b( til,:)
+        v_c( aci,:) = v_b( til,:)
+      ELSEIF (til >  0 .AND. tir > 0) THEN
+        u_c( aci,:) = (u_b( til,:) + u_b( tir,:)) / 2._dp
+        v_c( aci,:) = (v_b( til,:) + v_b( tir,:)) / 2._dp
+      ELSE
+        CALL crash('something is seriously wrong with the Aci array of this mesh!')
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_velocities_from_b_to_c_3D
 
 END MODULE ice_velocity_module

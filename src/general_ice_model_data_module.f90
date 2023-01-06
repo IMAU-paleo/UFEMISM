@@ -27,9 +27,9 @@ MODULE general_ice_model_data_module
                                              is_floating, thickness_above_floatation, surface_elevation, &
                                              oblique_sg_projection, is_in_polygon
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model, type_grid
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model, type_grid, type_reference_geometry
   USE mesh_help_functions_module,      ONLY: find_triangle_area
-  USE mesh_operators_module,           ONLY: map_a_to_b_2D
+  USE mesh_operators_module,           ONLY: map_a_to_b_2D, d2dx2_a_to_a_2D, d2dxdy_a_to_a_2D, d2dy2_a_to_a_2D, ddx_a_to_a_2D, ddy_a_to_a_2D
 
   IMPLICIT NONE
 
@@ -46,15 +46,22 @@ CONTAINS
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_mesh),      INTENT(IN)    :: mesh
+    TYPE(type_ice_model), INTENT(INOUT) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_general_ice_model_data'
-    INTEGER                                            :: vi
+    CHARACTER(LEN=256), PARAMETER       :: routine_name = 'update_general_ice_model_data'
+    INTEGER                             :: vi
+    REAL(dp), DIMENSION(:), POINTER     ::  d2dx2,  d2dxdy,  d2dy2
+    INTEGER                             :: wd2dx2, wd2dxdy, wd2dy2
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Local allocations
+    CALL allocate_shared_dp_1D( mesh%nV, d2dx2,  wd2dx2)
+    CALL allocate_shared_dp_1D( mesh%nV, d2dxdy, wd2dxdy)
+    CALL allocate_shared_dp_1D( mesh%nV, d2dy2,  wd2dy2)
 
     ! Calculate surface elevation and thickness above floatation
     DO vi = mesh%vi1, mesh%vi2
@@ -68,8 +75,34 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Calculate total, negative, and positive surface curvatures
+    CALL d2dx2_a_to_a_2D(  mesh, ice%Hs_a, d2dx2 )
+    CALL d2dxdy_a_to_a_2D( mesh, ice%Hs_a, d2dxdy)
+    CALL d2dy2_a_to_a_2D(  mesh, ice%Hs_a, d2dy2 )
+
+    DO vi = mesh%vi1, mesh%vi2
+      ice%surf_curv( vi) = SQRT( d2dx2( vi)**2 + d2dy2( vi)**2 + d2dxdy( vi)**2)
+      ice%surf_peak( vi) = MAX( 0._dp, -d2dx2( vi) - d2dy2( vi) - d2dxdy( vi))
+      ice%surf_sink( vi) = MAX( 0._dp,  d2dx2( vi) + d2dy2( vi) + d2dxdy( vi))
+    END DO
+    CALL sync
+
+    ! Calculate surface slopeness (reuse curvature variables for simplicity)
+    CALL ddx_a_to_a_2D( mesh, ice%Hs_a, d2dx2) ! ddx
+    CALL ddy_a_to_a_2D( mesh, ice%Hs_a, d2dy2) ! ddy
+
+    DO vi = mesh%vi1, mesh%vi2
+      ice%surf_slop( vi) = SQRT(d2dx2( vi)**2 + d2dy2( vi)**2)
+    END DO
+    CALL sync
+
     ! Determine masks
     CALL determine_masks( mesh, ice)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd2dx2)
+    CALL deallocate_shared( wd2dxdy)
+    CALL deallocate_shared( wd2dy2)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -192,7 +225,7 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Ice
-      IF (ice%Hi_a( vi) > TINY(ice%Hi_a( 1))) THEN
+      IF (ice%Hi_a( vi) >= C%minimum_ice_thickness) THEN
         ice%mask_ice_a(  vi) = 1
       END IF
 
@@ -469,17 +502,28 @@ CONTAINS
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_mesh),      INTENT(IN)    :: mesh
+    TYPE(type_ice_model), INTENT(INOUT) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions'
+    CHARACTER(LEN=256), PARAMETER       :: routine_name = 'determine_grounded_fractions'
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL determine_grounded_fractions_a( mesh, ice)
-    CALL determine_grounded_fractions_b( mesh, ice)
+    IF (C%do_subgrid_grounded_fraction) THEN
+      ! Determine sub-grid grounded fractions on the a grid
+      ! from the high resolution PD reference topography
+      CALL determine_subgrid_grounded_fractions_a( mesh, ice)
+      ! Determine sub-grid grounded fractions on the b grid
+      CALL determine_subgrid_grounded_fractions_b( mesh, ice)
+    ELSE
+      ! Determine sub-grid grounded fractions on the a grid
+      ! from the topography on the mesh
+      CALL determine_grounded_fractions_a( mesh, ice)
+      ! Determine sub-grid grounded fractions on the b grid
+      CALL determine_grounded_fractions_b( mesh, ice)
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -575,6 +619,8 @@ CONTAINS
 
       ! Calculate the grounded fraction of this Voronoi cell
       ice%f_grnd_a( vi) = A_grnd / A_vor
+      ! Safety
+      ice%f_grnd_a( vi) = MIN( 1._dp, MAX( 0._dp, ice%f_grnd_a( vi)))
 
     END DO
     CALL sync
@@ -643,6 +689,8 @@ CONTAINS
 
       ! Calculate the grounded fraction of this Voronoi cell
       ice%f_grnd_b( ti) = A_tri_grnd / A_tri_tot
+      ! Safety
+      ice%f_grnd_b( ti) = MIN( 1._dp, MAX( 0._dp, ice%f_grnd_b( ti)))
 
     END DO
     CALL sync
@@ -756,6 +804,228 @@ CONTAINS
     CALL find_triangle_area( va, pab, pac, A_tri_flt)
 
   END SUBROUTINE determine_grounded_area_triangle_1flt_2grnd
+
+  SUBROUTINE scan_subgrid_grounded_fractions( mesh, refgeo, ice)
+    ! Scan them.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),               INTENT(IN) :: mesh
+    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
+    TYPE(type_ice_model),          INTENT(IN) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'scan_subgrid_grounded_fractions'
+    INTEGER                                   :: vi, i, j
+    INTEGER                                   :: grid_count, ii0, ii1
+    REAL(dp)                                  :: radius, rmax_ref_vs_mem
+    REAL(dp)                                  :: isc, wii0, wii1
+    REAL(dp), DIMENSION(64)                   :: hb_list
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (par%master) WRITE(0,*) '  Initialising sub-grid grounded area fractions...'
+
+    ! Initialise cumulative density function (CDF)
+    ice%bedrock_cdf = 0._dp
+
+    ! === Scan ===
+    ! ============
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Skip vertices at edge of domain
+      IF (mesh%edge_index( vi)  > 0) THEN
+        CYCLE
+      END IF
+
+      ! Initialise list of subgrid bedrock elevations
+      hb_list = 0._dp
+
+      ! Determine maximum search radius based on allocated memory (64 elements per vertex)
+      rmax_ref_vs_mem = ( refgeo%grid%x(2) - refgeo%grid%x(1) ) * sqrt(REAL(64,dp)) / 2._dp
+
+      ! Determine search radius as the min betweeen the vertex radius and the max radius
+      radius = MIN( mesh%R( vi), rmax_ref_vs_mem)
+
+      ! Initialise counter for subgrid cells
+      grid_count = 0
+
+      DO j = 1, refgeo%grid%ny
+      DO i = 1, refgeo%grid%nx
+
+        ! If grid cell is within the search radius
+        IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
+
+          ! Increase counter
+          grid_count = grid_count + 1
+
+          ! Add bedrock elevation to list of found subgrid cells
+          hb_list( grid_count) = refgeo%Hb_grid(i,j)
+
+        END IF
+
+      END DO
+      END DO
+
+      ! === Cumulative density function ===
+      ! ===================================
+
+      ! Inefficient but easy sorting of hb_list
+      DO i = 1, grid_count-1
+      DO j = i+1, grid_count
+        IF (hb_list( i) > hb_list( j)) THEN
+          hb_list( i) = hb_list( i) + hb_list( j)
+          hb_list( j) = hb_list( i) - hb_list( j)
+          hb_list( i) = hb_list( i) - hb_list( j)
+        END IF
+      END DO
+      END DO
+
+      ! Set first (0%) and last bins (100%) of the CDF to the minimum
+      ! and maximum bedrock elevations scanned, respectively
+      ice%bedrock_cdf( vi, 1) = hb_list( 1)
+      ice%bedrock_cdf( vi,11) = hb_list( grid_count)
+
+      ! Compute the bedrock elevation for each of the other CDF bins,
+      ! from the second (10%) to the tenth (90%)
+      DO i = 2, 10
+        isc  = 1._dp + (REAL( grid_count,dp) - 1._dp) * (REAL( i,dp) - 1._dp) / 10._dp
+        ii0  = FLOOR( isc)
+        ii1  = CEILING( isc)
+        wii0 = REAL( ii1,dp) - isc
+        wii1 = 1.0 - wii0
+        ice%bedrock_cdf( vi,i) = wii0 * hb_list( ii0) + wii1 * hb_list( ii1)
+      END DO
+
+    END DO
+    CALL sync
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE scan_subgrid_grounded_fractions
+
+  SUBROUTINE determine_subgrid_grounded_fractions_a( mesh, ice)
+    ! Compute them.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),               INTENT(IN) :: mesh
+    TYPE(type_ice_model),          INTENT(IN) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'determine_subgrid_grounded_fractions_a'
+    INTEGER                                   :: vi
+    REAL(dp)                                  :: hb_float
+    INTEGER                                   :: il, iu
+    REAL(dp)                                  :: wl, wu
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! === Compute ===
+    ! ===============
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Assing edge vertices a value of either 0 or 1 depending
+      ! on their land mask, then skip
+
+      IF (mesh%edge_index( vi)  > 0) THEN
+        ice%f_grnd_a( vi) = REAL(ice%mask_land_a( vi),dp)
+        CYCLE
+      END IF
+
+      ! Compute the bedrock depth at which the current ice thickness and sea level float
+      ! will make this point afloat. Account for GIA here so we don't have to do it in
+      ! the computation of the cumulative density function (CDF).
+
+      hb_float = ice%SL_a( vi) - ice%Hi_a( vi) * ice_density/seawater_density - ice%dHb_a( vi)
+
+      ! Get the fraction of bedrock within vertex radius that is below hb_float as a linear
+      ! interpolation of the numbers in the CDF.
+
+      IF     (hb_float <= MINVAL( ice%bedrock_cdf( vi,:))) THEN
+        ! All sub-grid points are above the floating bedrock elevation
+        ice%f_grnd_a( vi) = 1._dp
+      ELSEIF (hb_float >= MAXVAL( ice%bedrock_cdf( vi,:))) THEN
+        ! All sub-grid points are below the floating bedrock elevation
+        ice%f_grnd_a( vi) = 0._dp
+      ELSE
+        ! Find the 2 elements in the CDF surrounding hb_float
+        iu = 1
+        DO WHILE (ice%bedrock_cdf( vi,iu) < hb_float)
+          iu = iu+1
+        END DO
+        il = iu-1
+
+        ! Interpolate bedrock to get the weights for both CDF percentages
+        wl = (ice%bedrock_cdf( vi,iu) - hb_float) / (ice%bedrock_cdf( vi,iu)-ice%bedrock_cdf( vi,il))
+        wu = 1._dp - wl
+
+        ! Interpolate between percentages, assuming that there are 11 CDF bins between
+        ! 0% and 100%, at 10% intervals, i.e. element 1 is 0% =(1-1)*10%, element 2 is
+        ! 10% = (2-1)*10%, and so on.
+        ice%f_grnd_a( vi) = 1._dp - (10._dp*(il-1)*wl + 10._dp*(iu-1)*wu) / 100._dp
+
+        ! Safety
+        ice%f_grnd_a( vi) = MIN( 1._dp, MAX( 0._dp, ice%f_grnd_a( vi)))
+
+      END IF
+
+    END DO
+    CALL sync
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE determine_subgrid_grounded_fractions_a
+
+  SUBROUTINE determine_subgrid_grounded_fractions_b( mesh, ice)
+    ! Compute them.
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_subgrid_grounded_fractions_b'
+    INTEGER                                            :: ti
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Map sub-grid grounded fraction from the a-grid to the b-grid
+    CALL map_a_to_b_2D( mesh, ice%f_grnd_a, ice%f_grnd_b)
+
+    DO ti = mesh%ti1, mesh%ti2
+      ! Safety
+      ice%f_grnd_b( ti) = MIN( 1._dp, MAX( 0._dp, ice%f_grnd_b( ti)))
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE determine_subgrid_grounded_fractions_b
 
 ! ===== Sub-grid ice-filled fraction and effective ice thickness at the calving front =====
 ! =========================================================================================
@@ -946,6 +1216,8 @@ CONTAINS
 
       IF     (C%choice_mask_noice_ANT == 'none') THEN
         ! No no-ice mask is defined for Antarctica
+      ELSEIF (C%choice_mask_noice_ANT == 'ANT_remove_islands') THEN
+        ! Nothing to do here, as all belongs to the grid version
       ELSEIF (C%choice_mask_noice_ANT == 'MISMIP_mod') THEN
         ! Confine ice to the circular shelf around the cone-shaped island of the MISMIP_mod idealised geometry
         CALL initialise_mask_noice_MISMIP_mod( mesh, region%mask_noice)

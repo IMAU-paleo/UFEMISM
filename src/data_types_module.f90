@@ -103,15 +103,13 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_a
     REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_a
     REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: f_grndx_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: f_grndx_b
     INTEGER,  DIMENSION(:,:  ), POINTER     :: gfrac_x
     INTEGER,  DIMENSION(:,:  ), POINTER     :: gfrac_y
     REAL(dp), DIMENSION(:,:  ), POINTER     :: bedrock_cdf
     INTEGER,  DIMENSION(:    ), POINTER     :: basin_ID                    ! The drainage basin to which each grid cell belongs
     INTEGER,                    POINTER     :: nbasins                     ! Total number of basins defined for this region
     INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
-    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_glf_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b, wf_grndx_a, wf_grndx_b
+    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_glf_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b
     INTEGER :: wbasin_ID, wnbasins, wgfrac_x, wgfrac_y, wbedrock_cdf
 
     ! Ice physical properties
@@ -137,14 +135,12 @@ MODULE data_types_module
 
     ! Ice dynamics - basal roughness / friction
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a                  ! Till friction angle (degrees)
-    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_inv_a              ! Inverted till friction angle (degrees)
-    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_ave_a              ! Averaged till friction angle over a running window (degrees)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: phi_fric_window_a           ! Running window to store the history of phi_fric
+    REAL(dp), DIMENSION(:    ), POINTER     :: dphi_dt_a                   ! Rate of change of the till friction angle (degrees/yr)
+    REAL(dp), DIMENSION(:    ), POINTER     :: h_delta_prev                ! Thickness misfit during previous time step
     REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
     REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_inv_a               ! Inverted power-law friction coefficient [Pa m^−1/3 yr^1/3]
-    INTEGER :: wphi_fric_a, wphi_fric_inv_a, wphi_fric_ave_a, wphi_fric_window_a, wtauc_a, walpha_sq_a, wbeta_sq_a, wbeta_sq_inv_a
+    INTEGER :: wphi_fric_a, wdphi_dt_a, wh_delta_prev, wtauc_a, walpha_sq_a, wbeta_sq_a
 
     ! Ice dynamics - basal inversion
     REAL(dp), DIMENSION(:    ), POINTER     :: BIV_uabs_surf_target  ! Target surface velocity for the basal inversion [m/yr]
@@ -184,6 +180,10 @@ MODULE data_types_module
     REAL(dp)                                :: DIVA_SOR_omega
     REAL(dp)                                :: DIVA_PETSc_rtol
     REAL(dp)                                :: DIVA_PETSc_abstol
+    REAL(dp)                                :: DIVA_visc_it_norm_dUV_tol
+    REAL(dp)                                :: DIVA_visc_it_nit
+    REAL(dp)                                :: DIVA_visc_it_relax
+    REAL(dp)                                :: DIVA_vel_max
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
 
     ! Ice dynamics - ice thickness calculation
@@ -259,12 +259,16 @@ MODULE data_types_module
 
     ! Mesh adaptation data
     REAL(dp), DIMENSION(:    ), POINTER     :: surf_curv
+    REAL(dp), DIMENSION(:    ), POINTER     :: surf_peak
+    REAL(dp), DIMENSION(:    ), POINTER     :: surf_sink
+    REAL(dp), DIMENSION(:    ), POINTER     :: surf_slop
+    REAL(dp), DIMENSION(:    ), POINTER     :: bed_curv
     REAL(dp), DIMENSION(:    ), POINTER     :: log_velocity
-    INTEGER :: wsurf_curv, wlog_velocity
+    INTEGER :: wsurf_curv, wsurf_peak, wsurf_sink, wsurf_slop, wbed_curv, wlog_velocity
 
     ! Useful extra stuff
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_a   ! Ice thickness difference w.r.t. PD
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHs_a   ! Ice elevation difference w.r.t. PD
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_a         ! Ice thickness difference w.r.t. PD
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHs_a         ! Ice elevation difference w.r.t. PD
     INTEGER :: wdHi_a, wdHs_a
 
   END TYPE type_ice_model
@@ -1055,13 +1059,6 @@ MODULE data_types_module
     REAL(dp),                   POINTER     :: C_refr
     INTEGER :: wC_abl_constant, wC_abl_Ts, wC_abl_Q, wC_refr
 
-    ! Inverted tuning parameters (different for each region, 1-D set from config)
-    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_constant_inv
-    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_Ts_inv
-    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_Q_inv
-    REAL(dp), DIMENSION(:    ), POINTER     :: C_refr_inv
-    INTEGER :: wC_abl_constant_inv, wC_abl_Ts_inv, wC_abl_Q_inv, wC_refr_inv
-
     ! Data fields
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Q_TOA                         ! The prescribed monthly insolation, from an external forcing file
     REAL(dp), DIMENSION(:    ), POINTER     :: AlbedoSurf                    ! Surface albedo underneath the snow layer (water, rock or ice)
@@ -1157,11 +1154,10 @@ MODULE data_types_module
     ! ================================
 
     REAL(dp), DIMENSION(:    ), POINTER     :: S_ocean_base                  ! Ocean salinity at the ice shelf base
-    INTEGER,  DIMENSION(:    ), POINTER     :: M_ocean_base                  ! Mask of vertices used during melt parameterisation
-    REAL(dp), DIMENSION(:    ), POINTER     :: T_base_inv                    ! Inverted ocean temps (degrees)
-    REAL(dp), DIMENSION(:    ), POINTER     :: T_base_ave                    ! Averaged inverted ocean temps over a running window (degrees)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: T_base_window                 ! Running window to store the history of T_ocean_base
-    INTEGER :: wS_ocean_base, wM_ocean_base, wT_base_inv, wT_base_ave, wT_base_window
+    REAL(dp), DIMENSION(:    ), POINTER     :: dT_base_dt                    ! Inverted ocean temps rate of change (degrees)
+    REAL(dp), DIMENSION(:    ), POINTER     :: h_delta_prev                  ! "Previous time-step" ice thickness misfit
+    REAL(dp), DIMENSION(:    ), POINTER     :: dist_gl                       ! Distance to closest grounding line
+    INTEGER :: wS_ocean_base, wdT_base_dt, wh_delta_prev, wdist_gl
 
     ! Additional data fields
     !=======================
@@ -1381,8 +1377,8 @@ MODULE data_types_module
 
     ! Dimensions
     INTEGER,                    POINTER     :: nz, nt
-    REAL(dp), DIMENSION(:    ), POINTER     :: zeta, time
-    INTEGER :: wnz, wnt, wzeta, wtime
+    REAL(dp), DIMENSION(:    ), POINTER     :: zeta, time, elf
+    INTEGER :: wnz, wnt, wzeta, wtime, welf
 
     ! Mesh
     TYPE(type_mesh)                         :: mesh
@@ -1395,18 +1391,22 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt
     REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dt
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_ave
-    INTEGER :: wHi, wHb, wHs, wTi, wdHi_dt, wdHb_dt, wdHi_dt_ave
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: bedrock_cdf
+    INTEGER :: wHi, wHb, wHs, wTi, wdHi_dt, wdHb_dt, wdHi_dt_ave, wbedrock_cdf
 
     ! Ice velocities
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D
     INTEGER :: wu_3D, wv_3D
 
+    ! Vertically integrated ice viscosity
+    REAL(dp), DIMENSION(:    ), POINTER     :: N
+    INTEGER :: wN
+
     ! Bed roughness
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric
-    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_ave
-    INTEGER :: wbeta_sq, wphi_fric, wphi_fric_ave
+    INTEGER :: wbeta_sq, wphi_fric
 
     ! Sea level and GIA
     REAL(dp), DIMENSION(:    ), POINTER     :: SL
@@ -1416,18 +1416,13 @@ MODULE data_types_module
     ! SMB
     REAL(dp), DIMENSION(:,:  ), POINTER     :: FirnDepth
     REAL(dp), DIMENSION(:    ), POINTER     :: MeltPreviousYear
-    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_constant_inv
-    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_Ts_inv
-    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_Q_inv
-    REAL(dp), DIMENSION(:    ), POINTER     :: C_refr_inv
-    INTEGER :: wFirnDepth, wMeltPreviousYear, wC_abl_constant_inv, wC_abl_Ts_inv, wC_abl_Q_inv, wC_refr_inv
+    INTEGER :: wFirnDepth, wMeltPreviousYear
 
     ! BMB
     REAL(dp), DIMENSION(:    ), POINTER     :: BMB_shelf
     REAL(dp), DIMENSION(:    ), POINTER     :: T_ocean_base
     REAL(dp), DIMENSION(:    ), POINTER     :: S_ocean_base
-    INTEGER,  DIMENSION(:    ), POINTER     :: M_ocean_base
-    INTEGER :: wBMB_shelf, wT_ocean_base, wS_ocean_base, wM_ocean_base
+    INTEGER :: wBMB_shelf, wT_ocean_base, wS_ocean_base
 
     ! Isotopes
     REAL(dp), DIMENSION(:,:  ), POINTER     :: IsoIce
@@ -1456,20 +1451,20 @@ MODULE data_types_module
     REAL(dp), POINTER                       :: dt_crit_SSA
     REAL(dp), POINTER                       :: dt_crit_ice
     REAL(dp), POINTER                       :: dt_crit_ice_prev
-    REAL(dp), POINTER                       :: t_last_mesh,     t_next_mesh
-    REAL(dp), POINTER                       :: t_last_SIA,      t_next_SIA
-    REAL(dp), POINTER                       :: t_last_SSA,      t_next_SSA
-    REAL(dp), POINTER                       :: t_last_DIVA,     t_next_DIVA
-    REAL(dp), POINTER                       :: t_last_thermo,   t_next_thermo
-    REAL(dp), POINTER                       :: t_last_output,   t_next_output
-    REAL(dp), POINTER                       :: t_last_climate,  t_next_climate
-    REAL(dp), POINTER                       :: t_last_ocean,    t_next_ocean
-    REAL(dp), POINTER                       :: t_last_SMB,      t_next_SMB
-    REAL(dp), POINTER                       :: t_last_BMB,      t_next_BMB
-    REAL(dp), POINTER                       :: t_last_ELRA,     t_next_ELRA
-    REAL(dp), POINTER                       :: t_last_slid_inv, t_next_slid_inv
-    REAL(dp), POINTER                       :: t_last_SMB_inv,  t_next_SMB_inv
-    REAL(dp), POINTER                       :: t_last_f_grnd,   t_next_f_grnd
+    REAL(dp), POINTER                       :: t_last_mesh,      t_next_mesh
+    REAL(dp), POINTER                       :: t_last_SIA,       t_next_SIA
+    REAL(dp), POINTER                       :: t_last_SSA,       t_next_SSA
+    REAL(dp), POINTER                       :: t_last_DIVA,      t_next_DIVA
+    REAL(dp), POINTER                       :: t_last_thermo,    t_next_thermo
+    REAL(dp), POINTER                       :: t_last_output,    t_next_output
+    REAL(dp), POINTER                       :: t_last_climate,   t_next_climate
+    REAL(dp), POINTER                       :: t_last_ocean,     t_next_ocean
+    REAL(dp), POINTER                       :: t_last_SMB,       t_next_SMB
+    REAL(dp), POINTER                       :: t_last_BMB,       t_next_BMB
+    REAL(dp), POINTER                       :: t_last_ELRA,      t_next_ELRA
+    REAL(dp), POINTER                       :: t_last_slid_inv,  t_next_slid_inv
+    REAL(dp), POINTER                       :: t_last_ocean_inv, t_next_ocean_inv
+    REAL(dp), POINTER                       :: t_last_f_grnd,    t_next_f_grnd
     LOGICAL,  POINTER                       :: do_mesh
     LOGICAL,  POINTER                       :: do_SIA
     LOGICAL,  POINTER                       :: do_SSA
@@ -1482,14 +1477,14 @@ MODULE data_types_module
     LOGICAL,  POINTER                       :: do_output
     LOGICAL,  POINTER                       :: do_ELRA
     LOGICAL,  POINTER                       :: do_slid_inv
-    LOGICAL,  POINTER                       :: do_SMB_inv
+    LOGICAL,  POINTER                       :: do_ocean_inv
     LOGICAL,  POINTER                       :: do_f_grnd
     INTEGER :: wdt_crit_SIA, wdt_crit_SSA, wdt_crit_ice, wdt_crit_ice_prev
-    INTEGER :: wt_last_mesh, wt_last_SIA, wt_last_SSA, wt_last_DIVA, wt_last_thermo, wt_last_output, wt_last_climate, wt_last_ocean, wt_last_SMB, wt_last_BMB, wt_last_ELRA, wt_last_slid_inv, wt_last_SMB_inv, wt_last_f_grnd
-    INTEGER :: wt_next_mesh, wt_next_SIA, wt_next_SSA, wt_next_DIVA, wt_next_thermo, wt_next_output, wt_next_climate, wt_next_ocean, wt_next_SMB, wt_next_BMB, wt_next_ELRA, wt_next_slid_inv, wt_next_SMB_inv, wt_next_f_grnd
-    INTEGER ::     wdo_mesh,     wdo_SIA,     wdo_SSA,     wdo_DIVA,     wdo_thermo,     wdo_output,     wdo_climate,     wdo_ocean,     wdo_SMB,     wdo_BMB,     wdo_ELRA,     wdo_slid_inv,     wdo_SMB_inv,     wdo_f_grnd
+    INTEGER :: wt_last_mesh, wt_last_SIA, wt_last_SSA, wt_last_DIVA, wt_last_thermo, wt_last_output, wt_last_climate, wt_last_ocean, wt_last_SMB, wt_last_BMB, wt_last_ELRA, wt_last_slid_inv, wt_last_ocean_inv, wt_last_f_grnd
+    INTEGER :: wt_next_mesh, wt_next_SIA, wt_next_SSA, wt_next_DIVA, wt_next_thermo, wt_next_output, wt_next_climate, wt_next_ocean, wt_next_SMB, wt_next_BMB, wt_next_ELRA, wt_next_slid_inv, wt_next_ocean_inv, wt_next_f_grnd
+    INTEGER ::     wdo_mesh,     wdo_SIA,     wdo_SSA,     wdo_DIVA,     wdo_thermo,     wdo_output,     wdo_climate,     wdo_ocean,     wdo_SMB,     wdo_BMB,     wdo_ELRA,     wdo_slid_inv,     wdo_ocean_inv,     wdo_f_grnd
 
-    ! The region's ice sheet's volume and volume above flotation (in mSLE, so the second one is the ice sheets GMSL contribution)
+    ! The region's ice sheet area (in km^2), volumes (in mSLE), and sea level contribution (in mSLE)
     REAL(dp), POINTER                       :: ice_area
     REAL(dp), POINTER                       :: ice_volume
     REAL(dp), POINTER                       :: ice_volume_PD
@@ -1497,6 +1492,12 @@ MODULE data_types_module
     REAL(dp), POINTER                       :: ice_volume_above_flotation_PD
     REAL(dp), POINTER                       :: GMSL_contribution
     INTEGER :: wice_area, wice_volume, wice_volume_PD, wice_volume_above_flotation, wice_volume_above_flotation_PD, wGMSL_contribution
+
+    ! The region's temporal variation of ice area (in km^2/yr) and volumes (in mSLE/yr)
+    REAL(dp), POINTER                       :: dice_area_dt
+    REAL(dp), POINTER                       :: dice_volume_dt
+    REAL(dp), POINTER                       :: dice_volume_above_flotation_dt
+    INTEGER :: wdice_area_dt, wdice_volume_dt, wdice_volume_above_flotation_dt
 
     ! Regionally integrated mass balance components
     REAL(dp), POINTER                       :: int_T2m

@@ -76,8 +76,10 @@ MODULE configuration_module
     REAL(dp)            :: dt_SELEN_config                             = 1000._dp                         ! Time step (in years) for calling SELEN
 
     ! Inversions
-    REAL(dp)            :: dt_slid_inv_config                          = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness
-    REAL(dp)            :: dt_SMB_inv_config                           = 50._dp                           ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
+    REAL(dp)            :: dt_slid_inv_guess_config                    = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness - first guess stage
+    REAL(dp)            :: dt_slid_inv_equil_config                    = 1000._dp                         ! Time step (in years) for calling the iterative inversion of basal roughness - equilibrium stage
+    REAL(dp)            :: dt_ocean_inv_guess_config                   = 5._dp                            ! Time step (in years) for calling the iterative inversion of ocean temperatures - first guess stage
+    REAL(dp)            :: dt_ocean_inv_equil_config                   = 1000._dp                         ! Time step (in years) for calling the iterative inversion of ocean temperatures - equilibrium stage
 
     ! Output
     REAL(dp)            :: dt_output_config                            = 5000.0_dp                        ! Time step (in years) for writing output
@@ -170,6 +172,13 @@ MODULE configuration_module
 
     ! Generation
     LOGICAL             :: use_submesh_config                          = .FALSE.                          ! Generate the mesh in parallel using multi-process method
+    LOGICAL             :: use_external_mesh_config                    = .FALSE.                          ! Use a mesh from an external file
+
+    ! External file containing a mesh
+    CHARACTER(LEN=256)  :: filename_external_NAM_config                = 'filename_external_mesh_NAM_placeholder'
+    CHARACTER(LEN=256)  :: filename_external_EAS_config                = 'filename_external_mesh_EAS_placeholder'
+    CHARACTER(LEN=256)  :: filename_external_GRL_config                = 'filename_external_mesh_GRL_placeholder'
+    CHARACTER(LEN=256)  :: filename_external_ANT_config                = 'filename_external_mesh_ANT_placeholder'
 
     ! Parameters
     INTEGER             :: nconmax_config                              = 32                               ! Maximum number of vertex connections
@@ -368,6 +377,8 @@ MODULE configuration_module
     REAL(dp)            :: vel_ref_Bernales2017_config                 = 30._dp                           ! Reference "onset" velocity for an ice stream (point of half SIA reduction)
     LOGICAL             :: include_SSADIVA_crossterms_config           = .TRUE.                           ! Whether or not to include the "cross-terms" of the SSA/DIVA
     LOGICAL             :: do_GL_subgrid_friction_config               = .TRUE.                           ! Whether or not to scale basal friction with the sub-grid grounded fraction (needed to get proper GL migration; only turn this off for showing the effect on the MISMIP_mod results!)
+    LOGICAL             :: do_subgrid_grounded_fraction_config         = .TRUE.                           ! Whether or not to compute a sub-grid grounded fraction from the high resolution PD reference topography + a cumulative density function
+    LOGICAL             :: use_external_bedrock_cdf_config             = .FALSE.                          ! Whether or not to read the sub-grid grounded fraction from an external file
 
     ! Some parameters for numerically solving the SSA/DIVA
     REAL(dp)            :: DIVA_visc_it_norm_dUV_tol_config            = 1E-2_dp                          ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
@@ -473,7 +484,6 @@ MODULE configuration_module
     REAL(dp)            :: Martin2011till_phi_min_config               = 5._dp                            ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
     REAL(dp)            :: Martin2011till_phi_max_config               = 20._dp                           ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
     CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
-    CHARACTER(LEN=256)  :: basal_roughness_restart_type_config         = 'average'                        ! Values from previous run: "last" (last output) or "average" (running average)
     LOGICAL             :: do_basal_roughness_remap_adjustment_config  = .TRUE.                           ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
 
     ! Bed roughness inversion
@@ -481,18 +491,16 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
     REAL(dp)            :: slid_inv_t_start_config                     = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
     REAL(dp)            :: slid_inv_t_end_config                       = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
+    REAL(dp)            :: slid_inv_t_change_config                    = +9.9E9_dp                        ! Model time at which the inversion changes from the first-guess to the equilibrium stage
+    REAL(dp)            :: slid_inv_t_scale_exp_config                 = 1._dp                            ! Exponent for the time scale used to shift from the first-guess to the equilibrium time steps
     REAL(dp)            :: slid_inv_phi_min_config                     = 2._dp                            ! Minimum value of phi_fric allowed during inversion
     REAL(dp)            :: slid_inv_phi_max_config                     = 30._dp                           ! Maximum value of phi_fric allowed during inversion
     CHARACTER(LEN=256)  :: slid_inv_filename_output_config             = 'bed_roughness_inv.nc'           ! NetCDF file where the final inverted basal roughness will be saved
-    INTEGER             :: slid_inv_window_size_config                 = 1000                             ! Number of previous time steps used to compute a running average of inverted values
 
-    LOGICAL             :: do_slid_inv_Bernales2017_smooth_config      = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
-    LOGICAL             :: do_slid_inv_Bernales2017_extrap_config      = .FALSE.                          ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
-    LOGICAL             :: do_slid_inv_Bernales2017_decay_config       = .FALSE.                          ! If set to TRUE, vary the inversion adjustment over time through the scaling factor
-    REAL(dp)            :: slid_inv_Bernales2017_scale_start_config    = 10000._dp                        ! Initial scaling factor for inversion procedure [m]
-    REAL(dp)            :: slid_inv_Bernales2017_scale_end_config      = 20000._dp                        ! Final   scaling factor for inversion procedure [m]
-    REAL(dp)            :: slid_inv_Bernales2017_smooth_r_config       = 10000._dp                        ! Smoothing radius for inversion procedure [m]
-    REAL(dp)            :: slid_inv_Bernales2017_smooth_w_config       = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
+    REAL(dp)            :: slid_inv_Bernales2017_scale_start_config    = .2_dp                            ! Initial scaling factor for inversion procedure [degrees]
+    REAL(dp)            :: slid_inv_Bernales2017_scale_end_config      = .2_dp                            ! Final   scaling factor for inversion procedure [degrees]
+    REAL(dp)            :: slid_inv_Bernales2017_smooth_r_config       = 40000._dp                        ! Smoothing radius for inversion procedure [m]
+    REAL(dp)            :: slid_inv_Bernales2017_smooth_w_config       = .1_dp                            ! Weight given to the smoothed roughness (1 = full smoothing applied)
     REAL(dp)            :: slid_inv_Bernales2017_tol_diff_config       = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion
     REAL(dp)            :: slid_inv_Bernales2017_tol_frac_config       = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
 
@@ -649,19 +657,6 @@ MODULE configuration_module
     REAL(dp)            :: SMB_IMAUITM_C_refr_GRL_config               = 0.051_dp
     REAL(dp)            :: SMB_IMAUITM_C_refr_ANT_config               = 0.051_dp
 
-    ! IMAU-ITM SMB model inversion
-    LOGICAL             :: do_SMB_IMAUITM_inversion_config             = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
-    CHARACTER(LEN=256)  :: SMB_IMAUITM_inv_choice_init_C_config        = 'uniform'                        ! How to initialise the C parameters in the IMAU-ITM SMB inversion: "uniform", "restart"
-    REAL(dp)            :: SMB_IMAUITM_inv_scale_config                = 10000._dp                        ! Scaling constant for inversion procedure [m]
-    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_constant_min_config   = -50._dp                          ! Minimum value of C_abl_constant allowed during inversion
-    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_constant_max_config   = 0._dp                            ! Maximum value of C_abl_constant allowed during inversion
-    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_Ts_min_config         = 0._dp                            ! Minimum value of C_abl_Ts       allowed during inversion
-    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_Ts_max_config         = 50._dp                           ! Maximum value of C_abl_Ts       allowed during inversion
-    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_Q_min_config          = 0._dp                            ! Minimum value of C_abl_Q        allowed during inversion
-    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_Q_max_config          = 1.0_dp                           ! Maximum value of C_abl_Q        allowed during inversion
-    REAL(dp)            :: SMB_IMAUITM_inv_C_refr_min_config           = 0._dp                            ! Minimum value of C_refr         allowed during inversion
-    REAL(dp)            :: SMB_IMAUITM_inv_C_refr_max_config           = 0.1_dp                           ! Maximum value of C_refr         allowed during inversion
-
   ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
   ! ==============================================================
 
@@ -688,12 +683,12 @@ MODULE configuration_module
     REAL(dp)            :: BMB_min_config                              = -200._dp                         ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
     LOGICAL             :: do_ocean_inv_config                         = .FALSE.                          ! Whether or not to invert for ocean temperatures in the Bernales202X shelf BMB model
-    LOGICAL             :: do_ocean_inv_smooth_config                  = .FALSE.                          ! If set to TRUE, inverted ocean temps are smoothed
-    LOGICAL             :: do_ocean_inv_decay_config                   = .FALSE.                          ! Whether or not to decrease the inversion adjustment over time
     REAL(dp)            :: ocean_inv_t_start_config                    = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
     REAL(dp)            :: ocean_inv_t_end_config                      = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
-    REAL(dp)            :: ocean_inv_hi_scale_config                   = 100._dp                          ! Scaling constant for inversion procedure [m]
-    INTEGER             :: ocean_inv_window_size_config                = 200                              ! Number of previous time steps used to compute a running average of inverted T_ocean_base
+    REAL(dp)            :: ocean_inv_t_change_config                   = +9.9E9_dp                        ! Model time at which the inversion changes from the first-guess to the equilibrium stage
+    REAL(dp)            :: ocean_inv_t_scale_exp_config                = 1._dp                            ! Exponent for the time scale used to shift from the first-guess to the equilibrium time steps
+    REAL(dp)            :: ocean_inv_scale_start_config                = .1_dp                            ! Initial scaling factor for inversion procedure [K]
+    REAL(dp)            :: ocean_inv_scale_end_config                  = .1_dp                            ! Final   scaling factor for inversion procedure [K]
     REAL(dp)            :: ocean_inv_smooth_r_config                   = 10000._dp                        ! Smoothing radius for inversion procedure [m]
     REAL(dp)            :: ocean_inv_smooth_w_config                   = .01_dp                           ! Weight given to the smoothed ocean temps (1 = full smoothing applied)
 
@@ -919,8 +914,10 @@ MODULE configuration_module
     REAL(dp)                            :: dt_mesh_min
     REAL(dp)                            :: dt_bedrock_ELRA
     REAL(dp)                            :: dt_SELEN
-    REAL(dp)                            :: dt_slid_inv
-    REAL(dp)                            :: dt_SMB_inv
+    REAL(dp)                            :: dt_slid_inv_guess
+    REAL(dp)                            :: dt_slid_inv_equil
+    REAL(dp)                            :: dt_ocean_inv_guess
+    REAL(dp)                            :: dt_ocean_inv_equil
 
     ! Which ice sheets do we simulate?
     ! ================================
@@ -1002,6 +999,11 @@ MODULE configuration_module
     ! ==========================
 
     LOGICAL                             :: use_submesh
+    LOGICAL                             :: use_external_mesh
+    CHARACTER(LEN=256)                  :: filename_external_NAM
+    CHARACTER(LEN=256)                  :: filename_external_EAS
+    CHARACTER(LEN=256)                  :: filename_external_GRL
+    CHARACTER(LEN=256)                  :: filename_external_ANT
     INTEGER                             :: nconmax
     REAL(dp)                            :: alpha_min
     REAL(dp)                            :: dz_max_ice
@@ -1165,6 +1167,8 @@ MODULE configuration_module
     REAL(dp)                            :: vel_ref_Bernales2017
     LOGICAL                             :: include_SSADIVA_crossterms
     LOGICAL                             :: do_GL_subgrid_friction
+    LOGICAL                             :: do_subgrid_grounded_fraction
+    LOGICAL                             :: use_external_bedrock_cdf
 
     ! Some parameters for numerically solving the SSA/DIVA
     REAL(dp)                            :: DIVA_visc_it_norm_dUV_tol
@@ -1268,7 +1272,6 @@ MODULE configuration_module
     REAL(dp)                            :: Martin2011till_phi_min
     REAL(dp)                            :: Martin2011till_phi_max
     CHARACTER(LEN=256)                  :: basal_roughness_filename
-    CHARACTER(LEN=256)                  :: basal_roughness_restart_type
     LOGICAL                             :: do_basal_roughness_remap_adjustment
 
     ! Bed roughness inversion
@@ -1276,14 +1279,12 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_slid_inv_method
     REAL(dp)                            :: slid_inv_t_start
     REAL(dp)                            :: slid_inv_t_end
+    REAL(dp)                            :: slid_inv_t_change
+    REAL(dp)                            :: slid_inv_t_scale_exp
     REAL(dp)                            :: slid_inv_phi_min
     REAL(dp)                            :: slid_inv_phi_max
     CHARACTER(LEN=256)                  :: slid_inv_filename_output
-    INTEGER                             :: slid_inv_window_size
 
-    LOGICAL                             :: do_slid_inv_Bernales2017_smooth
-    LOGICAL                             :: do_slid_inv_Bernales2017_extrap
-    LOGICAL                             :: do_slid_inv_Bernales2017_decay
     REAL(dp)                            :: slid_inv_Bernales2017_scale_start
     REAL(dp)                            :: slid_inv_Bernales2017_scale_end
     REAL(dp)                            :: slid_inv_Bernales2017_smooth_r
@@ -1444,19 +1445,6 @@ MODULE configuration_module
     REAL(dp)                            :: SMB_IMAUITM_C_refr_GRL
     REAL(dp)                            :: SMB_IMAUITM_C_refr_ANT
 
-    ! IMAU-ITM SMB model inversion
-    LOGICAL                             :: do_SMB_IMAUITM_inversion
-    CHARACTER(LEN=256)                  :: SMB_IMAUITM_inv_choice_init_C
-    REAL(dp)                            :: SMB_IMAUITM_inv_scale
-    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_constant_min
-    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_constant_max
-    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_Ts_min
-    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_Ts_max
-    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_Q_min
-    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_Q_max
-    REAL(dp)                            :: SMB_IMAUITM_inv_C_refr_min
-    REAL(dp)                            :: SMB_IMAUITM_inv_C_refr_max
-
     ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! ==============================================================
 
@@ -1483,12 +1471,12 @@ MODULE configuration_module
     REAL(dp)                            :: BMB_min
 
     LOGICAL                             :: do_ocean_inv
-    LOGICAL                             :: do_ocean_inv_smooth
-    LOGICAL                             :: do_ocean_inv_decay
     REAL(dp)                            :: ocean_inv_t_start
     REAL(dp)                            :: ocean_inv_t_end
-    REAL(dp)                            :: ocean_inv_hi_scale
-    INTEGER                             :: ocean_inv_window_size
+    REAL(dp)                            :: ocean_inv_t_change
+    REAL(dp)                            :: ocean_inv_t_scale_exp
+    REAL(dp)                            :: ocean_inv_scale_start
+    REAL(dp)                            :: ocean_inv_scale_end
     REAL(dp)                            :: ocean_inv_smooth_r
     REAL(dp)                            :: ocean_inv_smooth_w
 
@@ -1976,8 +1964,10 @@ CONTAINS
                      dt_mesh_min_config,                              &
                      dt_bedrock_ELRA_config,                          &
                      dt_SELEN_config,                                 &
-                     dt_slid_inv_config,                              &
-                     dt_SMB_inv_config,                               &
+                     dt_slid_inv_guess_config,                        &
+                     dt_slid_inv_equil_config,                        &
+                     dt_ocean_inv_guess_config,                       &
+                     dt_ocean_inv_equil_config,                       &
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
@@ -2101,6 +2091,8 @@ CONTAINS
                      vel_ref_Bernales2017_config,                     &
                      include_SSADIVA_crossterms_config,               &
                      do_GL_subgrid_friction_config,                   &
+                     do_subgrid_grounded_fraction_config,             &
+                     use_external_bedrock_cdf_config,                 &
                      DIVA_visc_it_norm_dUV_tol_config,                &
                      DIVA_visc_it_nit_config,                         &
                      DIVA_visc_it_relax_config,                       &
@@ -2179,19 +2171,16 @@ CONTAINS
                      Martin2011till_phi_min_config,                   &
                      Martin2011till_phi_max_config,                   &
                      basal_roughness_filename_config,                 &
-                     basal_roughness_restart_type_config,             &
                      do_basal_roughness_remap_adjustment_config,      &
                      do_slid_inv_config,                              &
                      choice_slid_inv_method_config,                   &
                      slid_inv_t_start_config,                         &
                      slid_inv_t_end_config,                           &
+                     slid_inv_t_change_config,                        &
+                     slid_inv_t_scale_exp_config,                     &
                      slid_inv_phi_min_config,                         &
                      slid_inv_phi_max_config,                         &
                      slid_inv_filename_output_config,                 &
-                     slid_inv_window_size_config,                     &
-                     do_slid_inv_Bernales2017_smooth_config,          &
-                     do_slid_inv_Bernales2017_extrap_config,          &
-                     do_slid_inv_Bernales2017_decay_config,           &
                      slid_inv_Bernales2017_scale_start_config,        &
                      slid_inv_Bernales2017_scale_end_config,          &
                      slid_inv_Bernales2017_smooth_r_config,           &
@@ -2214,6 +2203,11 @@ CONTAINS
                      continental_shelf_min_height_config,             &
                      minimum_ice_thickness_config,                    &
                      use_submesh_config,                              &
+                     use_external_mesh_config,                        &
+                     filename_external_NAM_config,                    &
+                     filename_external_EAS_config,                    &
+                     filename_external_GRL_config,                    &
+                     filename_external_ANT_config,                    &
                      nconmax_config,                                  &
                      alpha_min_config,                                &
                      dz_max_ice_config,                               &
@@ -2335,17 +2329,6 @@ CONTAINS
                      SMB_IMAUITM_C_refr_EAS_config,                   &
                      SMB_IMAUITM_C_refr_GRL_config,                   &
                      SMB_IMAUITM_C_refr_ANT_config,                   &
-                     do_SMB_IMAUITM_inversion_config,                 &
-                     SMB_IMAUITM_inv_choice_init_C_config,            &
-                     SMB_IMAUITM_inv_scale_config,                    &
-                     SMB_IMAUITM_inv_C_abl_constant_min_config,       &
-                     SMB_IMAUITM_inv_C_abl_constant_max_config,       &
-                     SMB_IMAUITM_inv_C_abl_Ts_min_config,             &
-                     SMB_IMAUITM_inv_C_abl_Ts_max_config,             &
-                     SMB_IMAUITM_inv_C_abl_Q_min_config,              &
-                     SMB_IMAUITM_inv_C_abl_Q_max_config,              &
-                     SMB_IMAUITM_inv_C_refr_min_config,               &
-                     SMB_IMAUITM_inv_C_refr_max_config,               &
                      ISMIP_forcing_filename_baseline_config,          &
                      ISMIP_forcing_foldername_aSMB_config,            &
                      ISMIP_forcing_basefilename_aSMB_config,          &
@@ -2364,12 +2347,12 @@ CONTAINS
                      BMB_max_config,                                  &
                      BMB_min_config,                                  &
                      do_ocean_inv_config,                             &
-                     do_ocean_inv_smooth_config,                      &
-                     do_ocean_inv_decay_config,                       &
                      ocean_inv_t_start_config,                        &
                      ocean_inv_t_end_config,                          &
-                     ocean_inv_hi_scale_config,                       &
-                     ocean_inv_window_size_config,                    &
+                     ocean_inv_t_change_config,                       &
+                     ocean_inv_t_scale_exp_config,                    &
+                     ocean_inv_scale_start_config,                    &
+                     ocean_inv_scale_end_config,                      &
                      ocean_inv_smooth_r_config,                       &
                      ocean_inv_smooth_w_config,                       &
                      BMB_inv_use_restart_field_config,                &
@@ -2525,17 +2508,17 @@ CONTAINS
 
     IF (config_filename == '') RETURN
 
-    ! ! Write the CONFIG namelist to a temporary file
-    ! namelist_filename = 'config_namelist_temp.txt'
-    ! OPEN(  UNIT = namelist_unit, FILE = TRIM( namelist_filename))
-    ! WRITE( UNIT = namelist_unit, NML  = CONFIG)
-    ! CLOSE( UNIT = namelist_unit)
+    ! Write the CONFIG namelist to a temporary file
+    namelist_filename = 'config_namelist_temp.txt'
+    OPEN(  UNIT = namelist_unit, FILE = TRIM( namelist_filename))
+    WRITE( UNIT = namelist_unit, NML  = CONFIG)
+    CLOSE( UNIT = namelist_unit)
 
-    ! ! Check the config file for validity
-    ! CALL check_config_file_validity( config_filename, namelist_filename)
+    ! Check the config file for validity
+    CALL check_config_file_validity( config_filename, namelist_filename)
 
-    ! ! Delete the temporary CONFIG namelist file
-    ! CALL system('rm -f ' // TRIM( namelist_filename))
+    ! Delete the temporary CONFIG namelist file
+    CALL system('rm -f ' // TRIM( namelist_filename))
 
     ! Open the config file
     OPEN(  UNIT = config_unit, FILE = TRIM( config_filename), STATUS = 'OLD', ACTION = 'READ', IOSTAT = ios)
@@ -2722,8 +2705,10 @@ CONTAINS
     C%dt_mesh_min                              = dt_mesh_min_config
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
     C%dt_SELEN                                 = dt_SELEN_config
-    C%dt_slid_inv                              = dt_slid_inv_config
-    C%dt_SMB_inv                               = dt_SMB_inv_config
+    C%dt_slid_inv_guess                        = dt_slid_inv_guess_config
+    C%dt_slid_inv_equil                        = dt_slid_inv_equil_config
+    C%dt_ocean_inv_guess                       = dt_ocean_inv_guess_config
+    C%dt_ocean_inv_equil                       = dt_ocean_inv_equil_config
 
     ! Which ice sheets do we simulate?
     ! ================================
@@ -2805,6 +2790,11 @@ CONTAINS
     ! ==========================
 
     C%use_submesh                              = use_submesh_config
+    C%use_external_mesh                        = use_external_mesh_config
+    C%filename_external_NAM                    = filename_external_NAM_config
+    C%filename_external_EAS                    = filename_external_EAS_config
+    C%filename_external_GRL                    = filename_external_GRL_config
+    C%filename_external_ANT                    = filename_external_ANT_config
     C%nconmax                                  = nconmax_config
     C%alpha_min                                = alpha_min_config
     C%dz_max_ice                               = dz_max_ice_config
@@ -2969,6 +2959,8 @@ CONTAINS
     C%vel_ref_Bernales2017                     = vel_ref_Bernales2017_config
     C%include_SSADIVA_crossterms               = include_SSADIVA_crossterms_config
     C%do_GL_subgrid_friction                   = do_GL_subgrid_friction_config
+    C%do_subgrid_grounded_fraction             = do_subgrid_grounded_fraction_config
+    C%use_external_bedrock_cdf                 = use_external_bedrock_cdf_config
 
     ! Some parameters for numerically solving the SSA/DIVA
     C%DIVA_visc_it_norm_dUV_tol                = DIVA_visc_it_norm_dUV_tol_config
@@ -3072,7 +3064,6 @@ CONTAINS
     C%Martin2011till_phi_min                   = Martin2011till_phi_min_config
     C%Martin2011till_phi_max                   = Martin2011till_phi_max_config
     C%basal_roughness_filename                 = basal_roughness_filename_config
-    C%basal_roughness_restart_type             = basal_roughness_restart_type_config
     C%do_basal_roughness_remap_adjustment      = do_basal_roughness_remap_adjustment_config
 
     ! Bed roughness inversion
@@ -3080,13 +3071,11 @@ CONTAINS
     C%choice_slid_inv_method                   = choice_slid_inv_method_config
     C%slid_inv_t_start                         = slid_inv_t_start_config
     C%slid_inv_t_end                           = slid_inv_t_end_config
+    C%slid_inv_t_change                        = slid_inv_t_change_config
+    C%slid_inv_t_scale_exp                     = slid_inv_t_scale_exp_config
     C%slid_inv_phi_min                         = slid_inv_phi_min_config
     C%slid_inv_phi_max                         = slid_inv_phi_max_config
     C%slid_inv_filename_output                 = slid_inv_filename_output_config
-    C%slid_inv_window_size                     = slid_inv_window_size_config
-    C%do_slid_inv_Bernales2017_smooth          = do_slid_inv_Bernales2017_smooth_config
-    C%do_slid_inv_Bernales2017_extrap          = do_slid_inv_Bernales2017_extrap_config
-    C%do_slid_inv_Bernales2017_decay           = do_slid_inv_Bernales2017_decay_config
     C%slid_inv_Bernales2017_scale_start        = slid_inv_Bernales2017_scale_start_config
     C%slid_inv_Bernales2017_scale_end          = slid_inv_Bernales2017_scale_end_config
     C%slid_inv_Bernales2017_smooth_r           = slid_inv_Bernales2017_smooth_r_config
@@ -3244,19 +3233,6 @@ CONTAINS
     C%SMB_IMAUITM_C_refr_GRL                   = SMB_IMAUITM_C_refr_GRL_config
     C%SMB_IMAUITM_C_refr_ANT                   = SMB_IMAUITM_C_refr_ANT_config
 
-    ! IMAU-ITM SMB model inversion
-    C%do_SMB_IMAUITM_inversion                 = do_SMB_IMAUITM_inversion_config
-    C%SMB_IMAUITM_inv_choice_init_C            = SMB_IMAUITM_inv_choice_init_C_config
-    C%SMB_IMAUITM_inv_scale                    = SMB_IMAUITM_inv_scale_config
-    C%SMB_IMAUITM_inv_C_abl_constant_min       = SMB_IMAUITM_inv_C_abl_constant_min_config
-    C%SMB_IMAUITM_inv_C_abl_constant_max       = SMB_IMAUITM_inv_C_abl_constant_max_config
-    C%SMB_IMAUITM_inv_C_abl_Ts_min             = SMB_IMAUITM_inv_C_abl_Ts_min_config
-    C%SMB_IMAUITM_inv_C_abl_Ts_max             = SMB_IMAUITM_inv_C_abl_Ts_max_config
-    C%SMB_IMAUITM_inv_C_abl_Q_min              = SMB_IMAUITM_inv_C_abl_Q_min_config
-    C%SMB_IMAUITM_inv_C_abl_Q_max              = SMB_IMAUITM_inv_C_abl_Q_max_config
-    C%SMB_IMAUITM_inv_C_refr_min               = SMB_IMAUITM_inv_C_refr_min_config
-    C%SMB_IMAUITM_inv_C_refr_max               = SMB_IMAUITM_inv_C_refr_max_config
-
     ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! ==============================================================
 
@@ -3283,12 +3259,12 @@ CONTAINS
     C%BMB_min                                  = BMB_min_config
 
     C%do_ocean_inv                             = do_ocean_inv_config
-    C%do_ocean_inv_smooth                      = do_ocean_inv_smooth_config
-    C%do_ocean_inv_decay                       = do_ocean_inv_decay_config
     C%ocean_inv_t_start                        = ocean_inv_t_start_config
     C%ocean_inv_t_end                          = ocean_inv_t_end_config
-    C%ocean_inv_hi_scale                       = ocean_inv_hi_scale_config
-    C%ocean_inv_window_size                    = ocean_inv_window_size_config
+    C%ocean_inv_t_change                       = ocean_inv_t_change_config
+    C%ocean_inv_t_scale_exp                    = ocean_inv_t_scale_exp_config
+    C%ocean_inv_scale_start                    = ocean_inv_scale_start_config
+    C%ocean_inv_scale_end                      = ocean_inv_scale_end_config
     C%ocean_inv_smooth_r                       = ocean_inv_smooth_r_config
     C%ocean_inv_smooth_w                       = ocean_inv_smooth_w_config
 

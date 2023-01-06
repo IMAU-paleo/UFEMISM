@@ -147,18 +147,22 @@ MODULE data_types_netcdf_module
     INTEGER :: id_dim_zeta
     INTEGER :: id_dim_time
     INTEGER :: id_dim_month
+    INTEGER :: id_dim_elf
 
     CHARACTER(LEN=256) :: name_dim_zeta                  = 'zeta                 '
     CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
     CHARACTER(LEN=256) :: name_dim_month                 = 'month                '
+    CHARACTER(LEN=256) :: name_dim_elf                   = 'CDF bin              '
 
     INTEGER :: id_var_time
     INTEGER :: id_var_zeta
     INTEGER :: id_var_month
+    INTEGER :: id_var_elf
 
     CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
     CHARACTER(LEN=256) :: name_var_zeta                  = 'zeta                 '
     CHARACTER(LEN=256) :: name_var_month                 = 'month                '
+    CHARACTER(LEN=256) :: name_var_elf                   = 'Bedrock CDF bin      '
 
     ! Variables
     ! =========
@@ -169,24 +173,20 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_dHi_dt
     INTEGER :: id_var_dHb_dt
     INTEGER :: id_var_dHi_dt_ave
+    INTEGER :: id_var_bedrock_cdf
     INTEGER :: id_var_u_3D
     INTEGER :: id_var_v_3D
+    INTEGER :: id_var_N
     INTEGER :: id_var_SL
     INTEGER :: id_var_dHb
     INTEGER :: id_var_beta_sq
     INTEGER :: id_var_phi_fric
-    INTEGER :: id_var_phi_fric_ave
     INTEGER :: id_var_Ti
     INTEGER :: id_var_FirnDepth
     INTEGER :: id_var_MeltPreviousYear
-    INTEGER :: id_var_C_abl_constant_inv
-    INTEGER :: id_var_C_abl_Ts_inv
-    INTEGER :: id_var_C_abl_Q_inv
-    INTEGER :: id_var_C_refr_inv
     INTEGER :: id_var_BMB_shelf
     INTEGER :: id_var_T_ocean_base
     INTEGER :: id_var_S_ocean_base
-    INTEGER :: id_var_M_ocean_base
 
     CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
     CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
@@ -194,24 +194,20 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_dHi_dt                = 'dHi_dt               '
     CHARACTER(LEN=256) :: name_var_dHb_dt                = 'dHb_dt               '
     CHARACTER(LEN=256) :: name_var_dHi_dt_ave            = 'dHi_dt_ave           '
+    CHARACTER(LEN=256) :: name_var_bedrock_cdf           = 'bedrock_cdf          '
     CHARACTER(LEN=256) :: name_var_u_3D                  = 'u_3D                 '
     CHARACTER(LEN=256) :: name_var_v_3D                  = 'v_3D                 '
+    CHARACTER(LEN=256) :: name_var_N                     = 'N                    '
     CHARACTER(LEN=256) :: name_var_SL                    = 'SL                   '
     CHARACTER(LEN=256) :: name_var_dHb                   = 'dHb                  '
     CHARACTER(LEN=256) :: name_var_beta_sq               = 'beta_sq              '
     CHARACTER(LEN=256) :: name_var_phi_fric              = 'phi_fric             '
-    CHARACTER(LEN=256) :: name_var_phi_fric_ave          = 'phi_fric_ave         '
     CHARACTER(LEN=256) :: name_var_Ti                    = 'Ti                   '
     CHARACTER(LEN=256) :: name_var_FirnDepth             = 'FirnDepth            '
     CHARACTER(LEN=256) :: name_var_MeltPreviousYear      = 'MeltPreviousYear     '
-    CHARACTER(LEN=256) :: name_var_C_abl_constant_inv    = 'C_abl_constant_inv   '
-    CHARACTER(LEN=256) :: name_var_C_abl_Ts_inv          = 'C_abl_Ts_inv         '
-    CHARACTER(LEN=256) :: name_var_C_abl_Q_inv           = 'C_abl_Q_inv          '
-    CHARACTER(LEN=256) :: name_var_C_refr_inv            = 'C_refr_inv           '
     CHARACTER(LEN=256) :: name_var_BMB_shelf             = 'BMB_shelf            '
     CHARACTER(LEN=256) :: name_var_T_ocean_base          = 'T_ocean_base         '
     CHARACTER(LEN=256) :: name_var_S_ocean_base          = 'S_ocean_base         '
-    CHARACTER(LEN=256) :: name_var_M_ocean_base          = 'M_ocean_base         '
 
   END TYPE type_netcdf_restart
 
@@ -492,6 +488,9 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_ice_volume
     INTEGER :: id_var_ice_volume_af
     INTEGER :: id_var_ice_area
+    INTEGER :: id_var_dice_volume_dt
+    INTEGER :: id_var_dice_volume_af_dt
+    INTEGER :: id_var_dice_area_dt
     INTEGER :: id_var_T2m
     INTEGER :: id_var_snowfall
     INTEGER :: id_var_rainfall
@@ -505,6 +504,9 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_ice_volume        = 'ice_volume           '
     CHARACTER(LEN=256) :: name_var_ice_volume_af     = 'ice_volume_af        '
     CHARACTER(LEN=256) :: name_var_ice_area          = 'ice_area             '
+    CHARACTER(LEN=256) :: name_var_dice_volume_dt    = 'dice_volume_dt       '
+    CHARACTER(LEN=256) :: name_var_dice_volume_af_dt = 'dice_volume_af_dt    '
+    CHARACTER(LEN=256) :: name_var_dice_area_dt      = 'dice_area_dt         '
     CHARACTER(LEN=256) :: name_var_T2m               = 'T2m                  '
     CHARACTER(LEN=256) :: name_var_snowfall          = 'snowfall             '
     CHARACTER(LEN=256) :: name_var_rainfall          = 'rainfall             '

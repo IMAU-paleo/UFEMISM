@@ -90,6 +90,8 @@ CONTAINS
     TYPE(tVec)                                         :: x
     TYPE(tKSP)                                         :: KSP_solver
     INTEGER                                            :: its
+    LOGICAL                                            :: has_converged
+    REAL(dp)                                           :: rtol_eff, abstol_eff
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -100,41 +102,72 @@ CONTAINS
       CALL crash('matrix and vector sizes dont match!')
     END IF
 
-  ! == Set up right-hand side and solution vectors as PETSc data structures
-  ! =======================================================================
+    ! == Set up right-hand side and solution vectors as PETSc data structures
+    ! =======================================================================
 
     CALL vec_double2petsc( xx, x)
     CALL vec_double2petsc( bb, b)
 
-  ! Set up the solver
-  ! =================
+    ! Set up the solver
+    ! =================
 
-    ! Set up the KSP solver
-    CALL KSPcreate( PETSC_COMM_WORLD, KSP_solver, perr)
+    rtol_eff = rtol
+    abstol_eff = abstol
 
-    ! Set operators. Here the matrix that defines the linear system
-    ! also serves as the preconditioning matrix.
-    CALL KSPSetOperators( KSP_solver, A, A, perr)
+    has_converged = .FALSE.
+    DO WHILE (.NOT. has_converged)
 
-    ! Iterative solver tolerances
-    CALL KSPSetTolerances( KSP_solver, rtol, abstol, PETSC_DEFAULT_REAL, PETSC_DEFAULT_INTEGER, perr)
+      ! Set up a new KSP solver
+      CALL KSPcreate( PETSC_COMM_WORLD, KSP_solver, perr)
 
-    ! Set runtime options, e.g.,
-    !     -ksp_type <type> -pc_type <type> -ksp_monitor -ksp_rtol <rtol>
-    ! These options will override those specified above as long as
-    ! KSPSetFromOptions() is called _after_ any other customization routines.
-    CALL KSPSetFromOptions( KSP_solver, perr)
+      ! Set operators. Here the matrix that defines the linear system
+      ! also serves as the preconditioning matrix.
+      CALL KSPSetOperators( KSP_solver, A, A, perr)
 
-  ! == Solve Ax=b
-  ! =============
+      ! Iterative solver tolerances
+      CALL KSPSetTolerances( KSP_solver, rtol_eff, abstol_eff, PETSC_DEFAULT_REAL, PETSC_DEFAULT_INTEGER, perr)
 
-    ! Solve the linear system
-    CALL KSPSolve( KSP_solver, b, x, perr)
+      ! Set runtime options, e.g.,
+      !     -ksp_type <type> -pc_type <type> -ksp_monitor -ksp_rtol <rtol>
+      ! These options will override those specified above as long as
+      ! KSPSetFromOptions() is called _after_ any other customization routines.
+      CALL KSPSetFromOptions( KSP_solver, perr)
 
-    ! Find out how many iterations it took
-    CALL KSPGetIterationNumber( KSP_solver, its, perr)
-    ! IF (par%master) WRITE(0,*) '   PETSc solved Ax=b in ', its, ' iterations'
-    IF (par%master .AND. its < 5) WRITE(0,*) '   PETSc solved Ax=b in ', its, ' iterations! WTF'
+      ! == Solve Ax=b
+      ! =============
+
+      ! Solve the linear system
+      CALL KSPSolve( KSP_solver, b, x, perr)
+
+      ! Find out how many iterations it took
+      CALL KSPGetIterationNumber( KSP_solver, its, perr)
+      ! IF (par%master) WRITE(0,*) '   PETSc: ', its, ' iterations'
+
+      ! Check if result is gud
+      has_converged = .FALSE.
+      IF     (its >= 12) THEN
+        ! All good
+        has_converged = .TRUE.
+
+      ELSE
+        ! Give warnging
+        IF (par%master) THEN
+          print*, ''
+          write(*,"(A,I2,A)") '   PETSc solved Ax=b in ', its, ' iterations! WTF <=========================================='
+          write(*,"(A,F8.4,A,F8.4,A)") '   Trying again using rtol: ', rtol_eff*.8_dp, ' and abstol: ', abstol_eff*.8_dp, ' ...'
+          print*, ''
+        END IF
+
+        ! Destroy the current solver
+        CALL KSPDestroy( KSP_solver, perr)
+
+        ! Reduce tolerances and try again
+        rtol_eff = rtol_eff * .8_dp
+        abstol_eff = abstol_eff * .8_dp
+
+      END IF
+
+    END DO
 
     ! Get the solution back to the native UFEMISM storage structure
     CALL vec_petsc2double( x, xx)

@@ -30,7 +30,7 @@ MODULE ice_dynamics_module
                                                    vertical_average, surface_elevation, thickness_above_floatation
   USE netcdf_module,                         ONLY: debug, write_to_debug_file
   USE data_types_module,                     ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
-                                                   type_remapping_mesh_mesh, type_restart_data
+                                                   type_remapping_mesh_mesh, type_restart_data, type_BMB_model
   USE mesh_mapping_module,                   ONLY: remap_field_dp_2D, remap_field_dp_3D
   USE general_ice_model_data_module,         ONLY: update_general_ice_model_data, determine_masks
   USE mesh_operators_module,                 ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
@@ -111,11 +111,16 @@ CONTAINS
       r_solver_acc = 1._dp
     END IF
 
-    region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
-    region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol      * r_solver_acc
-    region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
-    region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
-    region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    ! Accuracy for the SSA/DIVA solution
+    region%ice%DIVA_SOR_nit              = C%DIVA_SOR_nit              * CEILING( 1._dp / r_solver_acc)
+    region%ice%DIVA_SOR_tol              = C%DIVA_SOR_tol              * r_solver_acc
+    region%ice%DIVA_SOR_omega            = C%DIVA_SOR_omega
+    region%ice%DIVA_PETSc_rtol           = C%DIVA_PETSc_rtol           * r_solver_acc
+    region%ice%DIVA_PETSc_abstol         = C%DIVA_PETSc_abstol         * r_solver_acc
+    region%ice%DIVA_visc_it_norm_dUV_tol = C%DIVA_visc_it_norm_dUV_tol * r_solver_acc
+    region%ice%DIVA_visc_it_nit          = C%DIVA_visc_it_nit          * CEILING( 1._dp / r_solver_acc)
+    region%ice%DIVA_visc_it_relax        = C%DIVA_visc_it_relax        * r_solver_acc
+    region%ice%DIVA_vel_max              = C%DIVA_vel_max
 
     ! Reduce the time-step during the start-up phase
     IF     (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
@@ -164,7 +169,7 @@ CONTAINS
       IF (region%time == region%t_next_SSA) THEN
 
         ! Calculate new ice velocities
-        CALL solve_SSA( region%mesh, region%ice, region%SMB)
+        CALL solve_SSA( region%mesh, region%ice)
 
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
@@ -213,7 +218,7 @@ CONTAINS
       IF (region%time == region%t_next_SSA) THEN
 
         ! Calculate new ice velocities
-        CALL solve_SSA( region%mesh, region%ice, region%SMB)
+        CALL solve_SSA( region%mesh, region%ice)
 
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
@@ -253,7 +258,7 @@ CONTAINS
     ELSE
 
       ! Compute new dHi_dt and corresponding Hi_tplusdt_a
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD, do_dt_lim = .FALSE.)
 
       ! Calculate ice thickness at the end of this model loop
       region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
@@ -285,15 +290,15 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),             INTENT(INOUT) :: region
-    REAL(dp),                            INTENT(IN)    :: t_end
+    TYPE(type_model_region), INTENT(INOUT) :: region
+    REAL(dp),                INTENT(IN)    :: t_end
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ice_dynamics_pc'
-    INTEGER                                            :: vi1,vi2
-    LOGICAL                                            :: do_update_ice_velocity
-    REAL(dp)                                           :: dt_from_pc, dt_crit_adv
-    REAL(dp)                                           :: r_solver_acc, dt_max
+    CHARACTER(LEN=256), PARAMETER          :: routine_name = 'run_ice_dynamics_pc'
+    INTEGER                                :: vi1,vi2
+    LOGICAL                                :: do_update_ice_velocity
+    REAL(dp)                               :: dt_from_pc, dt_crit_adv
+    REAL(dp)                               :: r_solver_acc, dt_max
 
     ! == Initialisation
     ! =================
@@ -358,11 +363,16 @@ CONTAINS
     END IF
 
     ! Accuracy for the SSA/DIVA solution
-    region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
-    region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol      * r_solver_acc
-    region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
-    region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
-    region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+    region%ice%DIVA_SOR_nit              = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
+    region%ice%DIVA_SOR_tol              = C%DIVA_SOR_tol      * r_solver_acc
+    region%ice%DIVA_SOR_omega            = C%DIVA_SOR_omega
+    region%ice%DIVA_PETSc_rtol           = C%DIVA_PETSc_rtol   * r_solver_acc
+    region%ice%DIVA_PETSc_abstol         = C%DIVA_PETSc_abstol * r_solver_acc
+
+    region%ice%DIVA_visc_it_norm_dUV_tol = C%DIVA_visc_it_norm_dUV_tol
+    region%ice%DIVA_visc_it_nit          = C%DIVA_visc_it_nit
+    region%ice%DIVA_visc_it_relax        = C%DIVA_visc_it_relax
+    region%ice%DIVA_vel_max              = C%DIVA_vel_max
 
     ! == Velocity update
     ! ==================
@@ -383,7 +393,7 @@ CONTAINS
         region%dt_crit_ice = MAX( C%dt_min, MIN( dt_max, region%dt_crit_ice))
 
         ! Calculate zeta
-        region%ice%pc_zeta      = region%dt_crit_ice / region%dt_crit_ice_prev
+        region%ice%pc_zeta = region%dt_crit_ice / region%dt_crit_ice_prev
 
       END IF
       CALL sync
@@ -394,8 +404,14 @@ CONTAINS
       ! Calculate new ice geometry
       region%ice%pc_f2(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
 
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD, do_dt_lim = .TRUE.)
       region%ice%pc_f1(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
+
+      ! Re-calculate zeta after possible adaptation of dt_crit_ice inside calc_dHi_dt
+      IF (par%master) THEN
+        region%ice%pc_zeta = region%dt_crit_ice / region%dt_crit_ice_prev
+      END IF
+      CALL sync
 
       ! Robinson et al. (2020), Eq. 30)
       region%ice%Hi_pred( vi1:vi2) = MAX(0._dp, region%ice%Hi_a( vi1:vi2)   + region%dt_crit_ice * &
@@ -424,7 +440,7 @@ CONTAINS
       ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
 
         ! Calculate velocities
-        CALL solve_SSA(  region%mesh, region%ice, region%SMB)
+        CALL solve_SSA(  region%mesh, region%ice)
 
         ! Update timer
         IF (par%master) region%t_last_SSA = region%time
@@ -435,7 +451,7 @@ CONTAINS
 
         ! Calculate velocities
         CALL solve_SIA(  region%mesh, region%ice)
-        CALL solve_SSA(  region%mesh, region%ice, region%SMB)
+        CALL solve_SSA(  region%mesh, region%ice)
 
         ! Update timer
         IF (par%master) region%t_last_SIA = region%time
@@ -447,7 +463,7 @@ CONTAINS
       ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
 
         ! Calculate velocities
-        CALL solve_DIVA( region%mesh, region%ice, region%SMB)
+        CALL solve_DIVA( region%mesh, region%ice)
 
         ! Update timer
         IF (par%master) region%t_last_DIVA = region%time
@@ -462,7 +478,8 @@ CONTAINS
       ! ==============
 
       ! Calculate dHi_dt for the predicted ice thickness and updated velocity
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD, do_dt_lim = .FALSE.)
+
       region%ice%pc_f3(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
       region%ice%pc_f4(   vi1:vi2) = region%ice%pc_f1(    vi1:vi2)
 
@@ -521,7 +538,7 @@ CONTAINS
 ! ===== Ice thickness update =====
 ! ================================
 
-  SUBROUTINE update_ice_thickness( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq, time)
+  SUBROUTINE update_ice_thickness( mesh, ice, BMB, mask_noice, refgeo_PD, refgeo_GIAeq, time)
     ! Update the ice thickness at the end of a model time loop
 
     IMPLICIT NONE
@@ -529,13 +546,14 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                             INTENT(IN)    :: mesh
     TYPE(type_ice_model),                        INTENT(INOUT) :: ice
+    TYPE(type_BMB_model),                        INTENT(INOUT) :: BMB
     INTEGER,                       DIMENSION(:), INTENT(IN)    :: mask_noice
     TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_PD
     TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_GIAeq
     REAL(dp),                                    INTENT(IN)    :: time
 
     ! Local variables:
-    CHARACTER(LEN=256),    PARAMETER                           :: routine_name = 'update_ice_thickness'
+    CHARACTER(LEN=256), PARAMETER                              :: routine_name = 'update_ice_thickness'
     INTEGER                                                    :: vi
     REAL(dp)                                                   :: dH_dt_max, dH_dt_sum
 
@@ -551,7 +569,7 @@ CONTAINS
 
     ! Check if we want to keep the ice thickness fixed for some specific areas,
     ! or modify the computed new ice thickness in some way before applying it
-    CALL fix_ice_thickness( mesh, ice, refgeo_PD, time)
+    CALL alter_ice_thickness( mesh, ice, BMB, refgeo_PD, time)
 
     ! Set ice thickness to new value
     ice%Hi_a( mesh%vi1:mesh%vi2) = MAX( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
@@ -589,7 +607,7 @@ CONTAINS
 
   END SUBROUTINE update_ice_thickness
 
-  SUBROUTINE fix_ice_thickness( mesh, ice, refgeo_PD, time)
+  SUBROUTINE alter_ice_thickness( mesh, ice, BMB, refgeo_PD, time)
     ! Check if we want to keep the ice thickness fixed in time for specific areas,
     ! or delay its evolution by a given percentage each time step, both options
     ! including the possibility to reduce this constraint over time.
@@ -600,16 +618,17 @@ CONTAINS
     IMPLICIT NONE
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
-    REAL(dp),                            INTENT(IN)    :: time
+    TYPE(type_mesh),               INTENT(IN)    :: mesh
+    TYPE(type_ice_model),          INTENT(INOUT) :: ice
+    TYPE(type_BMB_model),          INTENT(INOUT) :: BMB
+    TYPE(type_reference_geometry), INTENT(IN)    :: refgeo_PD
+    REAL(dp),                      INTENT(IN)    :: time
 
     ! Local variables:
-    CHARACTER(LEN=256),    PARAMETER                   :: routine_name = 'fix_ice_thickness'
-    INTEGER                                            :: vi
-    REAL(dp)                                           :: decay_start, decay_end
-    REAL(dp)                                           :: fixiness, limitness, Hi_lim
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'alter_ice_thickness'
+    INTEGER                                      :: vi
+    REAL(dp)                                     :: decay_start, decay_end
+    REAL(dp)                                     :: fixiness, limitness, Hi_lim
 
     ! === Initialisation ===
     ! ======================
@@ -755,13 +774,37 @@ CONTAINS
 
     END DO
 
+    ! Inversion first-guess stage
+    ! ===========================
+
+    IF ( C%do_slid_inv .AND. C%choice_slid_inv_method == 'Bernales2017' .AND. &
+         time > C%dt_max .AND. time < C%slid_inv_t_change + C%dt_max .AND. &
+         ABS( MOD( time, 2000._dp)) < C%dt_max) THEN
+      ! Time for a hard reset!
+
+      print*, '  Here we go!'
+
+      ! Return ice thickness to the reference topography distribution
+      ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2) = refgeo_PD%Hi( mesh%vi1:mesh%vi2)
+      ! Erase any memory about change
+      ice%dHi_dt_a = 0._dp
+      ! Erase any ongoing friction adjustments
+      ice%dphi_dt_a = 0._dp
+      ! Erase any ongoing ocean adjustments
+      IF (C%do_ocean_inv) THEN
+        BMB%dT_base_dt = 0._dp
+      END IF
+
+    END IF
+    CALL sync
+
     ! === Finalisation ===
     ! ====================
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE fix_ice_thickness
+  END SUBROUTINE alter_ice_thickness
 
   SUBROUTINE additional_ice_removal( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
     ! Remove ice following various criteria
@@ -1041,7 +1084,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_timesteps_and_actions'
-    REAL(dp)                                           :: t_next
+    REAL(dp)                                           :: t_next, t_scale, dt_inv
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1084,64 +1127,82 @@ CONTAINS
 
       region%do_thermo  = .FALSE.
       IF (region%time >= region%t_next_thermo) THEN
-        region%do_thermo      = .TRUE.
-        region%t_last_thermo  = region%time
-        region%t_next_thermo  = region%t_last_thermo + C%dt_thermo
+        region%do_thermo       = .TRUE.
+        region%t_last_thermo   = region%time
+        region%t_next_thermo   = region%t_last_thermo + C%dt_thermo
       END IF
 
       region%do_climate = .FALSE.
       IF (region%time >= region%t_next_climate) THEN
-        region%do_climate     = .TRUE.
-        region%t_last_climate = region%time
-        region%t_next_climate = region%t_last_climate + C%dt_climate
+        region%do_climate      = .TRUE.
+        region%t_last_climate  = region%time
+        region%t_next_climate  = region%t_last_climate + C%dt_climate
       END IF
 
       region%do_ocean   = .FALSE.
       IF (region%time >= region%t_next_ocean) THEN
-        region%do_ocean       = .TRUE.
-        region%t_last_ocean   = region%time
-        region%t_next_ocean   = region%t_last_ocean + C%dt_ocean
+        region%do_ocean        = .TRUE.
+        region%t_last_ocean    = region%time
+        region%t_next_ocean    = region%t_last_ocean + C%dt_ocean
       END IF
 
       region%do_SMB     = .FALSE.
       IF (region%time >= region%t_next_SMB) THEN
-        region%do_SMB         = .TRUE.
-        region%t_last_SMB     = region%time
-        region%t_next_SMB     = region%t_last_SMB + C%dt_SMB
+        region%do_SMB          = .TRUE.
+        region%t_last_SMB      = region%time
+        region%t_next_SMB      = region%t_last_SMB + C%dt_SMB
       END IF
 
       region%do_BMB     = .FALSE.
       IF (region%time >= region%t_next_BMB) THEN
-        region%do_BMB         = .TRUE.
-        region%t_last_BMB     = region%time
-        region%t_next_BMB     = region%t_last_BMB + C%dt_BMB
+        region%do_BMB          = .TRUE.
+        region%t_last_BMB      = region%time
+        region%t_next_BMB      = region%t_last_BMB + C%dt_BMB
       END IF
 
       region%do_ELRA    = .FALSE.
-      IF (C%choice_GIA_model == 'ELRA') THEN
-        IF (region%time >= region%t_next_ELRA) THEN
-          region%do_ELRA      = .TRUE.
-          region%t_last_ELRA  = region%time
-          region%t_next_ELRA  = region%t_last_ELRA + C%dt_bedrock_ELRA
-        END IF
+      IF (C%choice_GIA_model == 'ELRA' .AND. region%time >= region%t_next_ELRA) THEN
+        region%do_ELRA         = .TRUE.
+        region%t_last_ELRA     = region%time
+        region%t_next_ELRA     = region%t_last_ELRA + C%dt_bedrock_ELRA
       END IF
 
-      region%do_slid_inv      = .FALSE.
-      IF (C%do_slid_inv) THEN
-        IF (region%time >= region%t_next_slid_inv) THEN
-          region%do_slid_inv  = .TRUE.
-          region%t_last_slid_inv = region%time
-          region%t_next_slid_inv = region%t_last_slid_inv + C%dt_slid_inv
-        END IF
+      ! Then, the bed roughness inversion
+      ! =================================
+
+      ! Compute how much time has passed since start of equilibrium stage
+      t_scale = (region%time - C%slid_inv_t_change) / (C%slid_inv_t_end - C%slid_inv_t_change)
+      ! Limit t_scale to [0 1]
+      t_scale = max( 0._dp, min( t_scale, 1._dp))
+      ! Curve t_scale a bit
+      t_scale = t_scale ** C%slid_inv_t_scale_exp
+      ! Time evolving inversion time step
+      dt_inv = t_scale * C%dt_slid_inv_equil + (1._dp - t_scale) * C%dt_slid_inv_guess
+
+      region%do_slid_inv       = .FALSE.
+      IF (C%do_slid_inv .AND. region%time >= region%t_next_slid_inv) THEN
+        region%do_slid_inv     = .TRUE.
+        region%t_last_slid_inv = region%time
+        region%t_next_slid_inv = region%t_last_slid_inv + dt_inv
       END IF
 
-      region%do_SMB_inv = .FALSE.
-      IF (C%do_SMB_IMAUITM_inversion) THEN
-        IF (region%time >= region%t_next_SMB_inv) THEN
-          region%do_SMB_inv     = .TRUE.
-          region%t_last_SMB_inv = region%time
-          region%t_next_SMB_inv = region%t_last_SMB_inv + C%dt_SMB_inv
-        END IF
+      ! Then, the ocean temperature inversion
+      ! =====================================
+
+      ! Compute how much time has passed since start of equilibrium stage
+      t_scale = (region%time - C%ocean_inv_t_change) / (C%ocean_inv_t_end - C%ocean_inv_t_change)
+      ! Limit t_scale to [0 1]
+      t_scale = max( 0._dp, min( t_scale, 1._dp))
+      ! Curve t_scale a bit
+      t_scale = t_scale ** 1._dp
+      ! Time evolving inversion time step
+      dt_inv = t_scale * C%dt_ocean_inv_equil + (1._dp - t_scale) * C%dt_ocean_inv_guess
+
+      region%do_ocean_inv       = .FALSE.
+      IF (C%do_ocean_inv .AND. region%time >= region%t_next_ocean_inv) THEN
+        region%do_ocean_inv     = .TRUE.
+        region%t_last_ocean_inv = region%time
+        region%t_next_ocean_inv = region%t_last_ocean_inv + dt_inv
       END IF
 
       ! Finally, the output
@@ -1327,6 +1388,9 @@ CONTAINS
     IF (C%is_restart) THEN
 
       IF (par%master) WRITE(0,*) '   Initialising ice velocities using data read from restart file...'
+
+      ! Set vertically averaged ice viscosity to restart data
+      ice%N_a( mesh%vi1:mesh%vi2) = restart%N( mesh%vi1:mesh%vi2)
 
       ! Set 3D velocity field to restart data
       ice%u_3D_b( mesh%ti1:mesh%ti2,:) = restart%u_3D( mesh%ti1:mesh%ti2,:)
@@ -1514,10 +1578,10 @@ CONTAINS
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_glf_a            , ice%wmask_glf_a           )
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_cf_a             , ice%wmask_cf_a            )
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_a                , ice%wmask_a               )
+
+    ! Sub-grid stuff
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%f_grnd_a              , ice%wf_grnd_a             )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%f_grnd_b              , ice%wf_grnd_b             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%f_grndx_a             , ice%wf_grndx_a            )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%f_grndx_b             , ice%wf_grndx_b            )
     CALL allocate_shared_int_2D(  mesh%nV  , 64         , ice%gfrac_x               , ice%wgfrac_x              )
     CALL allocate_shared_int_2D(  mesh%nV  , 64         , ice%gfrac_y               , ice%wgfrac_y              )
     CALL allocate_shared_dp_2D(   mesh%nV  , 11         , ice%bedrock_cdf           , ice%wbedrock_cdf          )
@@ -1573,6 +1637,10 @@ CONTAINS
 
     ! Mesh adaptation data
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%surf_curv             , ice%wsurf_curv            )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%surf_peak             , ice%wsurf_peak            )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%surf_sink             , ice%wsurf_sink            )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%surf_slop             , ice%wsurf_slop            )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%bed_curv              , ice%wbed_curv             )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%log_velocity          , ice%wlog_velocity         )
 
     ! GIA
@@ -1706,10 +1774,10 @@ CONTAINS
     CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_gl_a,            ice%wmask_gl_a           )
     CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_cf_a,            ice%wmask_cf_a           )
     CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_a,               ice%wmask_a              )
+
+    ! Sub-grid stuff
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%f_grnd_a,             ice%wf_grnd_a            )
     CALL reallocate_shared_dp_1D(  mesh_new%nTri,                ice%f_grnd_b,             ice%wf_grnd_b            )
-    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%f_grndx_a,            ice%wf_grndx_a           )
-    CALL reallocate_shared_dp_1D(  mesh_new%nTri,                ice%f_grndx_b,            ice%wf_grndx_b           )
     CALL reallocate_shared_int_2D( mesh_new%nV, 64,              ice%gfrac_x,              ice%wgfrac_x             )
     CALL reallocate_shared_int_2D( mesh_new%nV, 64,              ice%gfrac_y,              ice%wgfrac_y             )
     CALL reallocate_shared_dp_2D(  mesh_new%nV, 11,              ice%bedrock_cdf,          ice%wbedrock_cdf         )
@@ -1753,6 +1821,10 @@ CONTAINS
 
     ! Mesh adaptation data
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%surf_curv,            ice%wsurf_curv           )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%surf_peak,            ice%wsurf_peak           )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%surf_sink,            ice%wsurf_sink           )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%surf_slop,            ice%wsurf_slop           )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%bed_curv,             ice%wbed_curv            )
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%log_velocity,         ice%wlog_velocity        )
 
     ! End of memory reallocation

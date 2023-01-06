@@ -122,6 +122,7 @@ CONTAINS
           ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
             ! Remove ice from this vertex
             ice%Hi_a( vi) = 0._dp
+            ice%dHi_dt_a( vi) = 0._dp
             ! Calving event occurred. This will cause the calving loop to
             ! do a whole another check over the entire (new) calving front
             ! after this iteration.
@@ -163,6 +164,7 @@ CONTAINS
       DO vi = mesh%vi1, mesh%vi2
         IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
           ice%Hi_a( vi) = 0._dp
+          ice%dHi_dt_a( vi) = 0._dp
         END IF
       END DO
       CALL sync
@@ -174,6 +176,7 @@ CONTAINS
         IF (is_floating( refgeo_PD%Hi( vi), refgeo_PD%Hb( vi), 0._dp)) THEN
           IF (refgeo_PD%Hi( vi) == 0._dp) THEN
             ice%Hi_a( vi) = 0._dp
+            ice%dHi_dt_a( vi) = 0._dp
           END IF
         END IF
       END DO
@@ -185,6 +188,7 @@ CONTAINS
       DO vi = mesh%vi1, mesh%vi2
         IF (refgeo_GIAeq%Hi( vi) == 0._dp .AND. refgeo_GIAeq%Hb( vi) < C%continental_shelf_min_height) THEN
           ice%Hi_a( vi) = 0._dp
+          ice%dHi_dt_a( vi) = 0._dp
         END IF
       END DO
       CALL sync
@@ -268,6 +272,7 @@ CONTAINS
       DO vi = 1, mesh%nV
         IF (ice%mask_shelf_a( vi) == 1 .AND. map( vi) == 0) THEN
           ice%Hi_a( vi) = 0._dp
+          ice%dHi_dt_a( vi) = 0._dp
         END IF
       END DO
 

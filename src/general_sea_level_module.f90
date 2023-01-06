@@ -75,32 +75,42 @@ CONTAINS
 ! ===================================
 
   ! Calculate regional ice volume and area
-  SUBROUTINE calculate_icesheet_volume_and_area( region)
+  SUBROUTINE calculate_icesheet_volume_and_area( region, do_ddt)
     ! Calculate this region's ice sheet's volume and area
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),      INTENT(INOUT)  :: region
+    TYPE(type_model_region), INTENT(INOUT) :: region
+    LOGICAL,                 INTENT(IN)    :: do_ddt
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'calculate_icesheet_volume_and_area'
-    INTEGER                                      :: vi
-    REAL(dp)                                     :: ice_area, ice_volume, thickness_above_flotation, ice_volume_above_flotation
+    CHARACTER(LEN=256), PARAMETER          :: routine_name = 'calculate_icesheet_volume_and_area'
+    INTEGER                                :: vi
+    REAL(dp)                               :: ice_area, ice_volume, thickness_above_flotation, ice_volume_above_flotation
+    REAL(dp)                               :: ice_area_prev, ice_volume_prev, ice_volume_above_flotation_prev
+
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Initialise
     ice_area                   = 0._dp
     ice_volume                 = 0._dp
     ice_volume_above_flotation = 0._dp
+
+    ! Save previous value
+    ice_area_prev                   = region%ice_area
+    ice_volume_prev                 = region%ice_volume
+    ice_volume_above_flotation_prev = region%ice_volume_above_flotation
+    CALL sync
 
     ! Calculate ice area and volume for process domain
     DO vi = region%mesh%vi1, region%mesh%vi2
 
       IF (region%ice%mask_ice_a( vi) == 1) THEN
         ice_volume = ice_volume + (region%ice%Hi_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area))
-        ice_area   = ice_area   + region%mesh%A( vi) * 1.0E-06_dp ! [km^3]
+        ice_area   = ice_area   + region%mesh%A( vi) * 1.0E-06_dp ! [km^2]
 
         ! Thickness above flotation
         thickness_above_flotation = MAX(0._dp, region%ice%Hi_a( vi) - MAX(0._dp, (region%ice%SL_a( vi) - region%ice%Hb_a( vi)) * (seawater_density / ice_density)))
@@ -115,8 +125,21 @@ CONTAINS
     CALL MPI_REDUCE( ice_volume,                 region%ice_volume,                 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_REDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation, 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 
-    ! Calculate GMSL contribution
-    IF (par%master) region%GMSL_contribution = -1._dp * (region%ice_volume_above_flotation - region%ice_volume_above_flotation_PD)
+    IF (par%master) THEN
+
+      ! Calculate GMSL contribution
+      region%GMSL_contribution = -1._dp * (region%ice_volume_above_flotation - region%ice_volume_above_flotation_PD)
+
+      IF (do_ddt) THEN
+        ! Calculate variation in area
+        region%dice_area_dt = (region%ice_area - ice_area_prev) / region%dt
+        ! Calculate variation in volume
+        region%dice_volume_dt = (region%ice_volume - ice_volume_prev) / region%dt
+        ! Calculate variation in volume above floatation
+        region%dice_volume_above_flotation_dt = (region%ice_volume_above_flotation - ice_volume_above_flotation_prev) / region%dt
+      END IF
+
+    END IF
     CALL sync
 
     ! Finalise routine path

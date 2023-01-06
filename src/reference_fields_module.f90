@@ -494,6 +494,9 @@ CONTAINS
 
       IF     (C%choice_mask_noice_ANT == 'none') THEN
         ! Do not remove ice from anywhere
+      ELSEIF (C%choice_mask_noice_ANT == 'ANT_remove_islands') THEN
+        ! Remove a few iced islands from the Antarctic domain
+        CALL apply_mask_noice_ANT_remove_tyny_islands(refgeo)
       ELSEIF (C%choice_mask_noice_ANT == 'MISMIP_mod') THEN
         ! Nothing to do here, as all belongs to the mesh version
       ELSEIF (C%choice_mask_noice_ANT == 'MISMIP+') THEN
@@ -636,6 +639,56 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE apply_mask_noice_GRL_remove_Ellesmere_grid
+
+  SUBROUTINE apply_mask_noice_ANT_remove_tyny_islands( refgeo)
+    ! Remove ice from a few fucking islands in the Antarctic domain
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'apply_mask_noice_ANT_remove_tyny_islands'
+    INTEGER                                      :: i,j
+    REAL(dp), DIMENSION(2)                       :: pa_latlon, pb_latlon
+    REAL(dp)                                     :: xa,ya,xb,yb
+    REAL(dp), DIMENSION(2)                       :: pa, pb
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Coronation-Laurie islands
+    pa_latlon = [-62.2_dp, 315.1_dp]
+    ! The three turds
+    pb_latlon = [-68.4_dp, 162.5_dp]
+
+    ! The two endpoints in x,y
+    CALL oblique_sg_projection( pa_latlon(2), pa_latlon(1), refgeo%grid%lambda_M, refgeo%grid%phi_M, refgeo%grid%beta_stereo, xa, ya)
+    CALL oblique_sg_projection( pb_latlon(2), pb_latlon(1), refgeo%grid%lambda_M, refgeo%grid%phi_M, refgeo%grid%beta_stereo, xb, yb)
+
+    pa = [xa,ya]
+    pb = [xb,yb]
+
+    DO i = refgeo%grid%i1, refgeo%grid%i2
+      DO j = 1, refgeo%grid%ny
+
+        IF (refgeo%grid%x(i) < pa(1) .AND. refgeo%grid%y(j) > pa(2)) THEN
+          refgeo%Hi_grid( i,j) = 0._dp
+        END IF
+
+        IF (refgeo%grid%y(j) < pb(2)) THEN
+          refgeo%Hi_grid( i,j) = 0._dp
+        END IF
+
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_mask_noice_ANT_remove_tyny_islands
 
   ! Apply some light smoothing to the initial geometry to improve numerical stability
   SUBROUTINE smooth_model_geometry( grid, Hi, Hb, Hs)
@@ -1347,16 +1400,16 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D(  grid%nx, grid%ny, refgeo%surf_curv  , refgeo%wsurf_curv  )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_land  , refgeo%wmask_land  )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ocean , refgeo%wmask_ocean )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ice   , refgeo%wmask_ice   )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_sheet , refgeo%wmask_sheet )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_shelf , refgeo%wmask_shelf )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_margin, refgeo%wmask_margin)
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_gl    , refgeo%wmask_gl    )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_cf    , refgeo%wmask_cf    )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_coast , refgeo%wmask_coast )
+    CALL allocate_shared_dp_2D(  grid%nx, grid%ny, refgeo%surf_curv      , refgeo%wsurf_curv       )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_land      , refgeo%wmask_land       )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ocean     , refgeo%wmask_ocean      )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ice       , refgeo%wmask_ice        )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_sheet     , refgeo%wmask_sheet      )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_shelf     , refgeo%wmask_shelf      )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_margin    , refgeo%wmask_margin     )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_gl        , refgeo%wmask_gl         )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_cf        , refgeo%wmask_cf         )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_coast     , refgeo%wmask_coast      )
 
     ! Calculate surface curvature
     DO i = grid%i1, grid%i2

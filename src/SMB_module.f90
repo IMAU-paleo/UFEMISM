@@ -363,9 +363,8 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'run_SMB_model_IMAUITM'
-    INTEGER                                             :: vi, m
-    INTEGER                                             :: mprev
-    REAL(dp)                                            :: snowfrac, liquid_water, sup_imp_wat
+    INTEGER                                             :: vi, m, mprev
+    REAL(dp)                                            :: snowfrac, liquid_water, sup_imp_wat, mountain_fact
 
     ! == Initialisation
     ! =================
@@ -427,27 +426,28 @@ CONTAINS
         ! Determine ablation as function af surface temperature and
         ! albedo/insolation according to Bintanja et al. (2002)
 
-        IF (C%do_SMB_IMAUITM_inversion) THEN
-
-          SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts_inv( vi)         * (climate%T2m( vi,m) - T0) + &
-                                         SMB%C_abl_Q_inv( vi)          * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
-                                         SMB%C_abl_constant_inv( vi))  * sec_per_year / (L_fusion * 1000._dp * 12._dp))
-        ELSE
-
-          SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts                  * (climate%T2m( vi,m) - T0) + &
-                                         SMB%C_abl_Q                   * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
-                                         SMB%C_abl_constant)           * sec_per_year / (L_fusion * 1000._dp * 12._dp))
-        END IF
+        SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts        * (climate%T2m( vi,m) - T0) + &
+                                       SMB%C_abl_Q         * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
+                                       SMB%C_abl_constant) * sec_per_year / (L_fusion * 1000._dp * 12._dp))
 
         ! Monthly accumulation
         ! ====================
 
-        ! Determine accumulation with snow/rain fraction from Ohmura et al. (1999),
-        ! liquid water content (rain and melt water) and snowdepth
+        ! Determine accumulation with snow/rain fraction from Ohmura et al. (1999)
         snowfrac = MAX(0._dp, MIN(1._dp, 0.725_dp * (1 - ATAN((climate%T2m( vi,m) - T0) / 5.95_dp) / 1.8566_dp)))
+        ! Jorjo's ink
+        ! snowfrac = MAX(0._dp, MIN(1._dp, 0.5_dp * (.63 - ATAN((climate%T2m( vi,m) - T0) / 1.00_dp) / 1.0000_dp)))
 
-        SMB%Snowfall( vi,m) = climate%Precip( vi,m) *          snowfrac
-        SMB%Rainfall( vi,m) = climate%Precip( vi,m) * (1._dp - snowfrac)
+        ! Reduce total precipitation over high peak areas (e.g. mountains)
+        IF (ice%mask_land_a( vi) == 1) THEN
+          mountain_fact = MIN( 1._dp, MAX( 0.0_dp, (ice%surf_peak( vi)-5e-7_dp) / (1e-6_dp-5e-7_dp)))
+        ELSE
+          mountain_fact = 0._dp
+        END IF
+
+        ! Determine accumulation and rainfall with snow/rain fraction, including high-curvature factor
+        SMB%Snowfall( vi,m) = climate%Precip( vi,m) *          snowfrac  * (1._dp - mountain_fact)
+        SMB%Rainfall( vi,m) = climate%Precip( vi,m) * (1._dp - snowfrac) * (1._dp - mountain_fact)
 
         ! Add this month's snow accumulation to next month's initial snow depth.
         SMB%AddedFirn( vi,m) = SMB%Snowfall( vi,m) - SMB%Melt( vi,m)
@@ -577,12 +577,6 @@ CONTAINS
     CALL allocate_shared_dp_0D( SMB%C_abl_Q,        SMB%wC_abl_Q       )
     CALL allocate_shared_dp_0D( SMB%C_refr,         SMB%wC_refr        )
 
-    ! Inversion parameters
-    CALL allocate_shared_dp_1D( mesh%nV, SMB%C_abl_constant_inv, SMB%wC_abl_constant_inv)
-    CALL allocate_shared_dp_1D( mesh%nV, SMB%C_abl_Ts_inv,       SMB%wC_abl_Ts_inv      )
-    CALL allocate_shared_dp_1D( mesh%nV, SMB%C_abl_Q_inv,        SMB%wC_abl_Q_inv       )
-    CALL allocate_shared_dp_1D( mesh%nV, SMB%C_refr_inv,         SMB%wC_refr_inv        )
-
     ! Initialise regional scalar parameters to specified values
     IF (par%master) THEN
       IF     (region_name == 'NAM') THEN
@@ -605,41 +599,6 @@ CONTAINS
         SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_ANT
         SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_ANT
         SMB%C_refr                   = C%SMB_IMAUITM_C_refr_ANT
-      END IF
-    END IF ! IF (par%master) THEN
-    CALL sync
-
-    ! Initialise regional 1-D inversion parameters to specified values
-    IF (par%master) THEN
-      IF (C%SMB_IMAUITM_inv_choice_init_C == 'uniform') THEN
-        IF     (region_name == 'NAM') THEN
-          SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_NAM
-          SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_NAM
-          SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_NAM
-          SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_NAM
-        ELSEIF (region_name == 'EAS') THEN
-          SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_EAS
-          SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_EAS
-          SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_EAS
-          SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_EAS
-        ELSEIF (region_name == 'GRL') THEN
-          SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_GRL
-          SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_GRL
-          SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_GRL
-          SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_GRL
-        ELSEIF (region_name == 'ANT') THEN
-          SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_ANT
-          SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_ANT
-          SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_ANT
-          SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_ANT
-        END IF
-      ELSEIF (C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
-          SMB%C_abl_constant_inv       = restart%C_abl_constant_inv
-          SMB%C_abl_Ts_inv             = restart%C_abl_Ts_inv
-          SMB%C_abl_Q_inv              = restart%C_abl_Q_inv
-          SMB%C_refr_inv               = restart%C_refr_inv
-      ELSE
-        CALL crash('unknown SMB_IMAUITM_inv_choice_init_C "' // TRIM( C%SMB_IMAUITM_inv_choice_init_C) // '"!')
       END IF
     END IF ! IF (par%master) THEN
     CALL sync
@@ -817,14 +776,6 @@ CONTAINS
       CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')
       CALL remap_field_dp_3D( mesh_old, mesh_new, map, SMB%FirnDepth,        SMB%wFirnDepth,        'trilin')
 
-      ! IF (C%do_SMB_IMAUITM_inversion) THEN
-        ! Remap inverted IMAU-ITM paramaters so they are not reset after a mesh update
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_constant_inv, SMB%wC_abl_constant_inv, 'trilin')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_Ts_inv,       SMB%wC_abl_Ts_inv,       'trilin')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_Q_inv,        SMB%wC_abl_Q_inv,        'trilin')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_refr_inv,         SMB%wC_refr_inv,         'trilin')
-      ! END IF
-
       ! Reallocate rather than remap; after a mesh update we'll immediately run the SMB model anyway
       CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Q_TOA,            SMB%wQ_TOA           )
       CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%AlbedoSurf,       SMB%wAlbedoSurf      )
@@ -846,168 +797,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_SMB_model
-
-! == Inversion
-! ============
-
-  SUBROUTINE SMB_IMAUITM_inversion( mesh, ice, climate, SMB, refgeo)
-    ! Iteratively invert for IMAU-ITM SMB parameters over the entire domain
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_mesh),                      INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                 INTENT(IN)    :: ice
-    TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-    TYPE(type_SMB_model),                 INTENT(INOUT) :: SMB
-    TYPE(type_reference_geometry),        INTENT(IN)    :: refgeo
-
-    ! Local variables
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'SMB_IMAUITM_inversion'
-    INTEGER                                            :: vi
-    REAL(dp)                                           :: h_scale, h_delta, h_dfrac, new_val
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Initialise ice thickness scaling
-    h_scale = 1.0_dp/C%SMB_IMAUITM_inv_scale
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Compute ice thickness difference
-      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
-      ! To what fraction of the ice thickness this difference corresponds
-      h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
-      ! Scale down the difference to the range [-1.5, 1.5] (a la Pollard & DeConto 2012)
-      h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
-
-      ! Invert only where the model has diverged from the reference
-      IF (ABS(h_delta) > 0._dp) THEN
-
-        ! Exception for floating ice when inverting for basal melt rates
-        IF (ice%mask_shelf_a( vi) == 1 .AND. C%choice_BMB_shelf_model == 'inversion') THEN
-          ! Skip to next vertex and let the BMB inversion do the job
-          CYCLE
-        END IF
-
-        ! Further adjust only where the current value is not significantly improving the result
-        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -0.02_dp) .OR. &
-             (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <=  0.02_dp) ) THEN
-
-          ! NOTE: The C_abl_constant parameter is meant to serve as a threshold for melting, in
-          ! the sense that it decreases the total parameter-based melting unformly over the
-          ! entire domain. Only the remaining melt is then applied. That's why in the inversion
-          ! it decreases when the thickness difference is positive, to lower the threshold and
-          ! allow for more melting.
-
-          ! == Constant ablation
-          ! ====================
-
-          ! If any month has surface melt
-          IF ( ANY(SMB%Melt(vi,:) > 0._dp) ) THEN
-
-            ! Adjust parameter
-            IF (C%SMB_IMAUITM_inv_C_abl_constant_min /= C%SMB_IMAUITM_inv_C_abl_constant_max) THEN
-              ! Get value to be adjusted
-              new_val = SMB%C_abl_constant_inv( vi)
-              ! Adjust value based on ice thickness difference (note the negative sign here)
-              new_val = new_val - 1.72476_dp * TAN(h_delta)
-              ! Limit adjusted value
-              new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_constant_min)
-              new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_constant_max)
-              ! Assign adjusted value to the SMB parameter
-              SMB%C_abl_constant_inv( vi) = new_val
-            END IF
-
-          ELSE
-            ! Reset vertex to its minimum allowed value
-            SMB%C_abl_constant_inv( vi) = C%SMB_IMAUITM_inv_C_abl_constant_min
-
-          END IF ! ( ANY(SMB%Melt(vi,:) > 0._dp) )
-
-          ! == Temperature-based ablation
-          ! =============================
-
-          ! If any month has melting temperatures
-          IF ( ANY(climate%T2m(vi,:) - T0 > 0._dp) ) THEN
-
-            ! Adjust parameter
-            IF (C%SMB_IMAUITM_inv_C_abl_Ts_min /= C%SMB_IMAUITM_inv_C_abl_Ts_max) THEN
-              new_val = SMB%C_abl_Ts_inv( vi)
-              new_val = new_val + 1.72476_dp * TAN(h_delta) ! Note the positive sign here
-              new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_Ts_min)
-              new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_Ts_max)
-
-              SMB%C_abl_Ts_inv( vi) = new_val
-            END IF
-
-          ELSE
-            ! Reset vertex to its minimum allowed value
-            SMB%C_abl_Ts_inv( vi) = C%SMB_IMAUITM_inv_C_abl_Ts_min
-
-          END IF ! ( ANY(climate%T2m(vi,:) - T0 > 0._dp) )
-
-          ! == Insolation-based ablation
-          ! ============================
-
-          ! If any month has less than maximum albedo and not inverted above (Ts_inv)
-          IF ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) .AND. &
-               ALL(climate%T2m(vi,:) - T0 <= 0._dp) ) THEN
-
-            ! Adjust parameter
-            IF (C%SMB_IMAUITM_inv_C_abl_Q_min /= C%SMB_IMAUITM_inv_C_abl_Q_max) THEN
-              new_val = SMB%C_abl_Q_inv( vi)
-              new_val = new_val + 0.01724_dp * TAN(h_delta) ! Note the positive sign here
-              new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_Q_min)
-              new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_Q_max)
-
-              SMB%C_abl_Q_inv( vi) = new_val
-            END IF
-
-          ELSE
-            ! Reset vertex to its minimum allowed value
-            SMB%C_abl_Q_inv( vi) = C%SMB_IMAUITM_inv_C_abl_Q_min
-
-          END IF ! ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) ...)
-
-          ! == Refreezing
-          ! =============
-
-          ! If any month has freezing temperatures and there is any liquid water to refreeze
-          IF ( ANY(climate%T2m(vi,:) - T0 < 0._dp) .AND. &
-               ANY(SMB%Rainfall( vi,:) + SMB%Melt( vi,:) > 0._dp) ) THEN
-
-              ! Adjust parameter
-              IF (C%SMB_IMAUITM_inv_C_refr_min /= C%SMB_IMAUITM_inv_C_refr_max) THEN
-                new_val = SMB%C_refr_inv( vi)
-                new_val = new_val - 0.01724_dp * TAN(h_delta) ! Note the negative sign here
-                new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_refr_min)
-                new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_refr_max)
-
-                SMB%C_refr_inv( vi) = new_val
-              END IF
-
-          ELSE
-            ! Reset vertex to its minimum allowed value
-            SMB%C_abl_Q_inv( vi) = C%SMB_IMAUITM_inv_C_abl_Q_min
-
-          END IF ! ( ANY(climate%T2m(vi,:) - T0 < 0._dp) ...)
-
-          ! == END
-          ! ======
-
-        END IF ! else the fit is already improving for some other reason, so leave it alone
-
-      END IF ! else the model and the reference don't have ice there, so leave it alone
-
-    END DO
-    CALL sync
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE SMB_IMAUITM_inversion
 
 ! == Some generally useful tools
 ! ==============================

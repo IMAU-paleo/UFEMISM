@@ -36,19 +36,20 @@ MODULE UFEMISM_main_model
                                                  calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
   USE mesh_update_module,                  ONLY: determine_mesh_fitness, create_new_mesh
   USE mesh_single_module,                  ONLY: create_single_mesh_from_cart_data, create_new_mesh_single
-  USE general_ice_model_data_module,       ONLY: initialise_mask_noice, initialise_basins
+  USE general_ice_model_data_module,       ONLY: initialise_mask_noice, initialise_basins, scan_subgrid_grounded_fractions, determine_grounded_fractions
   USE forcing_module,                      ONLY: forcing, update_sealevel_record_at_model_time
   USE ice_dynamics_module,                 ONLY: initialise_ice_model,                    remap_ice_model,      run_ice_model,      update_ice_thickness
   USE thermodynamics_module,               ONLY: initialise_ice_temperature,                                    run_thermo_model,   calc_ice_rheology
   USE climate_module,                      ONLY: initialise_climate_model_regional,       remap_climate_model,  run_climate_model
   USE ocean_module,                        ONLY: initialise_ocean_model_regional,         remap_ocean_model,    run_ocean_model
-  USE SMB_module,                          ONLY: initialise_SMB_model,                    remap_SMB_model,      run_SMB_model,      SMB_IMAUITM_inversion
+  USE SMB_module,                          ONLY: initialise_SMB_model,                    remap_SMB_model,      run_SMB_model
   USE BMB_module,                          ONLY: initialise_BMB_model,                    remap_BMB_model,      run_BMB_model,      ocean_temperature_inversion
   USE isotopes_module,                     ONLY: initialise_isotopes_model,               remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
   USE bedrock_ELRA_module,                 ONLY: initialise_ELRA_model,                   remap_ELRA_model,     run_ELRA_model
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion, write_inverted_bed_roughness_to_file
-  USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file, remap_restart_data
+  USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file, remap_restart_data, &
+                                                 read_mesh_from_external_file, read_bedrock_CDF_from_external_file
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
   USE ice_velocity_module,                 ONLY: solve_DIVA
   USE utilities_module,                    ONLY: time_display
@@ -195,11 +196,6 @@ CONTAINS
 
       END IF
 
-      ! == Grounded fractions
-      ! =====================
-
-      CALL compute_subgrid_grounded(region%mesh, region%refgeo_PD, region%ice)
-
       ! == Ice dynamics
       ! ===============
 
@@ -258,6 +254,16 @@ CONTAINS
 
       CALL run_isotopes_model( region)
 
+      ! == Ice sheet scalars
+      ! ====================
+
+      ! Update ice sheet area and volume
+      IF (it <= 3 .OR. region%time+region%dt >= t_end) THEN
+        CALL calculate_icesheet_volume_and_area( region, do_ddt = .FALSE.)
+      ELSE
+        CALL calculate_icesheet_volume_and_area( region, do_ddt = .TRUE.)
+      END IF
+
       ! == Output
       ! =========
 
@@ -269,48 +275,35 @@ CONTAINS
           CALL sync
           region%output_file_exists = .TRUE.
         END IF
-        ! ! Update ice sheet area and volume
-        ! CALL calculate_icesheet_volume_and_area( region)
         ! ! Write to regional scalar output
         ! CALL write_regional_scalar_data( region, region%time)
         ! Write to regional 2-/3-D output
         CALL write_to_output_files( region)
       END IF
 
-      ! Update ice sheet area and volume
-      CALL calculate_icesheet_volume_and_area( region)
       ! Write to regional scalar output
       CALL write_regional_scalar_data( region, region%time)
 
       ! == Update ice geometry
       ! ======================
 
-      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
+      CALL update_ice_thickness( region%mesh, region%ice, region%BMB, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
       CALL sync
 
       ! == Basal sliding inversion
       ! ==========================
 
       IF (C%do_slid_inv) THEN
-        IF (region%do_slid_inv) THEN
-          ! Adjust bed roughness
-          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%SMB, region%time)
-        END IF
+        ! Adjust bed roughness
+        CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%time, region%dt, region%do_slid_inv)
       END IF
 
       ! == Ocean temperature inversion
       ! ==============================
 
-      IF (C%do_ocean_inv .AND. region%do_BMB) THEN
+      IF (C%do_ocean_inv) THEN
         ! Adjust ocean temperatures
-        CALL ocean_temperature_inversion( region%mesh, region%grid_smooth, region%ice, region%BMB, region%refgeo_PD, region%time)
-      END IF
-
-      ! == SBM IMAU-ITM inversion
-      ! =========================
-
-      IF (C%do_SMB_IMAUITM_inversion .AND. region%do_SMB_inv) THEN
-        CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%refgeo_PD)
+        CALL ocean_temperature_inversion( region%mesh, region%grid_smooth, region%ice, region%BMB, region%refgeo_PD, region%time, region%dt, region%do_ocean_inv)
       END IF
 
       ! == Advance region time
@@ -328,7 +321,7 @@ CONTAINS
 
     ! Determine total ice sheet area, volume, volume-above-flotation
     ! and GMSL contribution, used for global scalar output
-    CALL calculate_icesheet_volume_and_area( region)
+    CALL calculate_icesheet_volume_and_area( region, do_ddt = .FALSE.)
 
     ! Write to NetCDF output one last time at the end of the simulation
     IF (region%time == C%end_time_of_run) THEN
@@ -469,7 +462,7 @@ CONTAINS
     CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate_matrix, climate_matrix_global, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name, region%time)
     CALL remap_ocean_model(    region%mesh, region%mesh_new, map, region%ocean_matrix)
     CALL remap_SMB_model(      region%mesh, region%mesh_new, map, region%SMB)
-    CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%BMB)
+    CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%ice, region%BMB)
     CALL remap_isotopes_model( region%mesh, region%mesh_new, map, region)
 
     ! Deallocate shared memory for the mapping arrays
@@ -480,9 +473,10 @@ CONTAINS
     region%mesh = region%mesh_new
 
     ! Grounded fractions
-    IF (par%master) WRITE(0,*) '   Re-commputing sub-grid grounded area fractions...'
-    CALL scan_subgrid_grounded( region%mesh, region%refgeo_PD, region%ice)
-    CALL compute_subgrid_grounded( region%mesh, region%refgeo_PD, region%ice)
+    IF (C%do_subgrid_grounded_fraction) THEN
+      IF (par%master ) WRITE(0,*) '   Re-scanning sub-grid grounded area fractions...'
+      CALL scan_subgrid_grounded_fractions( region%mesh, region%refgeo_PD, region%ice)
+    END IF
 
     ! Run the sub-models once to fill them in
     CALL run_climate_model( region, climate_matrix_global, region%time)
@@ -509,29 +503,29 @@ CONTAINS
     CALL calculate_PD_sealevel_contribution( region)
 
     ! Request to run everything immediately after the mesh update
-    region%t_next_SIA      = region%time
-    region%t_next_SSA      = region%time
-    region%t_next_DIVA     = region%time
-    region%t_next_thermo   = region%time
-    region%t_next_climate  = region%time
-    region%t_next_ocean    = region%time
-    region%t_next_SMB      = region%time
-    region%t_next_BMB      = region%time
-    region%t_next_ELRA     = region%time
-    region%t_next_slid_inv = region%time
-    region%t_next_SMB_inv  = region%time
+    region%t_next_SIA       = region%time
+    region%t_next_SSA       = region%time
+    region%t_next_DIVA      = region%time
+    region%t_next_thermo    = region%time
+    region%t_next_climate   = region%time
+    region%t_next_ocean     = region%time
+    region%t_next_SMB       = region%time
+    region%t_next_BMB       = region%time
+    region%t_next_ELRA      = region%time
+    region%t_next_slid_inv  = region%time
+    region%t_next_ocean_inv = region%time
 
-    region%do_SIA          = .TRUE.
-    region%do_SSA          = .TRUE.
-    region%do_DIVA         = .TRUE.
-    region%do_thermo       = .TRUE.
-    region%do_climate      = .TRUE.
-    region%do_ocean        = .TRUE.
-    region%do_SMB          = .TRUE.
-    region%do_BMB          = .TRUE.
-    region%do_ELRA         = .TRUE.
-    region%do_slid_inv     = .TRUE.
-    region%do_SMB_inv      = .TRUE.
+    region%do_SIA           = .TRUE.
+    region%do_SSA           = .TRUE.
+    region%do_DIVA          = .TRUE.
+    region%do_thermo        = .TRUE.
+    region%do_climate       = .TRUE.
+    region%do_ocean         = .TRUE.
+    region%do_SMB           = .TRUE.
+    region%do_BMB           = .TRUE.
+    region%do_ELRA          = .TRUE.
+    region%do_slid_inv      = .TRUE.
+    region%do_ocean_inv     = .TRUE.
 
     IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
     IF (par%master) WRITE(0,*) '  Running again now...'
@@ -595,6 +589,13 @@ CONTAINS
       CALL read_init_data_from_restart_file( region%restart, region%name)
       ! Initialise topographic data fields (on a square grid), mapping the initial topo from the mesh onto the grid
       CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name, region%mesh, region%restart)
+
+    ELSEIF (C%use_external_mesh) THEN
+
+      ! Initialise topographic data fields (on a square grid)
+      CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
+      ! Read mesh from a external file (use the restart infrastructure)
+      CALL read_mesh_from_external_file( region%mesh, region%restart, region%name, region%time)
 
     ELSE
 
@@ -662,13 +663,24 @@ CONTAINS
 
     CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init, region%refgeo_PD, region%restart)
 
-    ! ===== Grounded fractions =====
-    ! ==============================
+    ! ===== Sub-grid grounded area fractions =====
+    ! ============================================
 
-    IF (par%master) WRITE(0,*) '  Initialising sub-grid grounded area fractions...'
+    IF (C%do_subgrid_grounded_fraction) THEN
+      ! Compute a sub-grid bedrock cumulative density function
 
-    CALL scan_subgrid_grounded( region%mesh, region%refgeo_PD, region%ice)
-    CALL compute_subgrid_grounded( region%mesh, region%refgeo_PD, region%ice)
+      IF (C%use_external_bedrock_cdf) THEN
+        ! Save some time by reading it from a previous simulation
+        CALL read_bedrock_CDF_from_external_file( region%mesh, region%restart, region%ice)
+      ELSE
+        ! Determine it from a (slow) scan of the reference gridded topography
+        CALL scan_subgrid_grounded_fractions( region%mesh, region%refgeo_PD, region%ice)
+      END IF
+
+      ! Initialise the sub-grid grounded area fractions
+      CALL determine_grounded_fractions( region%mesh, region%ice)
+
+    END IF
 
     ! ===== Ice basins =====
     ! ======================
@@ -746,7 +758,7 @@ CONTAINS
     ! once during initialisation (so that the thermodynamics are solved correctly)
     IF (C%choice_ice_dynamics == 'none') THEN
       C%choice_ice_dynamics = 'DIVA'
-      CALL solve_DIVA( region%mesh, region%ice, region%SMB)
+      CALL solve_DIVA( region%mesh, region%ice)
       C%choice_ice_dynamics = 'none'
     END IF
 
@@ -761,7 +773,7 @@ CONTAINS
     ! Calculate ice sheet metadata (volume, area, GMSL contribution),
     ! for writing to the first time point of the output file
     CALL calculate_PD_sealevel_contribution( region)
-    CALL calculate_icesheet_volume_and_area( region)
+    CALL calculate_icesheet_volume_and_area( region, do_ddt = .FALSE.)
 
     ! ===== Regional output =====
     ! ===========================
@@ -864,9 +876,9 @@ CONTAINS
     CALL allocate_shared_dp_0D(   region%t_next_slid_inv,  region%wt_next_slid_inv )
     CALL allocate_shared_bool_0D( region%do_slid_inv,      region%wdo_slid_inv     )
 
-    CALL allocate_shared_dp_0D(   region%t_last_SMB_inv,   region%wt_last_SMB_inv  )
-    CALL allocate_shared_dp_0D(   region%t_next_SMB_inv,   region%wt_next_SMB_inv  )
-    CALL allocate_shared_bool_0D( region%do_SMB_inv,       region%wdo_SMB_inv      )
+    CALL allocate_shared_dp_0D(   region%t_last_ocean_inv, region%wt_last_ocean_inv )
+    CALL allocate_shared_dp_0D(   region%t_next_ocean_inv, region%wt_next_ocean_inv )
+    CALL allocate_shared_bool_0D( region%do_ocean_inv,     region%wdo_ocean_inv     )
 
     CALL allocate_shared_dp_0D(   region%t_last_output,    region%wt_last_output   )
     CALL allocate_shared_dp_0D(   region%t_next_output,    region%wt_next_output   )
@@ -931,12 +943,12 @@ CONTAINS
       END IF
 
       region%t_last_slid_inv  = C%start_time_of_run
-      region%t_next_slid_inv  = C%start_time_of_run + C%dt_slid_inv
+      region%t_next_slid_inv  = C%start_time_of_run + MIN( C%dt_slid_inv_guess, C%dt_slid_inv_equil)
       region%do_slid_inv      = .FALSE.
 
-      region%t_last_SMB_inv   = C%start_time_of_run
-      region%t_next_SMB_inv   = C%start_time_of_run + C%dt_SMB_inv
-      region%do_SMB_inv       = .FALSE.
+      region%t_last_ocean_inv = C%start_time_of_run
+      region%t_next_ocean_inv = C%start_time_of_run + MIN( C%dt_ocean_inv_guess, C%dt_ocean_inv_equil)
+      region%do_ocean_inv     = .FALSE.
 
       region%t_last_output    = C%start_time_of_run
       region%t_next_output    = C%start_time_of_run
@@ -947,37 +959,40 @@ CONTAINS
     ! ===================
 
     ! Ice-sheet volume and area
-    CALL allocate_shared_dp_0D( region%ice_area                     , region%wice_area                     )
-    CALL allocate_shared_dp_0D( region%ice_volume                   , region%wice_volume                   )
-    CALL allocate_shared_dp_0D( region%ice_volume_PD                , region%wice_volume_PD                )
-    CALL allocate_shared_dp_0D( region%ice_volume_above_flotation   , region%wice_volume_above_flotation   )
-    CALL allocate_shared_dp_0D( region%ice_volume_above_flotation_PD, region%wice_volume_above_flotation_PD)
+    CALL allocate_shared_dp_0D( region%ice_area                       , region%wice_area                      )
+    CALL allocate_shared_dp_0D( region%ice_volume                     , region%wice_volume                    )
+    CALL allocate_shared_dp_0D( region%ice_volume_PD                  , region%wice_volume_PD                 )
+    CALL allocate_shared_dp_0D( region%ice_volume_above_flotation     , region%wice_volume_above_flotation    )
+    CALL allocate_shared_dp_0D( region%ice_volume_above_flotation_PD  , region%wice_volume_above_flotation_PD )
+    CALL allocate_shared_dp_0D( region%dice_area_dt                   , region%wdice_area_dt                  )
+    CALL allocate_shared_dp_0D( region%dice_volume_dt                 , region%wdice_volume_dt                )
+    CALL allocate_shared_dp_0D( region%dice_volume_above_flotation_dt , region%wdice_volume_above_flotation_dt)
 
     ! Regionally integrated SMB components
-    CALL allocate_shared_dp_0D( region%int_T2m                      , region%wint_T2m                      )
-    CALL allocate_shared_dp_0D( region%int_snowfall                 , region%wint_snowfall                 )
-    CALL allocate_shared_dp_0D( region%int_rainfall                 , region%wint_rainfall                 )
-    CALL allocate_shared_dp_0D( region%int_melt                     , region%wint_melt                     )
-    CALL allocate_shared_dp_0D( region%int_refreezing               , region%wint_refreezing               )
-    CALL allocate_shared_dp_0D( region%int_runoff                   , region%wint_runoff                   )
-    CALL allocate_shared_dp_0D( region%int_SMB                      , region%wint_SMB                      )
-    CALL allocate_shared_dp_0D( region%int_BMB                      , region%wint_BMB                      )
-    CALL allocate_shared_dp_0D( region%int_MB                       , region%wint_MB                       )
+    CALL allocate_shared_dp_0D( region%int_T2m                      , region%wint_T2m                         )
+    CALL allocate_shared_dp_0D( region%int_snowfall                 , region%wint_snowfall                    )
+    CALL allocate_shared_dp_0D( region%int_rainfall                 , region%wint_rainfall                    )
+    CALL allocate_shared_dp_0D( region%int_melt                     , region%wint_melt                        )
+    CALL allocate_shared_dp_0D( region%int_refreezing               , region%wint_refreezing                  )
+    CALL allocate_shared_dp_0D( region%int_runoff                   , region%wint_runoff                      )
+    CALL allocate_shared_dp_0D( region%int_SMB                      , region%wint_SMB                         )
+    CALL allocate_shared_dp_0D( region%int_BMB                      , region%wint_BMB                         )
+    CALL allocate_shared_dp_0D( region%int_MB                       , region%wint_MB                          )
 
     ! Englacial isotope content
-    CALL allocate_shared_dp_0D( region%GMSL_contribution            , region%wGMSL_contribution            )
-    CALL allocate_shared_dp_0D( region%mean_isotope_content         , region%wmean_isotope_content         )
-    CALL allocate_shared_dp_0D( region%mean_isotope_content_PD      , region%wmean_isotope_content_PD      )
-    CALL allocate_shared_dp_0D( region%d18O_contribution            , region%wd18O_contribution            )
-    CALL allocate_shared_dp_0D( region%d18O_contribution_PD         , region%wd18O_contribution_PD         )
+    CALL allocate_shared_dp_0D( region%GMSL_contribution            , region%wGMSL_contribution               )
+    CALL allocate_shared_dp_0D( region%mean_isotope_content         , region%wmean_isotope_content            )
+    CALL allocate_shared_dp_0D( region%mean_isotope_content_PD      , region%wmean_isotope_content_PD         )
+    CALL allocate_shared_dp_0D( region%d18O_contribution            , region%wd18O_contribution               )
+    CALL allocate_shared_dp_0D( region%d18O_contribution_PD         , region%wd18O_contribution_PD            )
 
     ! Computation times
-    CALL allocate_shared_dp_0D( region%tcomp_total                  , region%wtcomp_total                  )
-    CALL allocate_shared_dp_0D( region%tcomp_ice                    , region%wtcomp_ice                    )
-    CALL allocate_shared_dp_0D( region%tcomp_thermo                 , region%wtcomp_thermo                 )
-    CALL allocate_shared_dp_0D( region%tcomp_climate                , region%wtcomp_climate                )
-    CALL allocate_shared_dp_0D( region%tcomp_GIA                    , region%wtcomp_GIA                    )
-    CALL allocate_shared_dp_0D( region%tcomp_mesh                   , region%wtcomp_mesh                   )
+    CALL allocate_shared_dp_0D( region%tcomp_total                  , region%wtcomp_total                     )
+    CALL allocate_shared_dp_0D( region%tcomp_ice                    , region%wtcomp_ice                       )
+    CALL allocate_shared_dp_0D( region%tcomp_thermo                 , region%wtcomp_thermo                    )
+    CALL allocate_shared_dp_0D( region%tcomp_climate                , region%wtcomp_climate                   )
+    CALL allocate_shared_dp_0D( region%tcomp_GIA                    , region%wtcomp_GIA                       )
+    CALL allocate_shared_dp_0D( region%tcomp_mesh                   , region%wtcomp_mesh                      )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 71)
@@ -1281,334 +1296,5 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_model_windup
-
-  SUBROUTINE scan_subgrid_grounded_old( mesh, refgeo, ice)
-    ! Scan them.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),               INTENT(IN) :: mesh
-    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
-    TYPE(type_ice_model),          INTENT(IN) :: ice
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'scan_subgrid_grounded_old'
-    INTEGER                                   :: vi, i, j
-    INTEGER                                   :: grid_count
-    REAL(dp)                                  :: radius, rmax_ref_vs_mem
-
-    ! === Initialisation ===
-    ! ======================
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ice%gfrac_x = 0
-    ice%gfrac_y = 0
-
-    ! === Scan ===
-    ! ============
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      IF (mesh%edge_index( vi)  > 0) THEN
-        CYCLE
-      END IF
-
-      rmax_ref_vs_mem = ( refgeo%grid%x(2) - refgeo%grid%x(1) ) * sqrt(REAL(64,dp)) / 2._dp
-
-      radius = MIN( mesh%R( vi), rmax_ref_vs_mem)
-
-      grid_count = 0
-
-      DO j = 1, refgeo%grid%ny
-      DO i = 1, refgeo%grid%nx
-
-        IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
-
-          grid_count = grid_count + 1
-
-          ice%gfrac_x( vi,grid_count) = i
-          ice%gfrac_y( vi,grid_count) = j
-
-        END IF
-
-      END DO
-      END DO
-
-    END DO
-    CALL sync
-
-    ! === Finalisation ===
-    ! ====================
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE scan_subgrid_grounded_old
-
-  SUBROUTINE compute_subgrid_grounded_old( mesh, refgeo, ice)
-    ! Compute them.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),               INTENT(IN) :: mesh
-    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
-    TYPE(type_ice_model),          INTENT(IN) :: ice
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'compute_subgrid_grounded_old'
-    INTEGER                                   :: vi, n
-    INTEGER                                   :: grid_count, ground_count
-    REAL(dp)                                  :: hb_float, hb_local
-
-    ! === Initialisation ===
-    ! ======================
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! === Compute ===
-    ! ===============
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      hb_float = ice%SL_a( vi) - ice%Hi_a( vi) * ice_density/seawater_density
-
-      IF (ice%gfrac_x( vi,1) == 0 .OR. &
-          ice%gfrac_y( vi,1) == 0 .OR. &
-          mesh%edge_index( vi) > 0) THEN
-
-        ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
-        CYCLE
-
-      END IF
-
-      n = 0
-      DO WHILE (ice%gfrac_x(vi,n+1) > 0 .AND. ice%gfrac_y(vi,n+1) > 0)
-        n = n + 1
-      END DO
-      grid_count = n
-
-      ground_count = 0
-
-      DO n = 1, grid_count
-
-        hb_local = refgeo%Hb_grid( ice%gfrac_x( vi,n), ice%gfrac_y( vi,n)) + ice%dHb_a( vi)
-
-        IF ( hb_local >= hb_float) THEN
-
-          ground_count = ground_count + 1
-
-        END IF
-
-      END DO
-
-      IF (grid_count > 0) THEN
-        ice%f_grndx_a( vi) = REAL(ground_count,dp) / REAL(grid_count,dp)
-      ELSE
-        ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
-      END IF
-
-    END DO
-    CALL sync
-
-    ! === Finalisation ===
-    ! ====================
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE compute_subgrid_grounded_old
-
-  SUBROUTINE scan_subgrid_grounded( mesh, refgeo, ice)
-    ! Scan them.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),               INTENT(IN) :: mesh
-    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
-    TYPE(type_ice_model),          INTENT(IN) :: ice
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'scan_subgrid_grounded'
-    INTEGER                                   :: vi, i, j
-    INTEGER                                   :: grid_count, ii0, ii1
-    REAL(dp)                                  :: radius, rmax_ref_vs_mem
-    REAL(dp)                                  :: isc, wii0, wii1
-    REAL(dp), DIMENSION(64)                   :: hb_list
-
-    ! === Initialisation ===
-    ! ======================
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Initialise cumulative density function (CDF)
-    ice%bedrock_cdf = 0._dp
-
-    ! === Scan ===
-    ! ============
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Skip vertices at edge of domain
-      IF (mesh%edge_index( vi)  > 0) THEN
-        CYCLE
-      END IF
-
-      ! Initialise list of subgrid bedrock elevations
-      hb_list = 0._dp
-
-      ! Determine maximum search radius based on allocated memory (64 elements per vertex)
-      rmax_ref_vs_mem = ( refgeo%grid%x(2) - refgeo%grid%x(1) ) * sqrt(REAL(64,dp)) / 2._dp
-
-      ! Determine search radius as the min betweeen the vertex radius and the max radius
-      radius = MIN( mesh%R( vi), rmax_ref_vs_mem)
-
-      ! Initialise counter for subgrid cells
-      grid_count = 0
-
-      DO j = 1, refgeo%grid%ny
-      DO i = 1, refgeo%grid%nx
-
-        ! If grid cell is within the search radius
-        IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
-
-          ! Increase counter
-          grid_count = grid_count + 1
-
-          ! Add bedrock elevation to list of found subgrid cells
-          hb_list( grid_count) = refgeo%Hb_grid(i,j)
-
-        END IF
-
-      END DO
-      END DO
-
-      ! === Cumulative density function ===
-      ! ===================================
-
-      ! Inefficient but easy sorting of hb_list
-      DO i = 1, grid_count-1
-      DO j = i+1, grid_count
-        IF (hb_list( i) > hb_list( j)) THEN
-          hb_list( i) = hb_list( i) + hb_list( j)
-          hb_list( j) = hb_list( i) - hb_list( j)
-          hb_list( i) = hb_list( i) - hb_list( j)
-        END IF
-      END DO
-      END DO
-
-      ! Set first (0%) and last bins (100%) of the CDF to the minimum
-      ! and maximum bedrock elevations scanned, respectively
-      ice%bedrock_cdf( vi, 1) = hb_list( 1)
-      ice%bedrock_cdf( vi,11) = hb_list( grid_count)
-
-      ! Compute the bedrock elevation for each of the other CDF bins,
-      ! from the second (10%) to the tenth (90%)
-      DO i = 2, 10
-        isc  = 1._dp + (REAL( grid_count,dp) - 1._dp) * (REAL( i,dp) - 1._dp) / 10._dp
-        ii0  = FLOOR( isc)
-        ii1  = CEILING( isc)
-        wii0 = REAL( ii1,dp) - isc
-        wii1 = 1.0 - wii0
-        ice%bedrock_cdf( vi,i) = wii0 * hb_list( ii0) + wii1 * hb_list( ii1)
-      END DO
-
-    END DO
-    CALL sync
-
-    ! === Finalisation ===
-    ! ====================
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE scan_subgrid_grounded
-
-  SUBROUTINE compute_subgrid_grounded( mesh, refgeo, ice)
-    ! Compute them.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),               INTENT(IN) :: mesh
-    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
-    TYPE(type_ice_model),          INTENT(IN) :: ice
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'compute_subgrid_grounded'
-    INTEGER                                   :: vi
-    REAL(dp)                                  :: hb_float
-    INTEGER                                   :: il, iu
-    REAL(dp)                                  :: wl, wu
-
-    ! === Initialisation ===
-    ! ======================
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! === Compute ===
-    ! ===============
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Assing edge vertices a value of either 0 or 1 depending
-      ! on their land mask, then skip
-
-      IF (mesh%edge_index( vi)  > 0) THEN
-        ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
-        CYCLE
-      END IF
-
-      ! Compute the bedrock depth at which the current ice thickness and sea level float
-      ! will make this point afloat. Account for GIA here so we don't have to do it in
-      ! the computation of the cumulative density function (CDF).
-
-      hb_float = ice%SL_a( vi) - ice%Hi_a( vi) * ice_density/seawater_density - ice%dHb_a( vi)
-
-      ! Get the fraction of bedrock within vertex radius that is below hb_float as a linear
-      ! interpolation of the numbers in the CDF.
-
-      IF     (hb_float <= MINVAL( ice%bedrock_cdf( vi,:))) THEN
-        ! All sub-grid points are above the floating bedrock elevation
-        ice%f_grndx_a( vi) = 1._dp
-      ELSEIF (hb_float >= MAXVAL( ice%bedrock_cdf( vi,:))) THEN
-        ! All sub-grid points are below the floating bedrock elevation
-        ice%f_grndx_a( vi) = 0._dp
-      ELSE
-        ! Find the 2 elements in the CDF surrounding hb_float
-        iu = 1
-        DO WHILE (ice%bedrock_cdf( vi,iu) < hb_float)
-          iu = iu+1
-        END DO
-        il = iu-1
-
-        ! Interpolate bedrock to get the weights for both CDF percentages
-        wl = (ice%bedrock_cdf( vi,iu) - hb_float) / (ice%bedrock_cdf( vi,iu)-ice%bedrock_cdf( vi,il))
-        wu = 1._dp - wl
-
-        ! Interpolate between percentages, assuming that there are 11 CDF bins between
-        ! 0% and 100%, at 10% intervals, i.e. element 1 is 0% =(1-1)*10%, element 2 is
-        ! 10% = (2-1)*10%, and so on.
-        ice%f_grndx_a( vi) = 1._dp - (10._dp*(il-1)*wl + 10._dp*(iu-1)*wu) / 100._dp
-
-      END IF
-
-    END DO
-    CALL sync
-
-    ! === Finalisation ===
-    ! ====================
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE compute_subgrid_grounded
 
 END MODULE UFEMISM_main_model

@@ -378,6 +378,14 @@ CONTAINS
 
   SUBROUTINE calc_strain_rates( mesh, ice, BPA)
     ! Calculate the strain rates
+    !
+    ! The velocities u and v are defined on the bk-grid (triangles, regular vertical)
+    !
+    ! The horizontal strain rates du/dx, du/dy, dv/dx, dv/dy are calculated on the ak-grid (vertices, regular vertical),
+    ! and are then mapped to the bks-grid (triangles, staggered vertical)
+    !
+    ! The vertical shear strain rates du/dz, dv/dz are calculated on the bks-grid (triangles, staggered vertical),
+    ! and are then mapped to the ak-grid (vertices, regular vertical)
 
     IMPLICIT NONE
 
@@ -419,6 +427,11 @@ CONTAINS
 
   SUBROUTINE calc_effective_viscosity( mesh, ice, BPA)
     ! Calculate the effective viscosity eta, the product term N = eta*H, and the gradients of N
+    !
+    ! The effective viscosity eta is calculated separately on both the ak-grid (vertices, regular vertical)
+    ! and on the bks-grid (triangles, staggered vertical), using the strain rates calculated in calc_strain_rates.
+    !
+    ! eta_bk, deta_dx_bk, and deta_dy_bk are calculated from eta_ak
 
     IMPLICIT NONE
 
@@ -744,6 +757,10 @@ CONTAINS
     !   deta/dx ( 4 du/dx   + 2 dv/dy ) + ...
     !   deta/dy (   du/dy   +   dv/dx ) + ...
     !   d/dz [ eta du/dz] = -taud,x
+    !
+    ! The equations are solved on the bk-grid (triangles, regular vertical). In the last term,
+    ! the product rule is not explicitly applied; instead, du/dz and eta are defined on the bks-grid
+    ! (triangles, staggered vertical).
 
     IMPLICIT NONE
 

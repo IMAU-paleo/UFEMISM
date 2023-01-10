@@ -155,7 +155,7 @@
     choice_refgeo_init_ANT_config               = 'idealised'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
     ! Idealised settings
     choice_refgeo_init_idealised_config         = 'flatearth'                      ! Choice of idealised initial geometry; see "generate_idealised_geometry" in reference_fields_module for options
-    dx_refgeo_init_idealised_config             = 40000.0                          ! Resolution of square grid used for idealised initial geometry
+    dx_refgeo_init_idealised_config             = 50000.0                          ! Resolution of square grid used for idealised initial geometry
     ! Realistic settings
     filename_refgeo_init_NAM_config             = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
     filename_refgeo_init_EAS_config             = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
@@ -171,7 +171,7 @@
     choice_refgeo_PD_ANT_config                 = 'idealised'                      ! Choice of present-day geometry for Antarctica   ; can be "idealised", or "realistic"
     ! Idealised settings
     choice_refgeo_PD_idealised_config           = 'flatearth'                      ! Choice of idealised present-day geometry; see "generate_idealised_geometry" in reference_fields_module for options
-    dx_refgeo_PD_idealised_config               = 40000.0                          ! Resolution of square grid used for idealised present-day geometry
+    dx_refgeo_PD_idealised_config               = 50000.0                          ! Resolution of square grid used for idealised present-day geometry
     ! Realistic settings
     filename_refgeo_PD_NAM_config               = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
     filename_refgeo_PD_EAS_config               = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
@@ -187,7 +187,7 @@
     choice_refgeo_GIAeq_ANT_config              = 'idealised'                      ! Choice of GIA equilibrium geometry for Antarctica   ; can be "idealised", or "realistic"
     ! Idealised settings
     choice_refgeo_GIAeq_idealised_config        = 'flatearth'                      ! Choice of idealised GIA equilibrium geometry; see "generate_idealised_geometry" in reference_fields_module for options
-    dx_refgeo_GIAeq_idealised_config            = 40000.0                          ! Resolution of square grid used for idealised GIA equilibrium geometry
+    dx_refgeo_GIAeq_idealised_config            = 50000.0                          ! Resolution of square grid used for idealised GIA equilibrium geometry
     ! Realistic settings
     filename_refgeo_GIAeq_NAM_config            = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
     filename_refgeo_GIAeq_EAS_config            = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'

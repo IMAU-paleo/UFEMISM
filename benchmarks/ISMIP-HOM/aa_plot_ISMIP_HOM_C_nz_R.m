@@ -38,12 +38,12 @@ model_types = {...
 models = dir(foldername);
 models = models(3:end);
 
-% experiments.a160 = [];
-% experiments.a080 = [];
-% experiments.a040 = [];
-% experiments.a020 = [];
-% experiments.a010 = [];
-% experiments.a005 = [];
+% experiments.c160 = [];
+% experiments.c080 = [];
+% experiments.c040 = [];
+% experiments.c020 = [];
+% experiments.c010 = [];
+% experiments.c005 = [];
 % 
 % for mi = 1: length(models)
 %   
@@ -79,7 +79,7 @@ models = models(3:end);
 %           v_vec = zeros(n,1);
 %           w_vec = zeros(n,1);
 %           for i = 1:n
-%             temp2 = textscan(temp{i},'%f %f %f %f %f %f %f %f');
+%             temp2 = textscan(temp{i},'%f %f %f %f %f %f %f %f %f %f');
 %             x_vec(i) = temp2{1};
 %             y_vec(i) = temp2{2};
 %             u_vec(i) = temp2{3};
@@ -108,8 +108,8 @@ models = models(3:end);
 %   
 % end
 % 
-% save('ISMIP_HOM_A_ensemble.mat','experiments');
-load('ISMIP_HOM_A_ensemble.mat')
+% save('ISMIP_HOM_C_ensemble.mat','experiments')
+load('ISMIP_HOM_C_ensemble.mat')
 
 %% Plot Pattyn2008 ensemble
 
@@ -130,10 +130,10 @@ H.Ax = axes('units','pixels','position',[margin_left,margin_bot,wa,ha],...
 xlabel(H.Ax,'x / L')
 ylabel(H.Ax,'Velocity (m/yr)')
 
-set(H.Ax,'ylim',[0,125]);
+set(H.Ax,'ylim',[0,170]);
 
 % Legend
-c_UFE = [1.0,0.2,0.2];
+c_UFE    = [1.0,0.2,0.2];
 c_FS     = [0.2,0.5,1.0];
 c_HO     = [0.1,0.7,0.3];
 line(H.Ax(1),'xdata',[],'ydata',[],'color',c_UFE,'linewidth',3,'linestyle','-');
@@ -146,17 +146,17 @@ line(H.Ax(1),'xdata',[],'ydata',[],'color',c_HO,'linewidth',3);
 for a = 1
   
   if a == 1
-    ex = 'a160';
+    ex = 'c160';
   elseif a == 2
-    ex = 'a080';
+    ex = 'c080';
   elseif a == 3
-    ex = 'a040';
+    ex = 'c040';
   elseif a == 4
-    ex = 'a020';
+    ex = 'c020';
   elseif a == 5
-    ex = 'a010';
+    ex = 'c010';
   elseif a == 6
-    ex = 'a005';
+    ex = 'c005';
   end
   
   x_FS = linspace(0,1,200)';
@@ -270,12 +270,14 @@ for nzi = 1: length( nzs)
     trans.xt = linspace( -L/2, L/2, trans.n)';
     trans.yt = zeros( trans.n,1) + L/4;
     
-    foldername = ['ISMIP_HOM_A_BPA_nz' num2str(nz) '_R' Rstrs{ri} '_160'];
+    foldername = ['ISMIP_HOM_C_BPA_nz' num2str(nz) '_R' Rstrs{ri} '_160'];
     filename = [foldername '/help_fields_ANT_00001.nc'];
     
     if ~exist(filename,'file'); continue; end
     time = ncread( filename,'time');
     if isempty( time); continue; end
+    
+    disp(['Plotting run ' foldername])
     
     mesh     = read_mesh_from_file( filename);
     trans.A  = calc_transect_matrix_a( mesh, trans.xt, trans.yt);

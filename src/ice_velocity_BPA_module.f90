@@ -926,45 +926,46 @@ CONTAINS
     ! Calculate the stiffness matrix and load vector representing
     ! surface boundary conditions to the BPA.
     !
-    ! At the surface (k=1), the zero-stress boundary condition implies that:
+    ! At the ice surface (k=1), the zero-stress boundary condition implies that:
     !
-    !   2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx) - du/dz = 0
-    !   2 dh/dy (2 dv/dy + du/dx) + dh/dx (dv/dx + du/dy) - dv/dz = 0
+    ! [1]     2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx) - du/dz = 0
     !
     ! The two-sided differencing scheme for the first and second derivatives du/dz, d2u/dz2 reads:
     !
-    !    du/dz  =  dzeta/dz    (u( k+1) - u( k-1)) / (2 dzeta)
-    !   d2u/dz2 = (dzeta/dz)^2 (u( k+1) + u( k-1) - 2 u( k)) / dzeta^2
+    ! [2]     du/dz  =  dzeta/dz    (u( k+1) - u( k-1)) / (2 dzeta)
+    ! [3]     d2u/dz2 = (dzeta/dz)^2 (u( k+1) + u( k-1) - 2 u( k)) / dzeta^2
     !
-    ! However, in this case we know du/dz from the zero-stress boundary condition:
+    ! A the ice surface, u( k-1) doesn't actually exist, but we can treat it as a "ghost point".
+    ! Since, at the ice surface, we know du/dz from the zero-stress boundary condition [1]:
     !
-    !   du/dz = 2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)
+    ! [4]     du/dz = 2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)
     !
-    ! By inserting this BC into the expression for du/dz yields:
+    ! Substituting [4] into [2] yields:
     !
-    !   dzeta/dz (u( k+1) - u( k-1)) / (2 dzeta) = 2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)
-    !   u( k+1) - u( k-1) = 2 dzeta / (dzeta/dz)  (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx))
-    !   u( k-1) = u( k+1) - 2 dzeta / (dzeta/dz)  (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx))
+    !         dzeta/dz (u( k+1) - u( k-1)) / (2 dzeta) = 2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)
+    !         u( k+1) - u( k-1) = 2 dzeta / (dzeta/dz)  (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx))
+    ! [5]     u( k-1) = u( k+1) - 2 dzeta / (dzeta/dz)  (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx))
     !
-    ! Inserting this into the expression for d2u/dz2 yields:
+    ! Substituting [5] into [3] yields:
     !
-    !   d2u/dz2 = (dzeta/dz)^2 1/dzeta^2 ( -2 u( k) + u( k+1) + u( k-1))
-    !           = (dzeta/dz)^2 1/dzeta^2 ( -2 u( k) + 2 u( k+1) - 2 dzeta / (dzeta/dz) (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)))
-    !           = (dzeta/dz)^2 2/dzeta^2 ( u( k+1) - u( k) - dzeta / (dzeta/dz) (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)))
+    !         d2u/dz2 = (dzeta/dz)^2 1/dzeta^2 ( -2 u( k) + u( k+1) + u( k-1))
+    !                 = (dzeta/dz)^2 1/dzeta^2 ( -2 u( k) + 2 u( k+1) - 2 dzeta / (dzeta/dz) (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)))
+    ! [6]             = (dzeta/dz)^2 2/dzeta^2 ( u( k+1) - u( k) - dzeta / (dzeta/dz) (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)))
     !
     ! The product-rule-expanded form of the BPA reads:
     !
-    !    eta    ( 4 d2u/dx2 + d2u/dy2 + 3 d2v/dxdy + d2u/dz2) + ...
-    !   deta/dx ( 4 du/dx + 2 dv/dy) + ...
-    !   deta/dy (   du/dy +   dv/dx) + ...
-    !   deta/dz (   du/dz) = rho g dh/dx
+    ! [7]     eta    ( 4 d2u/dx2 + d2u/dy2 + 3 d2v/dxdy + d2u/dz2) + ...
+    !         deta/dx ( 4 du/dx + 2 dv/dy) + ...
+    !         deta/dy (   du/dy +   dv/dx) + ...
+    !         deta/dz (   du/dz) = rho g dh/dx
     !
-    ! Substituting the new expressions for du/dz, d2u/dz2 into this equation yields:
+    ! Substituting [4] and [6] into [7] yields:
     !
-    !    eta    ( 4 d2u/dx2 + d2u/dy2 + 3 d2v/dxdy + (dzeta/dz)^2 2/dzeta^2 ( u( k+1) - u( k) - dzeta / (dzeta/dz) (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)))) + ...
-    !   deta/dx ( 4 du/dx + 2 dv/dy) + ...
-    !   deta/dy (   du/dy +   dv/dx) + ...
-    !   deta/dz (   2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)) = rho g dh/dx
+    ! [8]     eta    ( 4 d2u/dx2 + d2u/dy2 + 3 d2v/dxdy + (dzeta/dz)^2 2/dzeta^2 ( u( k+1) - u( k) - ...
+    !                  dzeta / (dzeta/dz) (2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)))) + ...
+    !         deta/dx ( 4 du/dx + 2 dv/dy) + ...
+    !         deta/dy (   du/dy +   dv/dx) + ...
+    !         deta/dz ( 2 dh/dx (2 du/dx + dv/dy) + dh/dy (du/dy + dv/dx)) = rho g dh/dx
 
     IMPLICIT NONE
 
@@ -1268,10 +1269,48 @@ CONTAINS
 
   SUBROUTINE calc_stiffness_matrix_BPA_BC_base( mesh, ice, BPA)
     ! Calculate the stiffness matrix and load vector representing
-    ! basal boundary conditions to the BPA:
+    ! basal boundary conditions to the BPA.
     !
-    ! 2 db/dx ( 2 du/dx + dv/dy ) + db/dy ( du/dy + dv/dx ) - du/dz + beta_b/eta u = 0
-    ! 2 db/dy ( 2 dv/dy + du/dx ) + db/dx ( dv/dx + du/dy ) - dv/dz + beta_b/eta v = 0
+    ! At the ice base (k=nz), the zero-stress boundary condition implies that:
+    !
+    ! [1]     2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) - du/dz + beta_b/eta u = 0
+    !
+    ! The two-sided differencing scheme for the first and second derivatives du/dz, d2u/dz2 reads:
+    !
+    ! [2]     du/dz  =  dzeta/dz    (u( k+1) - u( k-1)) / (2 dzeta)
+    ! [3]     d2u/dz2 = (dzeta/dz)^2 (u( k+1) + u( k-1) - 2 u( k)) / dzeta^2
+    !
+    ! A the ice base, u( k+1) doesn't actually exist, but we can treat it as a "ghost point".
+    ! Since, at the ice base, we know du/dz from the zero-stress boundary condition [1]:
+    !
+    ! [4]     du/dz = 2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + beta_b/eta u
+    !
+    ! Substituting [4] into [2] yields:
+    !
+    !         dzeta/dz (u( k+1) - u( k-1)) / (2 dzeta) = 2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + beta_b/eta u
+    !         u( k+1) - u( k-1) = 2 dzeta / (dzeta/dz)  (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + beta_b/eta u)
+    ! [5]     u( k+1) = u( k-1) + 2 dzeta / (dzeta/dz)  (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + beta_b/eta u)
+    !
+    ! Substituting [5] into [3] yields:
+    !
+    !         d2u/dz2 = (dzeta/dz)^2  1/dzeta^2 ( -2 u( k) + u( k+1) + u( k-1))
+    !                 = (dzeta/dz)^2  1/dzeta^2 ( -2 u( k) + 2 u( k-1) + 2 dzeta / (dzeta/dz) (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + beta_b/eta u))
+    ! [6]             = (dzeta/dz)^2 -2/dzeta^2 ( u( k) - u( km1) - dzeta / (dzeta/dz) (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + beta_b/eta u))
+    !
+    ! The product-rule-expanded form of the BPA reads:
+    !
+    ! [7]     eta    ( 4 d2u/dx2 + d2u/dy2 + 3 d2v/dxdy + d2u/dz2) + ...
+    !         deta/dx ( 4 du/dx + 2 dv/dy) + ...
+    !         deta/dy (   du/dy +   dv/dx) + ...
+    !         deta/dz (   du/dz) = rho g dh/dx
+    !
+    ! Substituting [4] and [6] into [7] yields:
+    !
+    ! [8]     eta    ( 4 d2u/dx2 + d2u/dy2 + 3 d2v/dxdy + (dzeta/dz)^2 -2/dzeta^2 ( u( k) - u( km1) - ...
+    !                  dzeta / (dzeta/dz) (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + beta_b/eta u))) + ...
+    !         deta/dx ( 4 du/dx + 2 dv/dy) + ...
+    !         deta/dy (   du/dy +   dv/dx) + ...
+    !         deta/dz ( 2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + beta_b/eta u) = rho g dh/dx
 
     IMPLICIT NONE
 
@@ -1295,6 +1334,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                          :: beta_b_over_eta_bk_vec
     INTEGER                                                      :: wbeta_b_over_eta_b, wbeta_b_over_eta_b_vec, wbeta_b_over_eta_bk_vec
     INTEGER                                                      :: vi,ti,k,n,nu,nv
+    REAL(dp)                                                     :: dzeta
+    TYPE(tMat)                                                   :: M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u
+    TYPE(tMat)                                                   :: M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v
+    REAL(dp), DIMENSION(:    ), POINTER                          :: dzetadz_sq_times_2_over_dzetasq_bk_vec
+    REAL(dp), DIMENSION(:    ), POINTER                          :: dzeta_over_dzetadz_bk_vec
+    INTEGER                                                      :: wdzetadz_sq_times_2_over_dzetasq_bk_vec, wdzeta_over_dzetadz_bk_vec
     TYPE(tMat)                                                   :: Au1, Au2, Au3, Au4, Au, Au_bkuv
     TYPE(tMat)                                                   :: Av1, Av2, Av3, Av4, Av, Av_bkuv
     TYPE(tVec)                                                   :: V1
@@ -1332,16 +1377,18 @@ CONTAINS
     END IF ! IF (C%choice_sliding_law == 'none') THEN
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV  , b_a                   , wb_a                   )
-    CALL allocate_shared_dp_1D( mesh%nTri, db_dx_b               , wdb_dx_b               )
-    CALL allocate_shared_dp_1D( mesh%nTri, db_dy_b               , wdb_dy_b               )
-    CALL allocate_shared_dp_1D( mesh%nnb , db_dx_b_vec           , wdb_dx_b_vec           )
-    CALL allocate_shared_dp_1D( mesh%nnb , db_dy_b_vec           , wdb_dy_b_vec           )
-    CALL allocate_shared_dp_1D( mesh%nnbk, db_dx_bk_vec          , wdb_dx_bk_vec          )
-    CALL allocate_shared_dp_1D( mesh%nnbk, db_dy_bk_vec          , wdb_dy_bk_vec          )
-    CALL allocate_shared_dp_1D( mesh%nnb , beta_b_over_eta_b     , wbeta_b_over_eta_b     )
-    CALL allocate_shared_dp_1D( mesh%nnb , beta_b_over_eta_b_vec , wbeta_b_over_eta_b_vec )
-    CALL allocate_shared_dp_1D( mesh%nnbk, beta_b_over_eta_bk_vec, wbeta_b_over_eta_bk_vec)
+    CALL allocate_shared_dp_1D( mesh%nV  , b_a                                   , wb_a                                   )
+    CALL allocate_shared_dp_1D( mesh%nTri, db_dx_b                               , wdb_dx_b                               )
+    CALL allocate_shared_dp_1D( mesh%nTri, db_dy_b                               , wdb_dy_b                               )
+    CALL allocate_shared_dp_1D( mesh%nnb , db_dx_b_vec                           , wdb_dx_b_vec                           )
+    CALL allocate_shared_dp_1D( mesh%nnb , db_dy_b_vec                           , wdb_dy_b_vec                           )
+    CALL allocate_shared_dp_1D( mesh%nnbk, db_dx_bk_vec                          , wdb_dx_bk_vec                          )
+    CALL allocate_shared_dp_1D( mesh%nnbk, db_dy_bk_vec                          , wdb_dy_bk_vec                          )
+    CALL allocate_shared_dp_1D( mesh%nnb , beta_b_over_eta_b                     , wbeta_b_over_eta_b                     )
+    CALL allocate_shared_dp_1D( mesh%nnb , beta_b_over_eta_b_vec                 , wbeta_b_over_eta_b_vec                 )
+    CALL allocate_shared_dp_1D( mesh%nnbk, beta_b_over_eta_bk_vec                , wbeta_b_over_eta_bk_vec                )
+    CALL allocate_shared_dp_1D( mesh%nnbk, dzetadz_sq_times_2_over_dzetasq_bk_vec, wdzetadz_sq_times_2_over_dzetasq_bk_vec)
+    CALL allocate_shared_dp_1D( mesh%nnbk, dzeta_over_dzetadz_bk_vec             , wdzeta_over_dzetadz_bk_vec             )
 
     ! Calculate ice base elevation b = h - H
     DO vi = mesh%vi1, mesh%vi2
@@ -1368,13 +1415,24 @@ CONTAINS
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_b_bk_base, db_dy_b_vec          , db_dy_bk_vec          )
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_b_bk_base, beta_b_over_eta_b_vec, beta_b_over_eta_bk_vec)
 
-  ! == Calculate the stiffness matrix for Eq. 1
+    ! Calculate (dzeta/dz)^2 2/dzeta^2 and dzeta / (dzeta/dz)
+    dzeta = C%zeta( C%nz) - C%zeta( C%nz-1)
+    DO ti = mesh%ti1, mesh%ti2
+    DO k = 1, C%nz
+      n = mesh%tik2n( ti,k)
+      dzetadz_sq_times_2_over_dzetasq_bk_vec( n) = ice%dzeta_dz_bk( ti,k)**2 * 2._dp / dzeta**2
+      dzeta_over_dzetadz_bk_vec(              n) = dzeta / ice%dzeta_dz_bk( ti,k)
+    END DO
+    END DO
+    CALL sync
+
+ ! ==  Calculate matrix operators representing [2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u] and [2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta v]
 
     ! Au1 = (2 du/dx + dv/dy)
     CALL MatDuplicate( BPA%M_2_dudx_p_dvdy_bkuv_bk, MAT_COPY_VALUES, Au1, perr)
     ! V1 = db/dx
     CALL vec_double2petsc( db_dx_bk_vec, V1)
-    ! Au1 = db/dx (2 du/dx + dv/dy)
+    ! Au1 = V1 * Au1 = db/dx (2 du/dx + dv/dy)
     CALL MatDiagonalScale( Au1, V1, PETSC_NULL_VEC, perr)
     ! Clean up after yourself
     CALL VecDestroy( V1, perr)
@@ -1383,42 +1441,35 @@ CONTAINS
     CALL MatDuplicate( BPA%M_dudy_p_dvdx_bkuv_bk, MAT_COPY_VALUES, Au2, perr)
     ! V1 = db/dy
     CALL vec_double2petsc( db_dy_bk_vec, V1)
-    ! Au2 = db/dy (du/dy + dv/dx)
+    ! Au2 = V1 * Au2 = db/dy (du/dy + dv/dx)
     CALL MatDiagonalScale( Au2, V1, PETSC_NULL_VEC, perr)
     ! Clean up after yourself
     CALL VecDestroy( V1, perr)
 
-    ! Au3 = du/dz
-    CALL MatMatMult( mesh%M_ddz_bk_bk, mesh%M_map_bku_bk, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, Au3, perr)
-
-    ! Au4 = u
-    CALL MatDuplicate( mesh%M_map_bku_bk, MAT_COPY_VALUES, Au4, perr)
-    ! V1 = beta_b / eta
+    ! Au3 = u
+    CALL MatDuplicate( mesh%M_map_bku_bk, MAT_COPY_VALUES, Au3, perr)
+    ! V1 = betab/eta
     CALL vec_double2petsc( beta_b_over_eta_bk_vec, V1)
-    ! Au4 = beta_b / eta u
-    CALL MatDiagonalScale( Au4, V1, PETSC_NULL_VEC, perr)
+    ! Au3 = V1 * Au3 = betab/eta u
+    CALL MatDiagonalScale( Au3, V1, PETSC_NULL_VEC, perr)
     ! Clean up after yourself
     CALL VecDestroy( V1, perr)
 
-    ! Au = Au1 = db/dx (2 du/dx + dv/dy)
-    CALL MatDuplicate( Au1, MAT_COPY_VALUES, Au, perr)
-    ! Au = Au + Au2 = db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx)
-    CALL MatAXPY( Au, 1._dp, Au2, DIFFERENT_NONZERO_PATTERN, perr)
-    ! Au = Au - Au3 = db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) - du/dz
-    CALL MatAXPY( Au, -1._dp, Au3, DIFFERENT_NONZERO_PATTERN, perr)
-    ! Au = Au + Au4 = db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) - du/dz + beta_b / eta u
-    CALL MatAXPY( Au, 1._dp, Au4, DIFFERENT_NONZERO_PATTERN, perr)
-
-    ! Au_bkuv = Au on the bkuv-grid
-    CALL MatMatMult( mesh%M_map_bk_bku, Au, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, Au_bkuv, perr)
-
-  ! == Calculate the stiffness matrix for Eq. 2
+    ! M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u = Au2 + 2 Au1 = 2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx)
+    CALL MatDuplicate( Au2, MAT_COPY_VALUES, M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u, perr)
+    CALL MatAXPY( M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u, 2._dp, Au1, DIFFERENT_NONZERO_PATTERN, perr)
+    ! M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u = .. + Au3 = 2 db/dx (2 du/dx + dv/dy) + db/dx (du/dy + dv/dx) + betab/eta u
+    CALL MatAXPY( M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u, 1._dp, Au3, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Clean up after yourself
+    CALL MatDestroy( Au1, perr)
+    CALL MatDestroy( Au2, perr)
+    CALL MatDestroy( Au3, perr)
 
     ! Av1 = (2 dv/dy + du/dx)
     CALL MatDuplicate( BPA%M_2_dvdy_p_dudx_bkuv_bk, MAT_COPY_VALUES, Av1, perr)
     ! V1 = db/dy
     CALL vec_double2petsc( db_dy_bk_vec, V1)
-    ! Av1 = db/dy (2 dv/dy + du/dx)
+    ! Av1 = V1 * Av1 = db/dy (2 dv/dy + du/dx)
     CALL MatDiagonalScale( Av1, V1, PETSC_NULL_VEC, perr)
     ! Clean up after yourself
     CALL VecDestroy( V1, perr)
@@ -1427,31 +1478,166 @@ CONTAINS
     CALL MatDuplicate( BPA%M_dvdx_p_dudy_bkuv_bk, MAT_COPY_VALUES, Av2, perr)
     ! V1 = db/dx
     CALL vec_double2petsc( db_dx_bk_vec, V1)
-    ! Av2 = db/dx (dv/dx + du/dy)
+    ! Av2 = V1 * Av2 = db/dx (dv/dx + du/dy)
     CALL MatDiagonalScale( Av2, V1, PETSC_NULL_VEC, perr)
     ! Clean up after yourself
     CALL VecDestroy( V1, perr)
 
-    ! Av3 = dv/dz
-    CALL MatMatMult( mesh%M_ddz_bk_bk, mesh%M_map_bkv_bk, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, Av3, perr)
-
-    ! Av4 = v
-    CALL MatDuplicate( mesh%M_map_bkv_bk, MAT_COPY_VALUES, Av4, perr)
-    ! V1 = beta_b / eta
+    ! Av3 = v
+    CALL MatDuplicate( mesh%M_map_bkv_bk, MAT_COPY_VALUES, Av3, perr)
+    ! V1 = betab/eta
     CALL vec_double2petsc( beta_b_over_eta_bk_vec, V1)
-    ! Av4 = beta_b / eta v
+    ! Av3 = V1 * Av3 = betab/eta v
+    CALL MatDiagonalScale( Av3, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+
+    ! M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v = Av2 + 2 Av1 = 2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy)
+    CALL MatDuplicate( Av2, MAT_COPY_VALUES, M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v, perr)
+    CALL MatAXPY( M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v, 2._dp, Av1, DIFFERENT_NONZERO_PATTERN, perr)
+    ! M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v = .. + Av3 = 2 db/dy (2 dv/dy + du/dx) + db/dy (dv/dx + du/dy) + betab/eta v
+    CALL MatAXPY( M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v, 1._dp, Av3, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Clean up after yourself
+    CALL MatDestroy( Av1, perr)
+    CALL MatDestroy( Av2, perr)
+    CALL MatDestroy( Av3, perr)
+
+  ! == Calculate the stiffness matrix for Eq. 1
+
+    ! Au1 = u( k) - u( k-1)
+    CALL MatDuplicate( BPA%M_uk_m_ukm1_bkuv_bk, MAT_COPY_VALUES, Au1, perr)
+    ! Au2 = 2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u
+    CALL MatDuplicate( M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u, MAT_COPY_VALUES, Au2, perr)
+    ! V1 = dzeta / (dzeta/dz)
+    CALL vec_double2petsc( dzeta_over_dzetadz_bk_vec, V1)
+    ! Au2 = V1 * Au2 = dzeta / (dzeta/dz) (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u)
+    CALL MatDiagonalScale( Au2, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+    ! Au1 = Au1 - Au2 = u( k) - u( k-1) - dzeta / (dzeta/dz) (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u)
+    CALL MatAXPY( Au1, -1._dp, Au2, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Clean up after yourself
+    CALL MatDestroy( Au2, perr)
+    ! V1 = dzeta/dz)^2 2/dzeta^2
+    CALL vec_double2petsc( dzetadz_sq_times_2_over_dzetasq_bk_vec, V1)
+    ! Au1 = V1 * Au1 = dzeta/dz)^2 2/dzeta^2 ( u( k) - u( k-1) - dzeta / (dzeta/dz) (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u))
+    CALL MatDiagonalScale( Au1, V1, PETSC_NULL_VEC, perr)
+    ! Au1 = Au1 - M_4_d2udx2_p_3_d2vdxdy_p_d2udy2_bkuv_bk
+    !     = -(4 d2u/dx2 + d2u/dy2 + 3 d2v/dxdy) + (dzeta/dz)^2 2/dzeta^2 ( u( k) - u( k-1) - dzeta / (dzeta/dz) (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u))
+    CALL MatAXPY( Au1, -1._dp, BPA%M_4_d2udx2_p_3_d2vdxdy_p_d2udy2_bkuv_bk, DIFFERENT_NONZERO_PATTERN, perr)
+    ! V1 = eta
+    CALL vec_double2petsc( BPA%eta_bk_vec, V1)
+    ! Au1 = V1 * Au1
+    !     = -eta ( 4 d2u/dx2 + d2u/dy2 + 3 d2v/dxdy - (dzeta/dz)^2 2/dzeta^2 ( u( k) - u( k-1) - dzeta / (dzeta/dz) (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u)))
+    CALL MatDiagonalScale( Au1, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+
+    ! Au2 = 4 du/dx + 2 dv/dy
+    CALL MatDuplicate( BPA%M_4_dudx_p_2_dvdy_bkuv_bk, MAT_COPY_VALUES, Au2, perr)
+    ! V1 = deta/dx
+    CALL vec_double2petsc( BPA%deta_dx_bk_vec, V1)
+    ! Au2 = V1 * Au2 = deta/dx ( 4 du/dx + 2 dv/dy )
+    CALL MatDiagonalScale( Au2, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+
+    ! Au3 = du/dy + dv/dx
+    CALL MatDuplicate( BPA%M_dudy_p_dvdx_bkuv_bk, MAT_COPY_VALUES, Au3, perr)
+    ! V1 = deta/dy
+    CALL vec_double2petsc( BPA%deta_dy_bk_vec, V1)
+    ! Au3 = V1 * Au3 = deta/dy ( du/dy + dv/dx )
+    CALL MatDiagonalScale( Au3, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+
+    ! Au4 = 2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u
+    CALL MatDuplicate( M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u, MAT_COPY_VALUES, Au4, perr)
+    ! V1 = deta/dz
+    CALL vec_double2petsc( BPA%deta_dz_bk_vec, V1)
+    ! Au4 = V1 * Au4 = deta/dz (2 db/dx (2 du/dx + dv/dy) + db/dy (du/dy + dv/dx) + betab/eta u)
+    CALL MatDiagonalScale( Au4, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+
+    ! Au = Au2
+    CALL MatDuplicate( Au2, MAT_COPY_VALUES, Au, perr)
+    ! Au = Au - Au1 = -Au1 + Au2
+    CALL MatAXPY( Au, -1._dp, Au1, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Au = Au + Au3 = -Au1 + Au2 + Au3
+    CALL MatAXPY( Au,  1._dp, Au3, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Au = Au + Au4 = -Au1 + Au2 + Au3 + Au4
+    CALL MatAXPY( Au,  1._dp, Au4, DIFFERENT_NONZERO_PATTERN, perr)
+
+    ! Au_bkuv = Au on the bkuv-grid
+    CALL MatMatMult( mesh%M_map_bk_bku, Au, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, Au_bkuv, perr)
+
+  ! == Calculate the stiffness matrix for Eq. 2
+
+    ! Av1 = v( k) - v( k-1)
+    CALL MatDuplicate( BPA%M_vk_m_vkm1_bkuv_bk, MAT_COPY_VALUES, Av1, perr)
+    ! Av2 = 2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta u
+    CALL MatDuplicate( M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v, MAT_COPY_VALUES, Av2, perr)
+    ! V1 = dzeta / (dzeta/dz)
+    CALL vec_double2petsc( dzeta_over_dzetadz_bk_vec, V1)
+    ! Av2 = V1 * Av2 = dzeta / (dzeta/dz) (2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta u)
+    CALL MatDiagonalScale( Av2, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+    ! Av1 = Av1 - Av2 = v( k) - v( k-1) - dzeta / (dzeta/dz) (2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta u)
+    CALL MatAXPY( Av1, -1._dp, Av2, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Clean up after yourself
+    CALL MatDestroy( Av2, perr)
+    ! V1 = dzeta/dz)^2 2/dzeta^2
+    CALL vec_double2petsc( dzetadz_sq_times_2_over_dzetasq_bk_vec, V1)
+    ! Av1 = V1 * Av1 = dzeta/dz)^2 2/dzeta^2 ( v( k) - v( k-1) - dzeta / (dzeta/dz) (2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta u))
+    CALL MatDiagonalScale( Av1, V1, PETSC_NULL_VEC, perr)
+    ! Av1 = Av1 - M_4_d2vdy2_p_3_d2udxdy_p_d2vdx2_bkuv_bk
+    !     = -(4 d2v/dy2 + d2v/dx2 + 3 d2u/dxdy) + (dzeta/dz)^2 2/dzeta^2 ( v( k) - v( k-1) - dzeta / (dzeta/dz) (2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta u))
+    CALL MatAXPY( Av1, -1._dp, BPA%M_4_d2vdy2_p_3_d2udxdy_p_d2vdx2_bkuv_bk, DIFFERENT_NONZERO_PATTERN, perr)
+    ! V1 = eta
+    CALL vec_double2petsc( BPA%eta_bk_vec, V1)
+    ! Av1 = V1 * Av1
+    !     = -eta ( 4 d2v/dy2 + d2v/dx2 + 3 d2u/dxdy - (dzeta/dz)^2 2/dzeta^2 ( v( k) - v( k-1) - dzeta / (dzeta/dz) (2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta u)))
+    CALL MatDiagonalScale( Av1, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+
+    ! Av2 = 4 dv/dy + 2 du/dx
+    CALL MatDuplicate( BPA%M_4_dvdy_p_2_dudx_bkuv_bk, MAT_COPY_VALUES, Av2, perr)
+    ! V1 = deta/dy
+    CALL vec_double2petsc( BPA%deta_dy_bk_vec, V1)
+    ! Av2 = V1 * Av2 = deta/dy ( 4 dv/dy + 2 du/dx )
+    CALL MatDiagonalScale( Av2, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+
+    ! Av3 = dv/dx + du/dy
+    CALL MatDuplicate( BPA%M_dvdx_p_dudy_bkuv_bk, MAT_COPY_VALUES, Av3, perr)
+    ! V1 = deta/dx
+    CALL vec_double2petsc( BPA%deta_dx_bk_vec, V1)
+    ! Av3 = V1 * Av3 = deta/dx ( dv/dx + du/dy )
+    CALL MatDiagonalScale( Av3, V1, PETSC_NULL_VEC, perr)
+    ! Clean up after yourself
+    CALL VecDestroy( V1, perr)
+
+    ! Av4 = 2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta v
+    CALL MatDuplicate( M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v, MAT_COPY_VALUES, Av4, perr)
+    ! V1 = deta/dz
+    CALL vec_double2petsc( BPA%deta_dz_bk_vec, V1)
+    ! Av4 = V1 * Av4 = deta/dz (2 db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) + betab/eta u)
     CALL MatDiagonalScale( Av4, V1, PETSC_NULL_VEC, perr)
     ! Clean up after yourself
     CALL VecDestroy( V1, perr)
 
-    ! Av = Av1 = db/dy (2 dv/dy + du/dx)
-    CALL MatDuplicate( Av1, MAT_COPY_VALUES, Av, perr)
-    ! Av = Av + Av2 = db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy)
-    CALL MatAXPY( Av, 1._dp, Av2, DIFFERENT_NONZERO_PATTERN, perr)
-    ! Av = Av - Av3 = db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) - dv/dz
-    CALL MatAXPY( Av, -1._dp, Av3, DIFFERENT_NONZERO_PATTERN, perr)
-    ! Av = Av + Av4 = db/dy (2 dv/dy + du/dx) + db/dx (dv/dx + du/dy) - dv/dz + beta_b / eta v
-    CALL MatAXPY( Av, 1._dp, Av4, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Av = Av2
+    CALL MatDuplicate( Av2, MAT_COPY_VALUES, Av, perr)
+    ! Av = Av - Av1 = -Av1 + Av2
+    CALL MatAXPY( Av, -1._dp, Av1, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Av = Av + Av3 = -Av1 + Av2 + Av3
+    CALL MatAXPY( Av,  1._dp, Av3, DIFFERENT_NONZERO_PATTERN, perr)
+    ! Av = Av + Av4 = -Av1 + Av2 + Av3 + Av4
+    CALL MatAXPY( Av,  1._dp, Av4, DIFFERENT_NONZERO_PATTERN, perr)
 
     ! Av_bkuv = Av on the bkuv-grid
     CALL MatMatMult( mesh%M_map_bk_bkv, Av, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, Av_bkuv, perr)
@@ -1467,34 +1653,38 @@ CONTAINS
     DO k = 1, C%nz
       nu = mesh%tikuv2n( ti,k,1)
       nv = mesh%tikuv2n( ti,k,2)
-      BPA%bb_BC_base( nu) = 0._dp
-      BPA%bb_BC_base( nv) = 0._dp
+      BPA%bb_BC_base( nu) = -BPA%taudx_b( ti)
+      BPA%bb_BC_base( nv) = -BPA%taudy_b( ti)
     END DO
     END DO
 
     ! Clean up after yourself
-    CALL deallocate_shared( wb_a                   )
-    CALL deallocate_shared( wdb_dx_b               )
-    CALL deallocate_shared( wdb_dy_b               )
-    CALL deallocate_shared( wdb_dx_b_vec           )
-    CALL deallocate_shared( wdb_dy_b_vec           )
-    CALL deallocate_shared( wdb_dx_bk_vec          )
-    CALL deallocate_shared( wdb_dy_bk_vec          )
-    CALL deallocate_shared( wbeta_b_over_eta_b     )
-    CALL deallocate_shared( wbeta_b_over_eta_b_vec )
-    CALL deallocate_shared( wbeta_b_over_eta_bk_vec)
-    CALL MatDestroy( Au1    , perr)
-    CALL MatDestroy( Au2    , perr)
-    CALL MatDestroy( Au3    , perr)
-    CALL MatDestroy( Au4    , perr)
-    CALL MatDestroy( Au     , perr)
-    CALL MatDestroy( Au_bkuv, perr)
-    CALL MatDestroy( Av1    , perr)
-    CALL MatDestroy( Av2    , perr)
-    CALL MatDestroy( Av3    , perr)
-    CALL MatDestroy( Av4    , perr)
-    CALL MatDestroy( Av     , perr)
-    CALL MatDestroy( Av_bkuv, perr)
+    CALL deallocate_shared( wb_a                                   )
+    CALL deallocate_shared( wdb_dx_b                               )
+    CALL deallocate_shared( wdb_dy_b                               )
+    CALL deallocate_shared( wdb_dx_b_vec                           )
+    CALL deallocate_shared( wdb_dy_b_vec                           )
+    CALL deallocate_shared( wdb_dx_bk_vec                          )
+    CALL deallocate_shared( wdb_dy_bk_vec                          )
+    CALL deallocate_shared( wbeta_b_over_eta_b                     )
+    CALL deallocate_shared( wbeta_b_over_eta_b_vec                 )
+    CALL deallocate_shared( wbeta_b_over_eta_bk_vec                )
+    CALL deallocate_shared( wdzetadz_sq_times_2_over_dzetasq_bk_vec)
+    CALL deallocate_shared( wdzeta_over_dzetadz_bk_vec             )
+    CALL MatDestroy( M_2_dbdx_2_dudx_p_dvdy_p_dbdy_dudy_p_dvdx_p_betab_over_eta_u, perr)
+    CALL MatDestroy( M_2_dbdy_2_dvdy_p_dudx_p_dbdx_dvdx_p_dudy_p_betab_over_eta_v, perr)
+    CALL MatDestroy( Au1                                                         , perr)
+    CALL MatDestroy( Au2                                                         , perr)
+    CALL MatDestroy( Au3                                                         , perr)
+    CALL MatDestroy( Au4                                                         , perr)
+    CALL MatDestroy( Au                                                          , perr)
+    CALL MatDestroy( Au_bkuv                                                     , perr)
+    CALL MatDestroy( Av1                                                         , perr)
+    CALL MatDestroy( Av2                                                         , perr)
+    CALL MatDestroy( Av3                                                         , perr)
+    CALL MatDestroy( Av4                                                         , perr)
+    CALL MatDestroy( Av                                                          , perr)
+    CALL MatDestroy( Av_bkuv                                                     , perr)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

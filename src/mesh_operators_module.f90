@@ -1725,8 +1725,25 @@ CONTAINS
     ! Calculate matrices representing mapping operators between the scalar and vector b grids
     CALL calc_buv_matrices( mesh)
 
+    ! Calculate the 1-D zeta operators (needed for thermodynamics)
+    CALL calc_vertical_operators_reg_1D(  C%zeta, mesh%M_ddzeta_k_k_1D, mesh%M_d2dzeta2_k_k_1D, mesh%M_fkp1_m_fk_1D, mesh%M_fk_m_fkm1_1D)
+    CALL calc_vertical_operators_stag_1D( C%zeta, C%zeta_stag, mesh%M_map_k_ks_1D, mesh%M_ddzeta_k_ks_1D, mesh%M_map_ks_k_1D, mesh%M_ddzeta_ks_k_1D)
+
+    ! Zeta operators in tridiagonal form for efficient use in thermodynamics
+    CALL calc_zeta_operators_tridiagonal( mesh)
+
     ! Calculate all the basic 3-D matrix operators on the mesh
-    CALL calc_matrix_operators_mesh_basic_3D( mesh)
+    IF     (C%choice_stress_balance_approximation == 'none' .OR. &
+            C%choice_stress_balance_approximation == 'SIA'.OR. &
+            C%choice_stress_balance_approximation == 'SSA'.OR. &
+            C%choice_stress_balance_approximation == 'SIA/SSA'.OR. &
+            C%choice_stress_balance_approximation == 'DIVA') THEN
+      ! No need to do anything
+    ELSEIF (C%choice_stress_balance_approximation == 'BPA') THEN
+      CALL calc_matrix_operators_mesh_basic_3D( mesh)
+    ELSE
+      CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1806,12 +1823,6 @@ CONTAINS
 
   ! == Calculate mapping and d/dzeta operators between the regular and staggered vertical grids
 
-    ! Operators in the vertical column (1-D, no sense in recalculating the exact same coefficients for every grid point)
-    CALL calc_vertical_operators_reg_1D( C%zeta, mesh%M_ddzeta_k_k_1D, mesh%M_d2dzeta2_k_k_1D, mesh%M_fkp1_m_fk_1D, mesh%M_fk_m_fkm1_1D)
-    CALL calc_vertical_operators_stag_1D( C%zeta, C%zeta_stag, mesh%M_map_k_ks_1D, mesh%M_ddzeta_k_ks_1D, mesh%M_map_ks_k_1D, mesh%M_ddzeta_ks_k_1D)
-
-    ! Extrude them horizontally to get them on the 3-D grid(s)
-
     ! ak-ak
     CALL convert_vertical_operator_from_1D_to_3D_k_k( mesh%M_ddzeta_k_k_1D  , mesh%n2vik, mesh%vik2n,                           mesh%M_ddzeta_ak_ak   )
     CALL convert_vertical_operator_from_1D_to_3D_k_k( mesh%M_d2dzeta2_k_k_1D, mesh%n2vik, mesh%vik2n,                           mesh%M_d2dzeta2_ak_ak )
@@ -1830,9 +1841,6 @@ CONTAINS
     CALL convert_vertical_operator_from_1D_to_3D_k_ks( mesh%M_ddzeta_k_ks_1D, mesh%n2tik, mesh%tik2n, mesh%n2tiks, mesh%tiks2n, mesh%M_ddzeta_bk_bks  )
     CALL convert_vertical_operator_from_1D_to_3D_ks_k( mesh%M_map_ks_k_1D   , mesh%n2tik, mesh%tik2n, mesh%n2tiks, mesh%tiks2n, mesh%M_map_bks_bk     )
     CALL convert_vertical_operator_from_1D_to_3D_ks_k( mesh%M_ddzeta_ks_k_1D, mesh%n2tik, mesh%tik2n, mesh%n2tiks, mesh%tiks2n, mesh%M_ddzeta_bks_bk  )
-
-    ! Zeta operators in tridiagonal form for efficient use in thermodynamics
-    CALL calc_zeta_operators_tridiagonal( mesh)
 
     ! 3-D cross-terms
     CALL MatMatMult( mesh%M_ddzeta_bk_bk, mesh%M2_ddxp_bk_bk, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, mesh%M2_d2dxpdzeta_bk_bk, perr)

@@ -228,6 +228,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: eta_bk_vec
     REAL(dp), DIMENSION(:    ), POINTER     :: deta_dx_bk_vec              ! Gradients of eta
     REAL(dp), DIMENSION(:    ), POINTER     :: deta_dy_bk_vec
+    REAL(dp), DIMENSION(:    ), POINTER     :: deta_dz_bk_vec
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_b_b                    ! Friction coefficient (tau_b = u * beta_b)
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_b_b_vec
     REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! Driving stress
@@ -237,7 +238,7 @@ MODULE data_types_module
     INTEGER :: wu_bk_vec, wv_bk_vec
     INTEGER :: wdu_dx_ak_vec, wdu_dy_ak_vec, wdu_dz_ak_vec, wdv_dx_ak_vec, wdv_dy_ak_vec, wdv_dz_ak_vec
     INTEGER :: wdu_dx_bks_vec, wdu_dy_bks_vec, wdu_dz_bks_vec, wdv_dx_bks_vec, wdv_dy_bks_vec, wdv_dz_bks_vec
-    INTEGER :: weta_ak_vec, weta_bks_vec, weta_bk_vec, wdeta_dx_bk_vec, wdeta_dy_bk_vec
+    INTEGER :: weta_ak_vec, weta_bks_vec, weta_bk_vec, wdeta_dx_bk_vec, wdeta_dy_bk_vec, wdeta_dz_bk_vec
     INTEGER :: wbeta_b_b, wbeta_b_b_vec, wtaudx_b, wtaudy_b, wu_bk_prev_vec, wv_bk_prev_vec
 
     ! Parameters for the iterative solver used to solve the matrix equation representing the linearised SSA
@@ -285,6 +286,10 @@ MODULE data_types_module
     TYPE(tMat)                              :: M_dvdx_p_dudy_bkuv_bk
     TYPE(tMat)                              :: M_2_dudx_p_dvdy_bkuv_bk
     TYPE(tMat)                              :: M_2_dvdy_p_dudx_bkuv_bk
+    TYPE(tMat)                              :: M_ukp1_m_uk_bkuv_bk
+    TYPE(tMat)                              :: M_vkp1_m_vk_bkuv_bk
+    TYPE(tMat)                              :: M_uk_m_ukm1_bkuv_bk
+    TYPE(tMat)                              :: M_vk_m_vkm1_bkuv_bk
 
   END TYPE type_velocity_solver_BPA
 
@@ -725,6 +730,8 @@ MODULE data_types_module
     TYPE(type_sparse_matrix_CSR_dp)         :: M_ddzeta_k_ks_1D
     TYPE(type_sparse_matrix_CSR_dp)         :: M_map_ks_k_1D
     TYPE(type_sparse_matrix_CSR_dp)         :: M_ddzeta_ks_k_1D
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_fkp1_m_fk_1D
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_fk_m_fkm1_1D
 
     ! Zeta operators in tridiagonal form for efficient use in thermodynamics
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_ddzeta_k_k_ldiag
@@ -734,7 +741,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_d2dzeta2_k_k_diag
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: M_d2dzeta2_k_k_udiag
 
-    ! 3-D mapping and gradient operators in [x',y',zeta]
+    ! 3-D mapping and gradient operators in [x',y']
     TYPE(tMat)                              :: M_ddxp_ak_ak
     TYPE(tMat)                              :: M_ddyp_ak_ak
     TYPE(tMat)                              :: M_ddxp_bk_bk
@@ -770,6 +777,8 @@ MODULE data_types_module
     TYPE(tMat)                              :: M_ddzeta_bk_ak
     TYPE(tMat)                              :: M_map_bks_ak
     TYPE(tMat)                              :: M_map_ak_bks
+    TYPE(tMat)                              :: M_fkp1_m_fk_bk_bk
+    TYPE(tMat)                              :: M_fk_m_fkm1_bk_bk
 
     ! 3-D gradient operators in [x,y,z]
     TYPE(tMat)                              :: M_ddx_ak_ak

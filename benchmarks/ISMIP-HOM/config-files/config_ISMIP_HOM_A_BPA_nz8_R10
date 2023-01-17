@@ -51,7 +51,7 @@
   ! =========================================================================
 
     create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-    fixed_output_dir_config                     = 'benchmarks/ISMIP-HOM/ISMIP_HOM_A_BPA'                ! If not, create a directory with this name instead (stops the program if this directory already exists)
+    fixed_output_dir_config                     = 'benchmarks/ISMIP-HOM/ISMIP_HOM_A_BPA_nz8_R10'                ! If not, create a directory with this name instead (stops the program if this directory already exists)
     fixed_output_dir_suffix_config              = ''                               ! Suffix to put after the fixed output directory name, useful when doing ensemble runs with the template+variation set-up
     do_write_regional_scalar_output_config      = .FALSE.
     do_write_global_scalar_output_config        = .FALSE.
@@ -136,8 +136,8 @@
   ! ======================================
 
     choice_zeta_grid_config                     = 'irregular_log'                  ! The type of vertical grid to use; can be "regular", "irregular_log", "old_15_layer_zeta"
-    nz_config                                   = 12                               ! The number of vertical layers to use
-    zeta_irregular_log_R_config                 = 5.0                             ! Ratio between subsequent dzeta when choice_zeta_grid = 'irregular_log'
+    nz_config                                   = 8                                ! The number of vertical layers to use
+    zeta_irregular_log_R_config                 = 10.0                             ! Ratio between subsequent dzeta when choice_zeta_grid = 'irregular_log'
 
   ! == Reference geometries (initial, present-day, and GIA equilibrium)
   ! ===================================================================

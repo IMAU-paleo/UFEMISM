@@ -204,7 +204,7 @@ MODULE configuration_module
 
     CHARACTER(LEN=256)  :: choice_zeta_grid_config                     = 'regular'                        ! The type of vertical grid to use; can be "regular", "irregular_log", "old_15_layer_zeta"
     INTEGER             :: nz_config                                   = 12                               ! The number of vertical layers to use
-    REAL(dp)            :: zeta_irregular_log_R_config                 = 0.95_dp                          ! Ratio between subsequent dzeta when choice_zeta_grid = 'irregular_log'
+    REAL(dp)            :: zeta_irregular_log_R_config                 = 10._dp                           ! Ratio between surface and base layer spacings
 
   ! == Reference geometries (initial, present-day, and GIA equilibrium)
   ! ===================================================================

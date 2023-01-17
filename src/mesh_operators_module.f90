@@ -1806,20 +1806,30 @@ CONTAINS
 
   ! == Calculate mapping and d/dzeta operators between the regular and staggered vertical grids
 
-    ! 1-D (on the zeta grids only)
-    CALL calc_vertical_operators_reg_1D( C%zeta, mesh%M_ddzeta_k_k_1D, mesh%M_d2dzeta2_k_k_1D)
+    ! Operators in the vertical column (1-D, no sense in recalculating the exact same coefficients for every grid point)
+    CALL calc_vertical_operators_reg_1D( C%zeta, mesh%M_ddzeta_k_k_1D, mesh%M_d2dzeta2_k_k_1D, mesh%M_fkp1_m_fk_1D, mesh%M_fk_m_fkm1_1D)
     CALL calc_vertical_operators_stag_1D( C%zeta, C%zeta_stag, mesh%M_map_k_ks_1D, mesh%M_ddzeta_k_ks_1D, mesh%M_map_ks_k_1D, mesh%M_ddzeta_ks_k_1D)
 
+    ! Extrude them horizontally to get them on the 3-D grid(s)
+
     ! ak-ak
-    CALL calc_vertical_operators_reg( C%zeta, mesh%M_ddzeta_k_k_1D, mesh%M_d2dzeta2_k_k_1D, mesh%n2vik, mesh%vik2n, mesh%M_ddzeta_ak_ak, mesh%M_d2dzeta2_ak_ak)
+    CALL convert_vertical_operator_from_1D_to_3D_k_k( mesh%M_ddzeta_k_k_1D  , mesh%n2vik, mesh%vik2n,                           mesh%M_ddzeta_ak_ak   )
+    CALL convert_vertical_operator_from_1D_to_3D_k_k( mesh%M_d2dzeta2_k_k_1D, mesh%n2vik, mesh%vik2n,                           mesh%M_d2dzeta2_ak_ak )
     ! bk-bk
-    CALL calc_vertical_operators_reg( C%zeta, mesh%M_ddzeta_k_k_1D, mesh%M_d2dzeta2_k_k_1D, mesh%n2tik, mesh%tik2n, mesh%M_ddzeta_bk_bk, mesh%M_d2dzeta2_bk_bk)
+    CALL convert_vertical_operator_from_1D_to_3D_k_k( mesh%M_ddzeta_k_k_1D  , mesh%n2tik, mesh%tik2n,                           mesh%M_ddzeta_bk_bk   )
+    CALL convert_vertical_operator_from_1D_to_3D_k_k( mesh%M_d2dzeta2_k_k_1D, mesh%n2tik, mesh%tik2n,                           mesh%M_d2dzeta2_bk_bk )
+    CALL convert_vertical_operator_from_1D_to_3D_k_k( mesh%M_fkp1_m_fk_1D   , mesh%n2tik, mesh%tik2n,                           mesh%M_fkp1_m_fk_bk_bk)
+    CALL convert_vertical_operator_from_1D_to_3D_k_k( mesh%M_fk_m_fkm1_1D   , mesh%n2tik, mesh%tik2n,                           mesh%M_fk_m_fkm1_bk_bk)
     ! ak-aks
-    CALL calc_vertical_operators_stag( C%zeta, C%zeta_stag, mesh%M_map_k_ks_1D, mesh%M_ddzeta_k_ks_1D, mesh%M_map_ks_k_1D, mesh%M_ddzeta_ks_k_1D, &
-      mesh%n2vik, mesh%vik2n, mesh%n2viks, mesh%viks2n, mesh%M_map_ak_aks, mesh%M_ddzeta_ak_aks, mesh%M_map_aks_ak, mesh%M_ddzeta_aks_ak)
+    CALL convert_vertical_operator_from_1D_to_3D_k_ks( mesh%M_map_k_ks_1D   , mesh%n2vik, mesh%vik2n, mesh%n2viks, mesh%viks2n, mesh%M_map_ak_aks     )
+    CALL convert_vertical_operator_from_1D_to_3D_k_ks( mesh%M_ddzeta_k_ks_1D, mesh%n2vik, mesh%vik2n, mesh%n2viks, mesh%viks2n, mesh%M_ddzeta_ak_aks  )
+    CALL convert_vertical_operator_from_1D_to_3D_ks_k( mesh%M_map_ks_k_1D   , mesh%n2vik, mesh%vik2n, mesh%n2viks, mesh%viks2n, mesh%M_map_aks_ak     )
+    CALL convert_vertical_operator_from_1D_to_3D_ks_k( mesh%M_ddzeta_ks_k_1D, mesh%n2vik, mesh%vik2n, mesh%n2viks, mesh%viks2n, mesh%M_ddzeta_aks_ak  )
     ! bk-bks
-    CALL calc_vertical_operators_stag( C%zeta, C%zeta_stag, mesh%M_map_k_ks_1D, mesh%M_ddzeta_k_ks_1D, mesh%M_map_ks_k_1D, mesh%M_ddzeta_ks_k_1D, &
-      mesh%n2tik, mesh%tik2n, mesh%n2tiks, mesh%tiks2n, mesh%M_map_bk_bks, mesh%M_ddzeta_bk_bks, mesh%M_map_bks_bk, mesh%M_ddzeta_bks_bk)
+    CALL convert_vertical_operator_from_1D_to_3D_k_ks( mesh%M_map_k_ks_1D   , mesh%n2tik, mesh%tik2n, mesh%n2tiks, mesh%tiks2n, mesh%M_map_bk_bks     )
+    CALL convert_vertical_operator_from_1D_to_3D_k_ks( mesh%M_ddzeta_k_ks_1D, mesh%n2tik, mesh%tik2n, mesh%n2tiks, mesh%tiks2n, mesh%M_ddzeta_bk_bks  )
+    CALL convert_vertical_operator_from_1D_to_3D_ks_k( mesh%M_map_ks_k_1D   , mesh%n2tik, mesh%tik2n, mesh%n2tiks, mesh%tiks2n, mesh%M_map_bks_bk     )
+    CALL convert_vertical_operator_from_1D_to_3D_ks_k( mesh%M_ddzeta_ks_k_1D, mesh%n2tik, mesh%tik2n, mesh%n2tiks, mesh%tiks2n, mesh%M_ddzeta_bks_bk  )
 
     ! Zeta operators in tridiagonal form for efficient use in thermodynamics
     CALL calc_zeta_operators_tridiagonal( mesh)
@@ -6093,32 +6103,27 @@ CONTAINS
 
 ! == 1-D matrix operators on the zeta grid
 
-  SUBROUTINE calc_vertical_operators_reg( zeta, M_ddzeta_k_k_1D, M_d2dzeta2_k_k_1D, n2ck, ck2n, M_ddzeta_k_k, M_d2dzeta2_k_k)
-    ! Take the d/dzeta and d2/dzeta2 operators in the 1-D vertical column, and use them to construct matrix operators
-    ! that apply these operations to every column on the 2-D grid.
+  SUBROUTINE convert_vertical_operator_from_1D_to_3D_k_k( M_1D, n2ck, ck2n, M_3D)
+    ! Take a matrix operator in the 1-D vertical column, and extrude it
+    ! to apply the same operation to every column on the 2-D grid.
 
     IMPLICIT NONE
 
     ! In/output variables:
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)              :: zeta
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_ddzeta_k_k_1D
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_d2dzeta2_k_k_1D
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_1D
     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: n2ck
     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: ck2n
-    TYPE(tMat),                          INTENT(INOUT)           :: M_ddzeta_k_k
-    TYPE(tMat),                          INTENT(INOUT)           :: M_d2dzeta2_k_k
+    TYPE(tMat),                          INTENT(INOUT)           :: M_3D
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_vertical_operators_reg'
+    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'convert_vertical_operator_from_1D_to_3D_k_k'
     INTEGER                                                      :: nc, nz
     INTEGER                                                      :: nnz_per_row_max,row,ii1,ii2,nnz_in_row
     INTEGER                                                      :: ncols, nrows, nnz_max, nnz_est_proc
-    TYPE(type_sparse_matrix_CSR_dp)                              :: M_ddzeta_k_k_CSR
-    TYPE(type_sparse_matrix_CSR_dp)                              :: M_d2dzeta2_k_k_CSR
+    TYPE(type_sparse_matrix_CSR_dp)                              :: M_3D_CSR
     INTEGER,  DIMENSION(:    ), ALLOCATABLE                      :: cols_1D
     INTEGER,  DIMENSION(:    ), ALLOCATABLE                      :: cols_3D
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE                      :: vals_ddzeta
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE                      :: vals_d2dzeta2
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE                      :: vals
     INTEGER                                                      :: row_3D, row_3D1, row_3D2
     INTEGER                                                      :: cc,k
     INTEGER                                                      :: j,col_1D,kn,col_3D
@@ -6132,9 +6137,9 @@ CONTAINS
 
     ! Determine maximum number of non-zeros per row
     nnz_per_row_max = 0
-    DO row = 1, M_ddzeta_k_k_1D%m
-      ii1 = M_ddzeta_k_k_1D%ptr( row)
-      ii2 = M_ddzeta_k_k_1D%ptr( row+1)-1
+    DO row = 1, M_1D%m
+      ii1 = M_1D%ptr( row)
+      ii2 = M_1D%ptr( row+1)-1
       nnz_in_row = ii2 + 1 - ii1
       nnz_per_row_max = MAX( nnz_per_row_max, nnz_in_row)
     END DO
@@ -6146,14 +6151,12 @@ CONTAINS
     nnz_max = nrows * nnz_per_row_max
     nnz_est_proc = CEILING( REAL( nnz_max, dp) / REAL( par%n, dp))
 
-    CALL allocate_matrix_CSR_dist( M_ddzeta_k_k_CSR  , nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_d2dzeta2_k_k_CSR, nrows, ncols, nnz_max)
+    CALL allocate_matrix_CSR_dist( M_3D_CSR, nrows, ncols, nnz_max)
 
     ! Shape functions
-    ALLOCATE( cols_1D(       ncols))
-    ALLOCATE( vals_ddzeta(   ncols))
-    ALLOCATE( vals_d2dzeta2( ncols))
-    ALLOCATE( cols_3D(       ncols))
+    ALLOCATE( cols_1D( ncols))
+    ALLOCATE( cols_3D( ncols))
+    ALLOCATE( vals(    ncols))
 
     CALL partition_list( nrows, par%i, par%n, row_3D1, row_3D2)
     DO row_3D = row_3D1, row_3D2
@@ -6163,12 +6166,11 @@ CONTAINS
       k  = n2ck( row_3D,2)
 
       ! Read the row for layer ks from the 1-D operator matrix
-      ii1 = M_ddzeta_k_k_1D%ptr( k)
-      ii2 = M_ddzeta_k_k_1D%ptr( k+1)-1
+      ii1 = M_1D%ptr( k)
+      ii2 = M_1D%ptr( k+1)-1
       nnz_in_row = ii2 + 1 - ii1
-      cols_1D(       1:nnz_in_row) = M_ddzeta_k_k_1D%index( ii1: ii2)
-      vals_ddzeta(   1:nnz_in_row) = M_ddzeta_k_k_1D%val(   ii1: ii2)
-      vals_d2dzeta2( 1:nnz_in_row) = M_d2dzeta2_k_k_1D%val( ii1: ii2)
+      cols_1D( 1:nnz_in_row) = M_1D%index( ii1: ii2)
+      vals(    1:nnz_in_row) = M_1D%val(   ii1: ii2)
 
       ! Convert column indices from 1-D to 3-D
       DO j = 1, nnz_in_row
@@ -6182,69 +6184,51 @@ CONTAINS
 
       ! Write entries to the 3-D matrix operator
       DO j = 1, nnz_in_row
-        CALL add_entry_CSR_dist( M_ddzeta_k_k_CSR  , row_3D, cols_3D( j), vals_ddzeta(   j))
-        CALL add_entry_CSR_dist( M_d2dzeta2_k_k_CSR, row_3D, cols_3D( j), vals_d2dzeta2( j))
+        CALL add_entry_CSR_dist( M_3D_CSR, row_3D, cols_3D( j), vals( j))
       END DO
 
     END DO
 
     ! Assemble matrices
-    CALL finalise_matrix_CSR_dist( M_ddzeta_k_k_CSR  , row_3D1, row_3D2)
-    CALL finalise_matrix_CSR_dist( M_d2dzeta2_k_k_CSR, row_3D1, row_3D2)
+    CALL finalise_matrix_CSR_dist( M_3D_CSR, row_3D1, row_3D2)
 
     ! Convert matrices from Fortran to PETSc type
-    CALL mat_CSR2petsc( M_ddzeta_k_k_CSR  , M_ddzeta_k_k  )
-    CALL mat_CSR2petsc( M_d2dzeta2_k_k_CSR, M_d2dzeta2_k_k)
+    CALL mat_CSR2petsc( M_3D_CSR, M_3D)
 
     ! Clean up after yourself
-    DEALLOCATE( cols_1D      )
-    DEALLOCATE( vals_ddzeta  )
-    DEALLOCATE( vals_d2dzeta2)
-    DEALLOCATE( cols_3D      )
-    CALL deallocate_matrix_CSR( M_ddzeta_k_k_CSR)
-    CALL deallocate_matrix_CSR( M_d2dzeta2_k_k_CSR)
+    DEALLOCATE( cols_1D)
+    DEALLOCATE( cols_3D)
+    DEALLOCATE( vals   )
+    CALL deallocate_matrix_CSR( M_3D_CSR)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE calc_vertical_operators_reg
+  END SUBROUTINE convert_vertical_operator_from_1D_to_3D_k_k
 
-  SUBROUTINE calc_vertical_operators_stag( zeta, zeta_stag, M_map_k_ks_1D, M_ddzeta_k_ks_1D, M_map_ks_k_1D, M_ddzeta_ks_k_1D, &
-    n2ck, ck2n, n2cks, cks2n, M_map_k_ks, M_ddzeta_k_ks, M_map_ks_k, M_ddzeta_ks_k)
-    ! Take the d/dzeta and d2/dzeta2 operators in the 1-D vertical column, and use them to construct matrix operators
-    ! that apply these operations to every column on the 2-D grid.
+  SUBROUTINE convert_vertical_operator_from_1D_to_3D_k_ks( M_1D, n2ck, ck2n, n2cks, cks2n, M_3D)
+    ! Take a matrix operator in the 1-D vertical column, and extrude it
+    ! to apply the same operation to every column on the 2-D grid.
 
     IMPLICIT NONE
 
     ! In/output variables:
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)              :: zeta
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)              :: zeta_stag
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_map_k_ks_1D
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_ddzeta_k_ks_1D
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_map_ks_k_1D
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_ddzeta_ks_k_1D
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_1D
     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: n2ck
     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: ck2n
     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: n2cks
     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: cks2n
-    TYPE(tMat),                          INTENT(INOUT)           :: M_map_k_ks
-    TYPE(tMat),                          INTENT(INOUT)           :: M_ddzeta_k_ks
-    TYPE(tMat),                          INTENT(INOUT)           :: M_map_ks_k
-    TYPE(tMat),                          INTENT(INOUT)           :: M_ddzeta_ks_k
+    TYPE(tMat),                          INTENT(INOUT)           :: M_3D
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_vertical_operators_stag'
+    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'convert_vertical_operator_from_1D_to_3D_k_ks'
     INTEGER                                                      :: nc, nz
     INTEGER                                                      :: nnz_per_row_max,row,ii1,ii2,nnz_in_row
     INTEGER                                                      :: ncols, nrows, nnz_max, nnz_est_proc
-    TYPE(type_sparse_matrix_CSR_dp)                              :: M_map_k_ks_CSR
-    TYPE(type_sparse_matrix_CSR_dp)                              :: M_ddzeta_k_ks_CSR
-    TYPE(type_sparse_matrix_CSR_dp)                              :: M_map_ks_k_CSR
-    TYPE(type_sparse_matrix_CSR_dp)                              :: M_ddzeta_ks_k_CSR
+    TYPE(type_sparse_matrix_CSR_dp)                              :: M_3D_CSR
     INTEGER,  DIMENSION(:    ), ALLOCATABLE                      :: cols_1D
     INTEGER,  DIMENSION(:    ), ALLOCATABLE                      :: cols_3D
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE                      :: vals_map
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE                      :: vals_ddzeta
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE                      :: vals
     INTEGER                                                      :: row_3D, row_3D1, row_3D2
     INTEGER                                                      :: cc,ks
     INTEGER                                                      :: j,col_1D,k,col_3D
@@ -6258,29 +6242,25 @@ CONTAINS
 
     ! Determine maximum number of non-zeros per row
     nnz_per_row_max = 0
-    DO row = 1, M_map_k_ks_1D%m
-      ii1 = M_map_k_ks_1D%ptr( row)
-      ii2 = M_map_k_ks_1D%ptr( row+1)-1
+    DO row = 1, M_1D%m
+      ii1 = M_1D%ptr( row)
+      ii2 = M_1D%ptr( row+1)-1
       nnz_in_row = ii2 + 1 - ii1
       nnz_per_row_max = MAX( nnz_per_row_max, nnz_in_row)
     END DO
 
     ! Fill 3-D operator matrices
 
-  ! == k (regular) to ks (staggered)
-
     ncols = nc *  nz
     nrows = nc * (nz-1)
     nnz_max = nrows * nnz_per_row_max
     nnz_est_proc = CEILING( REAL( nnz_max, dp) / REAL( par%n, dp))
 
-    CALL allocate_matrix_CSR_dist( M_map_k_ks_CSR   , nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddzeta_k_ks_CSR, nrows, ncols, nnz_max)
+    CALL allocate_matrix_CSR_dist( M_3D_CSR, nrows, ncols, nnz_max)
 
-    ALLOCATE( cols_1D(     ncols))
-    ALLOCATE( vals_map(    ncols))
-    ALLOCATE( vals_ddzeta( ncols))
-    ALLOCATE( cols_3D(     ncols))
+    ALLOCATE( cols_1D( ncols))
+    ALLOCATE( cols_3D( ncols))
+    ALLOCATE( vals(    ncols))
 
     CALL partition_list( nrows, par%i, par%n, row_3D1, row_3D2)
     DO row_3D = row_3D1, row_3D2
@@ -6290,12 +6270,11 @@ CONTAINS
       ks = n2cks( row_3D,2)
 
       ! Read the row for layer ks from the 1-D operator matrix
-      ii1 = M_map_k_ks_1D%ptr( ks)
-      ii2 = M_map_k_ks_1D%ptr( ks+1)-1
+      ii1 = M_1D%ptr( ks)
+      ii2 = M_1D%ptr( ks+1)-1
       nnz_in_row = ii2 + 1 - ii1
-      cols_1D(     1:nnz_in_row) = M_map_k_ks_1D%index(  ii1: ii2)
-      vals_map(    1:nnz_in_row) = M_map_k_ks_1D%val(    ii1: ii2)
-      vals_ddzeta( 1:nnz_in_row) = M_ddzeta_k_ks_1D%val( ii1: ii2)
+      cols_1D( 1:nnz_in_row) = M_1D%index(  ii1: ii2)
+      vals(    1:nnz_in_row) = M_1D%val(    ii1: ii2)
 
       ! Convert column indices from 1-D to 3-D
       DO j = 1, nnz_in_row
@@ -6309,41 +6288,82 @@ CONTAINS
 
       ! Write entries to the 3-D matrix operator
       DO j = 1, nnz_in_row
-        CALL add_entry_CSR_dist( M_map_k_ks_CSR   , row_3D, cols_3D( j), vals_map(    j))
-        CALL add_entry_CSR_dist( M_ddzeta_k_ks_CSR, row_3D, cols_3D( j), vals_ddzeta( j))
+        CALL add_entry_CSR_dist( M_3D_CSR, row_3D, cols_3D( j), vals( j))
       END DO
 
     END DO
 
     ! Assemble matrices
-    CALL finalise_matrix_CSR_dist( M_map_k_ks_CSR   , row_3D1, row_3D2)
-    CALL finalise_matrix_CSR_dist( M_ddzeta_k_ks_CSR, row_3D1, row_3D2)
+    CALL finalise_matrix_CSR_dist( M_3D_CSR, row_3D1, row_3D2)
 
     ! Convert matrices from Fortran to PETSc type
-    CALL mat_CSR2petsc( M_map_k_ks_CSR   , M_map_k_ks   )
-    CALL mat_CSR2petsc( M_ddzeta_k_ks_CSR, M_ddzeta_k_ks)
+    CALL mat_CSR2petsc( M_3D_CSR, M_3D)
 
     ! Clean up after yourself
-    DEALLOCATE( cols_1D    )
-    DEALLOCATE( vals_map   )
-    DEALLOCATE( vals_ddzeta)
-    DEALLOCATE( cols_3D    )
-    CALL deallocate_matrix_CSR( M_map_k_ks_CSR   )
-    CALL deallocate_matrix_CSR( M_ddzeta_k_ks_CSR)
+    DEALLOCATE( cols_1D)
+    DEALLOCATE( cols_3D)
+    DEALLOCATE( vals   )
+    CALL deallocate_matrix_CSR( M_3D_CSR)
 
-  ! == ks (staggered) to k (regular)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE convert_vertical_operator_from_1D_to_3D_k_ks
+
+  SUBROUTINE convert_vertical_operator_from_1D_to_3D_ks_k( M_1D, n2ck, ck2n, n2cks, cks2n, M_3D)
+    ! Take a matrix operator in the 1-D vertical column, and extrude it
+    ! to apply the same operation to every column on the 2-D grid.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)              :: M_1D
+    INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: n2ck
+    INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: ck2n
+    INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: n2cks
+    INTEGER,  DIMENSION(:,:  ),          INTENT(IN)              :: cks2n
+    TYPE(tMat),                          INTENT(INOUT)           :: M_3D
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'convert_vertical_operator_from_1D_to_3D_ks_k'
+    INTEGER                                                      :: nc, nz
+    INTEGER                                                      :: nnz_per_row_max,row,ii1,ii2,nnz_in_row
+    INTEGER                                                      :: ncols, nrows, nnz_max, nnz_est_proc
+    TYPE(type_sparse_matrix_CSR_dp)                              :: M_3D_CSR
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE                      :: cols_1D
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE                      :: cols_3D
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE                      :: vals
+    INTEGER                                                      :: row_3D, row_3D1, row_3D2
+    INTEGER                                                      :: cc,ks
+    INTEGER                                                      :: j,col_1D,k,col_3D
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Number of grid cells in the horizontal and vertical dimensions
+    nc = size( ck2n,1)
+    nz = size( ck2n,2)
+
+    ! Determine maximum number of non-zeros per row
+    nnz_per_row_max = 0
+    DO row = 1, M_1D%m
+      ii1 = M_1D%ptr( row)
+      ii2 = M_1D%ptr( row+1)-1
+      nnz_in_row = ii2 + 1 - ii1
+      nnz_per_row_max = MAX( nnz_per_row_max, nnz_in_row)
+    END DO
+
+    ! Fill 3-D operator matrices
 
     ncols = nc * (nz-1)
     nrows = nc * nz
     nnz_max = nrows * nnz_per_row_max
 
-    CALL allocate_matrix_CSR_dist( M_map_ks_k_CSR   , nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddzeta_ks_k_CSR, nrows, ncols, nnz_max)
+    CALL allocate_matrix_CSR_dist( M_3D_CSR, nrows, ncols, nnz_max)
 
-    ALLOCATE( cols_1D(     ncols))
-    ALLOCATE( vals_map(    ncols))
-    ALLOCATE( vals_ddzeta( ncols))
-    ALLOCATE( cols_3D(     ncols))
+    ALLOCATE( cols_1D( ncols))
+    ALLOCATE( cols_3D( ncols))
+    ALLOCATE( vals(    ncols))
 
     CALL partition_list( nrows, par%i, par%n, row_3D1, row_3D2)
     DO row_3D = row_3D1, row_3D2
@@ -6353,12 +6373,11 @@ CONTAINS
       k  = n2ck( row_3D,2)
 
       ! Read the row for layer ks from the 1-D operator matrix
-      ii1 = M_map_ks_k_1D%ptr( k)
-      ii2 = M_map_ks_k_1D%ptr( k+1)-1
+      ii1 = M_1D%ptr( k)
+      ii2 = M_1D%ptr( k+1)-1
       nnz_in_row = ii2 + 1 - ii1
-      cols_1D(     1:nnz_in_row) = M_map_ks_k_1D%index(  ii1: ii2)
-      vals_map(    1:nnz_in_row) = M_map_ks_k_1D%val(    ii1: ii2)
-      vals_ddzeta( 1:nnz_in_row) = M_ddzeta_ks_k_1D%val( ii1: ii2)
+      cols_1D( 1:nnz_in_row) = M_1D%index( ii1: ii2)
+      vals(    1:nnz_in_row) = M_1D%val(   ii1: ii2)
 
       ! Convert column indices from 1-D to 3-D
       DO j = 1, nnz_in_row
@@ -6372,34 +6391,29 @@ CONTAINS
 
       ! Write entries to the 3-D matrix operator
       DO j = 1, nnz_in_row
-        CALL add_entry_CSR_dist( M_map_ks_k_CSR   , row_3D, cols_3D( j), vals_map(    j))
-        CALL add_entry_CSR_dist( M_ddzeta_ks_k_CSR, row_3D, cols_3D( j), vals_ddzeta( j))
+        CALL add_entry_CSR_dist( M_3D_CSR, row_3D, cols_3D( j), vals( j))
       END DO
 
     END DO
 
     ! Assemble matrices
-    CALL finalise_matrix_CSR_dist( M_map_ks_k_CSR   , row_3D1, row_3D2)
-    CALL finalise_matrix_CSR_dist( M_ddzeta_ks_k_CSR, row_3D1, row_3D2)
+    CALL finalise_matrix_CSR_dist( M_3D_CSR, row_3D1, row_3D2)
 
     ! Convert matrices from Fortran to PETSc type
-    CALL mat_CSR2petsc( M_map_ks_k_CSR   , M_map_ks_k   )
-    CALL mat_CSR2petsc( M_ddzeta_ks_k_CSR, M_ddzeta_ks_k)
+    CALL mat_CSR2petsc( M_3D_CSR, M_3D)
 
     ! Clean up after yourself
-    DEALLOCATE( cols_1D    )
-    DEALLOCATE( vals_map   )
-    DEALLOCATE( vals_ddzeta)
-    DEALLOCATE( cols_3D    )
-    CALL deallocate_matrix_CSR( M_map_ks_k_CSR   )
-    CALL deallocate_matrix_CSR( M_ddzeta_ks_k_CSR)
+    DEALLOCATE( cols_1D)
+    DEALLOCATE( vals   )
+    DEALLOCATE( cols_3D)
+    CALL deallocate_matrix_CSR( M_3D_CSR)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE calc_vertical_operators_stag
+  END SUBROUTINE convert_vertical_operator_from_1D_to_3D_ks_k
 
-  SUBROUTINE calc_vertical_operators_reg_1D( zeta, M_ddzeta_k_k_1D, M_d2dzeta2_k_k_1D)
+  SUBROUTINE calc_vertical_operators_reg_1D( zeta, M_ddzeta_k_k_1D, M_d2dzeta2_k_k_1D, M_fkp1_m_fk_1D, M_fk_m_fkm1_1D)
     ! Calculate mapping and d/dzeta operators in the 1-D vertical column
     !
     ! NOTE: since its well possible that the number of cores running the model
@@ -6412,6 +6426,8 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)              :: zeta
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT)           :: M_ddzeta_k_k_1D
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT)           :: M_d2dzeta2_k_k_1D
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT)           :: M_fkp1_m_fk_1D
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT)           :: M_fk_m_fkm1_1D
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_vertical_operators_reg_1D'
@@ -6438,6 +6454,8 @@ CONTAINS
 
     CALL allocate_matrix_CSR_dist( M_ddzeta_k_k_1D  , nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_d2dzeta2_k_k_1D, nrows, ncols, nnz_max)
+    CALL allocate_matrix_CSR_dist( M_fkp1_m_fk_1D   , nrows, ncols, nnz_max)
+    CALL allocate_matrix_CSR_dist( M_fk_m_fkm1_1D   , nrows, ncols, nnz_max)
 
     DO k = 1, nz
 
@@ -6473,6 +6491,16 @@ CONTAINS
         CALL add_entry_CSR_dist( M_d2dzeta2_k_k_1D, k, kn, Nfzz_c( i))
       END DO
 
+      ! One-sided differencing
+      IF (k > 1) THEN
+        CALL add_entry_CSR_dist( M_fk_m_fkm1_1D, k, k-1, -1._dp)
+        CALL add_entry_CSR_dist( M_fk_m_fkm1_1D, k, k  ,  1._dp)
+      END IF
+      IF (k < C%nz) THEN
+        CALL add_entry_CSR_dist( M_fkp1_m_fk_1D, k, k  , -1._dp)
+        CALL add_entry_CSR_dist( M_fkp1_m_fk_1D, k, k+1,  1._dp)
+      END IF
+
     END DO
 
     ! Finalise routine path
@@ -6503,8 +6531,8 @@ CONTAINS
     INTEGER                                                      :: ks
     REAL(dp)                                                     :: dzeta
     INTEGER                                                      :: k, row, col
-    INTEGER                                                      ::  ks_lo,  ks_hi
-    REAL(dp)                                                     :: wks_lo, wks_hi
+    INTEGER                                                      ::  k_lo,  k_hi,  ks_lo,  ks_hi
+    REAL(dp)                                                     :: wk_lo, wk_hi, wks_lo, wks_hi
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -6522,20 +6550,27 @@ CONTAINS
 
     DO ks = 1, nz-1
 
-      dzeta = zeta( ks+1) - zeta( ks)
+      ! Indices of neighbouring grid points
+      k_lo = ks
+      k_hi = ks + 1
 
-      ! k = ks
-      k = ks
+      ! Local grid spacing
+      dzeta = zeta( k_hi) - zeta( k_lo)
+
+      ! Linear interpolation weights
+      wk_lo = (zeta( k_hi) - zeta_stag( ks)) / dzeta
+      wk_hi = 1._dp - wk_lo
+
+      ! Left-hand neighbour
       row = ks
-      col = k
-      CALL add_entry_CSR_dist( M_map_k_ks_1D   , row, col,  0.5_dp       )
+      col = k_lo
+      CALL add_entry_CSR_dist( M_map_k_ks_1D   , row, col, wk_lo         )
       CALL add_entry_CSR_dist( M_ddzeta_k_ks_1D, row, col, -1._dp / dzeta)
 
-      ! k = ks+1
-      k = ks+1
+      ! Right-hand neighbour
       row = ks
-      col = k
-      CALL add_entry_CSR_dist( M_map_k_ks_1D   , row, col,  0.5_dp       )
+      col = k_hi
+      CALL add_entry_CSR_dist( M_map_k_ks_1D   , row, col, wk_hi         )
       CALL add_entry_CSR_dist( M_ddzeta_k_ks_1D, row, col,  1._dp / dzeta)
 
     END DO
@@ -6551,6 +6586,7 @@ CONTAINS
 
     DO k = 1, nz
 
+      ! Indices of neighbouring grid points
       IF     (k == 1) THEN
         ks_lo = 1
         ks_hi = 2
@@ -6562,16 +6598,20 @@ CONTAINS
         ks_hi = k
       END IF
 
-      wks_lo = (zeta_stag( ks_hi) - zeta( k)) / (zeta_stag( ks_hi) - zeta_stag( ks_lo))
+      ! Local grid spacing
+      dzeta = zeta_stag( ks_hi) - zeta_stag( ks_lo)
+
+      ! Linear interpolation weights
+      wks_lo = (zeta_stag( ks_hi) - zeta( k)) / dzeta
       wks_hi = 1._dp - wks_lo
 
-      ! ks = ks_lo
+      ! Left-hand neighbour
       row = k
       col = ks_lo
       CALL add_entry_CSR_dist( M_map_ks_k_1D   , row, col, wks_lo        )
       CALL add_entry_CSR_dist( M_ddzeta_ks_k_1D, row, col, -1._dp / dzeta)
 
-      ! ks = ks_hi
+      ! Right-hand neighbour
       row = k
       col = ks_hi
       CALL add_entry_CSR_dist( M_map_ks_k_1D   , row, col, wks_hi        )

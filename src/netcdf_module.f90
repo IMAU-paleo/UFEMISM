@@ -941,6 +941,8 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'uabs_base_b') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_b, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'uabs_surf_target') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%BIV_uabs_surf_target, start=(/1, netcdf%ti /) ))
 
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -1605,6 +1607,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'uabs_base',                [vi,    t], id_var, long_name='Basal ice velocity', units='m/yr')
     ELSEIF (field_name == 'uabs_base_b') THEN
       CALL create_double_var( netcdf%ncid, 'uabs_base_b',              [ti,    t], id_var, long_name='Basal ice velocity (b-grid)', units='m/yr')
+    ELSEIF (field_name == 'uabs_surf_target') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_surf_target',         [vi,    t], id_var, long_name='Target surface ice velocity', units='m/yr')
 
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -2051,6 +2055,8 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%uabs_base_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'uabs_base_b') THEN
       ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'uabs_surf_target') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%BIV_uabs_surf_target, id_var, netcdf%ti)
 
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -2627,6 +2633,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'uabs_base',                [x, y,    t], id_var, long_name='Basal ice velocity', units='m/yr')
     ELSEIF (field_name == 'uabs_base_b') THEN
       ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'uabs_surf_target') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_surf_target',         [x, y,    t], id_var, long_name='Target surface ice velocity', units='m/yr')
 
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -5431,8 +5439,8 @@ CONTAINS
     END DO
 
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_u_surf, (/ x, y /), netcdf%id_var_u_surf)
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_v_surf, (/ x, y /), netcdf%id_var_v_surf)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_u_surf, (/ x, y /), netcdf%id_var_u_surf)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_v_surf, (/ x, y /), netcdf%id_var_v_surf)
 
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)

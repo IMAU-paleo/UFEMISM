@@ -23,8 +23,8 @@ MODULE data_types_netcdf_module
     ! ID for NetCDF file:
     INTEGER :: ncid
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     INTEGER :: id_dim_x
     INTEGER :: id_dim_y
@@ -32,8 +32,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
     CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Dimensions
     INTEGER :: id_var_x
@@ -392,8 +392,8 @@ MODULE data_types_netcdf_module
     ! Index of time frame to be written to
     INTEGER :: ti
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     INTEGER :: id_dim_time
 
@@ -403,8 +403,8 @@ MODULE data_types_netcdf_module
 
     CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Global model stuff: sealevel, CO2, d18O components, etc.
     INTEGER :: id_var_GMSL
@@ -470,8 +470,8 @@ MODULE data_types_netcdf_module
     ! Index of time frame to be written to
     INTEGER :: ti
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     INTEGER :: id_dim_time
 
@@ -481,8 +481,8 @@ MODULE data_types_netcdf_module
 
     CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Regionally integrated stuff: ice volume, SMB components, etc.
     INTEGER :: id_var_ice_volume
@@ -1440,8 +1440,8 @@ MODULE data_types_netcdf_module
     ! ID for NetCDF file:
     INTEGER :: ncid
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     ! Grid
     INTEGER :: id_dim_x
@@ -1475,8 +1475,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_ai                    = 'ai                   '
     CHARACTER(LEN=256) :: name_dim_tai                   = 'tai                  '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Grid
     INTEGER :: id_var_x
@@ -1546,8 +1546,8 @@ MODULE data_types_netcdf_module
     ! ID for NetCDF file:
     INTEGER :: ncid
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     INTEGER :: id_dim_x
     INTEGER :: id_dim_y
@@ -1555,8 +1555,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
     CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Dimensions
     INTEGER :: id_var_x
@@ -1582,8 +1582,8 @@ MODULE data_types_netcdf_module
     ! ID for NetCDF file:
     INTEGER :: ncid
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     INTEGER :: id_dim_x
     INTEGER :: id_dim_y
@@ -1593,8 +1593,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
     CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Dimensions
     INTEGER :: id_var_x
@@ -1626,8 +1626,8 @@ MODULE data_types_netcdf_module
     ! ID for NetCDF file:
     INTEGER :: ncid
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     INTEGER :: id_dim_x
     INTEGER :: id_dim_y
@@ -1635,8 +1635,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
     CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Dimensions
     INTEGER :: id_var_x
@@ -1664,8 +1664,8 @@ MODULE data_types_netcdf_module
     ! ID for NetCDF file:
     INTEGER :: ncid
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     INTEGER :: id_dim_x
     INTEGER :: id_dim_y
@@ -1675,8 +1675,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
     CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Dimensions
     INTEGER :: id_var_x
@@ -1702,8 +1702,8 @@ MODULE data_types_netcdf_module
     ! ID for NetCDF file:
     INTEGER :: ncid
 
-  ! Dimensions
-  ! ==========
+    ! Dimensions
+    ! ==========
 
     INTEGER :: id_dim_x
     INTEGER :: id_dim_y
@@ -1711,8 +1711,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
     CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
 
-  ! Variables
-  ! =========
+    ! Variables
+    ! =========
 
     ! Dimensions
     INTEGER :: id_var_x

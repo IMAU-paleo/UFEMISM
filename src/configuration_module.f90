@@ -387,6 +387,10 @@ MODULE configuration_module
     REAL(dp)            :: DIVA_epsilon_sq_0_config                    = 1E-15_dp                         ! Normalisation term so that zero velocity gives non-zero viscosity
     REAL(dp)            :: DIVA_visc_eff_min_config                    = 1E3_dp                           ! Minimum value for effective viscosity
     REAL(dp)            :: DIVA_beta_max_config                        = 1E20_dp                          ! Maximum value for basal friction coefficient
+    REAL(dp)            :: DIVA_beta_surf_slope_pass_config            = 2E-2_dp                          ! Maximum surface slope without any regularisation of beta
+    REAL(dp)            :: DIVA_beta_surf_slope_threshold_config       = 3E-2_dp                          ! Threshold surface slope after which full regularisation of beta is applied
+    REAL(dp)            :: DIVA_beta_surf_curvature_pass_config        = 1E-6_dp                          ! Maximum negative surface  curvature (peaks) without any regularisation of beta
+    REAL(dp)            :: DIVA_beta_surf_curvature_threshold_config   = 2E-6_dp                          ! Threshold negative surface curvature (peaks) after which full regularisation of beta is applied
     REAL(dp)            :: DIVA_vel_max_config                         = 5000._dp                         ! DIVA velocities are limited to this value
     CHARACTER(LEN=256)  :: DIVA_boundary_BC_u_west_config              = 'infinite'                       ! Boundary conditions for the ice velocity field at the domain boundary in the DIVA
     CHARACTER(LEN=256)  :: DIVA_boundary_BC_u_east_config              = 'infinite'                       ! Allowed choices: "infinite", "periodic", "zero"
@@ -559,6 +563,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: filename_climate_snapshot_cold_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
 
     REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
+    LOGICAL             :: do_climate_PD_mountain_correction_config    = .FALSE.                          ! Whether or not to apply a mountain peak PD precipitation correction
 
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     REAL(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
@@ -691,6 +696,7 @@ MODULE configuration_module
     REAL(dp)            :: ocean_inv_scale_end_config                  = .1_dp                            ! Final   scaling factor for inversion procedure [K]
     REAL(dp)            :: ocean_inv_smooth_r_config                   = 10000._dp                        ! Smoothing radius for inversion procedure [m]
     REAL(dp)            :: ocean_inv_smooth_w_config                   = .01_dp                           ! Weight given to the smoothed ocean temps (1 = full smoothing applied)
+    REAL(dp)            :: ocean_inv_tol_diff_config                   = 10._dp                           ! Minimum ice thickness difference [m] that triggers inversion
 
     LOGICAL             :: BMB_inv_use_restart_field_config            = .FALSE.                          ! Whether or not to use BMB_shelf field from a the restart file
     REAL(dp)            :: BMB_inv_scale_shelf_config                  = 200._dp                          ! Scaling constant for inversion procedure over shelves [m]
@@ -1177,6 +1183,10 @@ MODULE configuration_module
     REAL(dp)                            :: DIVA_epsilon_sq_0
     REAL(dp)                            :: DIVA_visc_eff_min
     REAL(dp)                            :: DIVA_beta_max
+    REAL(dp)                            :: DIVA_beta_surf_slope_pass
+    REAL(dp)                            :: DIVA_beta_surf_slope_threshold
+    REAL(dp)                            :: DIVA_beta_surf_curvature_pass
+    REAL(dp)                            :: DIVA_beta_surf_curvature_threshold
     REAL(dp)                            :: DIVA_vel_max
     CHARACTER(LEN=256)                  :: DIVA_boundary_BC_u_west
     CHARACTER(LEN=256)                  :: DIVA_boundary_BC_u_east
@@ -1347,6 +1357,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_climate_snapshot_cold
 
     REAL(dp)                            :: constant_lapserate
+    LOGICAL                             :: do_climate_PD_mountain_correction
 
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     REAL(dp)                            :: matrix_high_CO2_level
@@ -1479,6 +1490,7 @@ MODULE configuration_module
     REAL(dp)                            :: ocean_inv_scale_end
     REAL(dp)                            :: ocean_inv_smooth_r
     REAL(dp)                            :: ocean_inv_smooth_w
+    REAL(dp)                            :: ocean_inv_tol_diff
 
     LOGICAL                             :: BMB_inv_use_restart_field
     REAL(dp)                            :: BMB_inv_scale_shelf
@@ -2099,6 +2111,10 @@ CONTAINS
                      DIVA_epsilon_sq_0_config,                        &
                      DIVA_visc_eff_min_config,                        &
                      DIVA_beta_max_config,                            &
+                     DIVA_beta_surf_slope_pass_config,                &
+                     DIVA_beta_surf_slope_threshold_config,           &
+                     DIVA_beta_surf_curvature_pass_config,            &
+                     DIVA_beta_surf_curvature_threshold_config,       &
                      DIVA_vel_max_config,                             &
                      DIVA_boundary_BC_u_west_config,                  &
                      DIVA_boundary_BC_u_east_config,                  &
@@ -2262,6 +2278,7 @@ CONTAINS
                      filename_climate_snapshot_warm_config,           &
                      filename_climate_snapshot_cold_config,           &
                      constant_lapserate_config,                       &
+                     do_climate_PD_mountain_correction_config,        &
                      matrix_high_CO2_level_config,                    &
                      matrix_low_CO2_level_config,                     &
                      matrix_warm_orbit_time_config,                   &
@@ -2355,6 +2372,7 @@ CONTAINS
                      ocean_inv_scale_end_config,                      &
                      ocean_inv_smooth_r_config,                       &
                      ocean_inv_smooth_w_config,                       &
+                     ocean_inv_tol_diff_config,                       &
                      BMB_inv_use_restart_field_config,                &
                      BMB_inv_scale_shelf_config,                      &
                      BMB_inv_scale_ocean_config,                      &
@@ -2969,6 +2987,10 @@ CONTAINS
     C%DIVA_epsilon_sq_0                        = DIVA_epsilon_sq_0_config
     C%DIVA_visc_eff_min                        = DIVA_visc_eff_min_config
     C%DIVA_beta_max                            = DIVA_beta_max_config
+    C%DIVA_beta_surf_slope_pass                = DIVA_beta_surf_slope_pass_config
+    C%DIVA_beta_surf_slope_threshold           = DIVA_beta_surf_slope_threshold_config
+    C%DIVA_beta_surf_curvature_pass            = DIVA_beta_surf_curvature_pass_config
+    C%DIVA_beta_surf_curvature_threshold       = DIVA_beta_surf_curvature_threshold_config
     C%DIVA_vel_max                             = DIVA_vel_max_config
     C%DIVA_boundary_BC_u_west                  = DIVA_boundary_BC_u_west_config
     C%DIVA_boundary_BC_u_east                  = DIVA_boundary_BC_u_east_config
@@ -3137,6 +3159,7 @@ CONTAINS
     C%filename_climate_snapshot_cold           = filename_climate_snapshot_cold_config
 
     C%constant_lapserate                       = constant_lapserate_config
+    C%do_climate_PD_mountain_correction        = do_climate_PD_mountain_correction_config
 
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     C%matrix_high_CO2_level                    = matrix_high_CO2_level_config
@@ -3267,6 +3290,7 @@ CONTAINS
     C%ocean_inv_scale_end                      = ocean_inv_scale_end_config
     C%ocean_inv_smooth_r                       = ocean_inv_smooth_r_config
     C%ocean_inv_smooth_w                       = ocean_inv_smooth_w_config
+    C%ocean_inv_tol_diff                       = ocean_inv_tol_diff_config
 
     C%BMB_inv_use_restart_field                = BMB_inv_use_restart_field_config
     C%BMB_inv_scale_shelf                      = BMB_inv_scale_shelf_config

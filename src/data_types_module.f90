@@ -832,6 +832,10 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: lambda
     INTEGER :: wlambda
 
+    ! Mountain factor for PD snapshot, which accounts for unresolved ice-free mountain peaks
+    REAL(dp), DIMENSION(:    ), POINTER     :: mountain_fact
+    INTEGER :: wmountain_fact
+
     ! Bias-corrected GCM data
     REAL(dp), DIMENSION(:,:  ), POINTER     :: T2m_corr                      ! Bias-corrected monthly mean 2m air temperature (K)
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Precip_corr                   ! Bias-corrected monthly mean precipitation (m)

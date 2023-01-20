@@ -29,8 +29,7 @@ MODULE basal_conditions_and_sliding_module
                                              create_BIV_bed_roughness_file_grid, inquire_BIV_target_velocity, &
                                              read_BIV_target_velocity, get_grid_from_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
-                                             type_reference_geometry, type_grid, type_restart_data, &
-                                             type_SMB_model
+                                             type_reference_geometry, type_grid, type_restart_data
   USE data_types_netcdf_module,        ONLY: type_netcdf_BIV_target_velocity
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, smooth_Gaussian_2D, &
                                              map_grid2mesh_2D, calc_remapping_operator_grid2mesh, &
@@ -438,13 +437,7 @@ CONTAINS
               C%choice_sliding_law == 'Coulomb_regularised' .OR. &
               C%choice_sliding_law == 'Zoet-Iverson') THEN
 
-        IF (C%basal_roughness_restart_type == 'average') THEN
-          ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric_ave( mesh%vi1:mesh%vi2)
-        ELSEIF (C%basal_roughness_restart_type == 'last') THEN
-          ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
-        ELSE
-          CALL crash('unknown basal_roughness_restart_type "' // TRIM( C%basal_roughness_restart_type) // '"!')
-        END IF
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
 
       ELSE
         CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
@@ -993,7 +986,7 @@ CONTAINS
 ! ===== Sliding laws =====
 ! ========================
 
-  SUBROUTINE calc_sliding_law( mesh, ice, SMB, u_a, v_a, beta_a)
+  SUBROUTINE calc_sliding_law( mesh, ice, u_a, v_a, beta_a)
     ! Calculate the sliding term beta in the SSA/DIVA using the specified sliding law
 
     IMPLICIT NONE
@@ -1001,7 +994,6 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
@@ -1027,7 +1019,7 @@ CONTAINS
       CALL calc_sliding_law_Coulomb(             mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
       ! Regularised Coulomb-type sliding law
-      CALL calc_sliding_law_Coulomb_regularised( mesh, ice, SMB, u_a, v_a, beta_a)
+      CALL calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Tsai et al. (2015)
       CALL calc_sliding_law_Tsai2015(            mesh, ice, u_a, v_a, beta_a)
@@ -1131,7 +1123,7 @@ CONTAINS
 
   END SUBROUTINE calc_sliding_law_Coulomb
 
-  SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, SMB, u_a, v_a, beta_a)
+  SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
     ! Regularised Coulomb-type sliding law
 
     IMPLICIT NONE
@@ -1139,7 +1131,6 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
@@ -1147,68 +1138,23 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Coulomb_regularised'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: uabs, tauc_max, ti_diff
-    REAL(dp)                                           :: w_ti, w_pwp, w_run, w_tot
+    REAL(dp)                                           :: uabs, tauc_min
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Calculate the till yield stress from the till friction angle and the effective pressure
     DO vi = mesh%vi1, mesh%vi2
-
-      ! Predictor step
-      ! ==============
-
-      ! Compute the modelled till yield stress
-      ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
-      !   ice%tauc_a( vi) = TAN( (pi / 180._dp) * MAX( C%slid_inv_phi_min, ice%phi_fric_a( vi) - .5_dp) ) * ice%Neff_a( vi)
-      ! ELSE
         ice%tauc_a( vi) = TAN((pi / 180._dp) * ice%phi_fric_a( vi)) * ice%Neff_a( vi)
-      ! END IF
-
-      ! Weights
-      ! =======
-
-      ! ! Compute ice basal temperature relative to the pressure melting point of ice
-      ! ti_diff = MAX( 0._dp, ice%Ti_pmp_a( vi,C%nz) - ice%Ti_a( vi,C%nz))
-      ! ! Compute weight based on temperature difference
-      ! w_ti = 1._dp - (ti_diff**5._dp / 10._dp**5._dp)
-      ! ! Limit weight to [0 1] interval, just in case
-      ! w_ti = MAX( 0._dp, MIN( 1._dp, w_ti))
-
-      ! ! Compute cubic-root-of-complementary-weight based on pore water pressure
-      ! w_pwp = (ice%Hb_a( vi) - ice%SL_a( vi) - C%Martin2011_hydro_Hb_min) / (C%Martin2011_hydro_Hb_max - C%Martin2011_hydro_Hb_min)
-      ! ! Compute weight, where 1: saturated and 0: dry
-      ! w_pwp = 1._dp - w_pwp**3._dp
-      ! ! Limit weight to [0 1] interval (required)
-      ! w_pwp = MAX( 0._dp, MIN( 1._dp, w_pwp))
-
-      ! ! Compute weight based on runoff, as an estimator for percolation
-      ! w_run = (2.0_dp/pi) * ATAN( (SUM(SMB%Runoff( vi,:))**2.0_dp) / (.1_dp**2.0_dp) )
-      ! ! Limit weight to [0 1] interval, just in case
-      ! w_run = MAX( 0._dp, MIN( 1._dp, w_run))
-
-      ! Compute final weight
-      w_tot = 1._dp!MAX( w_ti, w_pwp, w_run)
-
-      ! Corrector step
-      ! ==============
-
-      ! Compute the maximum till yield stress possible based on inversion limits
-      tauc_max = TAN((pi / 180._dp) * C%slid_inv_phi_max) * ice%Neff_a( vi)
-
-      ! Compute weighed average between max and modelled till yield stress
-      ice%tauc_a( vi) = w_tot * ice%tauc_a( vi) + (1._dp - w_tot) * tauc_max
-
     END DO
     CALL sync
 
-    ! Calculate beta
     DO vi = mesh%vi1, mesh%vi2
 
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
       uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
 
+      ! Calculate beta
       beta_a( vi) = ice%tauc_a( vi) * uabs ** (C%slid_Coulomb_reg_q_plastic - 1._dp) / (C%slid_Coulomb_reg_u_threshold ** C%slid_Coulomb_reg_q_plastic)
 
     END DO
@@ -1624,7 +1570,6 @@ CONTAINS
 
       IF (C%do_slid_inv) THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
       END IF
@@ -1636,7 +1581,6 @@ CONTAINS
       IF (C%do_slid_inv) THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
@@ -1648,11 +1592,10 @@ CONTAINS
       ! Yield-stress sliding law
 
       IF (C%do_slid_inv) THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a,        ice%wphi_fric_a,        'nearest_neighbour')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,            ice%wtauc_a,            'nearest_neighbour')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a,    ice%wphi_fric_inv_a,    'nearest_neighbour')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_ave_a,    ice%wphi_fric_ave_a,    'nearest_neighbour')
-        CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%phi_fric_window_a, ice%wphi_fric_window_a, 'nearest_neighbour')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a,   ice%wphi_fric_a,   'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dphi_dt_a,    ice%wdphi_dt_a,    'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%h_delta_prev, ice%wh_delta_prev, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,       ice%wtauc_a,       'cons_2nd_order')
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
@@ -1728,7 +1671,7 @@ CONTAINS
 ! ===== Inversion =====
 ! =====================
 
-  SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo, SMB, time)
+  SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo, time, dt, do_adjustment)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
     ! and extrapolate the resulting field over the rest of the domain
 
@@ -1739,8 +1682,9 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
     REAL(dp),                            INTENT(IN)    :: time
+    REAL(dp),                            INTENT(IN)    :: dt
+    LOGICAL,                             INTENT(IN)    :: do_adjustment
 
     ! Local variables
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion'
@@ -1750,9 +1694,9 @@ CONTAINS
 
     ! Apply the selected inversion scheme
     IF     (C%choice_slid_inv_method == 'Bernales2017') THEN
-      CALL basal_sliding_inversion_Bernales2017( mesh, grid, ice, refgeo, SMB, time)
+      CALL basal_sliding_inversion_Bernales2017( mesh, grid, ice, refgeo, time, dt, do_adjustment)
     ELSEIF (C%choice_slid_inv_method == 'Berends2022') THEN
-      CALL basal_sliding_inversion_Berends2022( mesh, grid, ice, refgeo)
+      CALL basal_sliding_inversion_Berends2022( mesh, grid, ice, refgeo, time, do_adjustment)
     ELSE
       CALL crash('unknown choice_slid_inv_method "' // TRIM( C%choice_slid_inv_method) // '"!')
     END IF
@@ -1762,207 +1706,518 @@ CONTAINS
 
   END SUBROUTINE basal_sliding_inversion
 
-  SUBROUTINE basal_sliding_inversion_Bernales2017( mesh, grid, ice, refgeo, SMB, time)
+  SUBROUTINE basal_sliding_inversion_Bernales2017( mesh, grid, ice, refgeo, time, dt, do_adjustment)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
     ! and extrapolate the resulting field over the rest of the domain
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
-    REAL(dp),                            INTENT(IN)    :: time
+    type(type_mesh),               intent(in)    :: mesh
+    type(type_grid),               intent(in)    :: grid
+    type(type_ice_model),          intent(inout) :: ice
+    type(type_reference_geometry), intent(in)    :: refgeo
+    real(dp),                      intent(in)    :: time
+    real(dp),                      intent(in)    :: dt
+    logical,                       intent(in)    :: do_adjustment
 
     ! Local variables
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion_Bernales2017'
-    INTEGER                                            :: vi
-    REAL(dp)                                           :: h_delta, t_scale, a_scale, m_scale
-    REAL(dp)                                           :: w_smooth
-    REAL(dp)                                           :: ti_diff, w_ti, w_pwp, w_run, w_tot
-    INTEGER,  DIMENSION(:    ), POINTER                :: mask,  mask_filled
-    REAL(dp), DIMENSION(:    ), POINTER                :: rough_smoothed
-    INTEGER                                            :: wmask, wmask_filled, wrough_smoothed
+    character(len=256), parameter                :: routine_name = 'basal_sliding_inversion_Bernales2017'
+    integer                                      :: vi
+    real(dp)                                     :: t_scale, evo_start, evo_end
+    real(dp)                                     :: dt_slid_inv, phi_min
+    real(dp), dimension(2)                       :: amp_slid_inv
 
     ! Initialisation
     ! ==============
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    ! Initial checks
-    IF ( .NOT. (C%choice_sliding_law == 'Coulomb' .OR. &
-                C%choice_sliding_law == 'Coulomb_regularised' .OR. &
-                C%choice_sliding_law == 'Zoet-Iverson') ) THEN
+    ! Inversion temporal window
+    if (time < C%slid_inv_t_start .or. &
+        time > C%slid_inv_t_end) then
+      ! Model time is outside of inversion window; just finalise
+      call finalise_routine( routine_name)
+      ! And exit
+      return
+    end if
 
-      CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
-    END IF
+    ! Safety
+    if (C%slid_inv_t_start > C%slid_inv_t_end) then
+      !WTF
+      call crash('wtf?')
+    end if
 
-    IF (time < C%slid_inv_t_start) THEN
-      ! Nothing to do for now. Just return.
-      CALL finalise_routine( routine_name)
-      RETURN
-    ELSEIF (time > C%slid_inv_t_end) THEN
-      ! Inversion is done. Return.
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
+    ! Determine time step
+    ! ===================
 
-    ! Allocate masks for extrapolation
-    CALL allocate_shared_int_1D( mesh%nV, mask,        wmask       )
-    CALL allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
+    ! Compute how much time has passed since start of equilibrium stage
+    t_scale = (time - C%slid_inv_t_change) / (C%slid_inv_t_end - C%slid_inv_t_change)
+    ! Limit t_scale to [0 1]
+    t_scale = max( 0._dp, min( t_scale, 1._dp))
+    ! Curve t_scale a bit
+    t_scale = t_scale ** C%slid_inv_t_scale_exp
 
-    ! Allocate smoothed bed roughness field
-    CALL allocate_shared_dp_1D( mesh%nV, rough_smoothed, wrough_smoothed)
+    dt_slid_inv = t_scale * C%dt_slid_inv_equil + (1._dp - t_scale) * C%dt_slid_inv_guess
 
-    ! Adjustment magnitude
+    ! Determine adjustment magnitude
+    ! ==============================
+
+    ! Start the modification at the end of the first-guess stage
+    evo_start = C%slid_inv_t_change
+    ! Finish the modification at 75% of the equilibrium-stage inversion time window
+    evo_end = C%slid_inv_t_change + .75_dp*(C%slid_inv_t_end - C%slid_inv_t_change)
+    ! Compute how much progress we have done
+    t_scale = (time - evo_start) / (evo_end - evo_start)
+    ! Limit t_scale to [0 1]
+    t_scale = max( 0._dp, min( t_scale, 1._dp))
+
+    ! Modify positive-misfit adjustment as time goes on: from scale_start to scale_end
+    amp_slid_inv(1) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start + t_scale * C%slid_inv_Bernales2017_scale_end
+    ! Modify negative-misfit adjustment as time goes on: from scale_start to zero
+    amp_slid_inv(2) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start ! - t_scale * C%slid_inv_Bernales2017_scale_start
+
+    ! Safety net
+    amp_slid_inv(1) = max( amp_slid_inv(1), 0._dp)
+    amp_slid_inv(2) = max( amp_slid_inv(2), 0._dp)
+
+    ! Update rate of change
+    ! =====================
+
+    if (do_adjustment) then
+      ! Compute a new rate of change of till friction angle
+      call determine_inverted_bed_roughness_rate_of_change( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
+    end if
+
+    ! Determine minimum till friction angle
+    ! =====================================
+
+    ! Start the modification at the end of the first-guess stage
+    evo_start = C%slid_inv_t_change
+    ! Finish the modification at 20% of the equilibrium-stage inversion time window
+    evo_end = C%slid_inv_t_change + .2_dp*(C%slid_inv_t_end - C%slid_inv_t_change)
+    ! Compute how much progress we have done
+    t_scale = (time - evo_start) / (evo_end - evo_start)
+    ! Limit t_scale to [0 1]
+    t_scale = max( 0._dp, min( t_scale, 1._dp))
+    ! Compute time-variable bed roughness minimum value
+    phi_min = t_scale * C%slid_inv_phi_min + (1._dp-t_scale) * max(2._dp, C%slid_inv_phi_min)
+
+    ! Apply rate of change
     ! ====================
 
-    ! Default values
-    a_scale = C%slid_inv_Bernales2017_scale_start
-    m_scale = .0_dp
-    t_scale = 0._dp
+    do vi = mesh%vi1, mesh%vi2
 
-    ! Time scale
-    IF (C%slid_inv_t_start < C%slid_inv_t_end) THEN
-      ! Compute how much time has passed since start of inversion
-      t_scale = (time - C%slid_inv_t_start) / (C%slid_inv_t_end - C%slid_inv_t_start)
-      ! Limit t_scale to [0 1]
-      t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
-    END IF
+      ! Check that we are not overshooting
+      if ( abs(ice%Hi_a( vi) - refgeo%Hi( vi)) > C%slid_inv_Bernales2017_tol_diff .and. &
+              (ice%Hi_a( vi) - refgeo%Hi( vi)) * ice%dphi_dt_a( vi) > 0._dp) then
+        ! Too thick and friction up, or too thin and friction down; skip
+        cycle
+      end if
 
-    ! Magnitude decay
-    IF (C%do_slid_inv_Bernales2017_decay) THEN
-      ! Reduce adjustment amount as time goes on
-      a_scale = C%slid_inv_Bernales2017_scale_start * (1._dp - t_scale) + C%slid_inv_Bernales2017_scale_end * t_scale
-    END IF
+      ! Apply inverted rate of change
+      ice%phi_fric_a( vi) = ice%phi_fric_a( vi) + ice%dphi_dt_a( vi) * dt
 
-    ! Do the inversion
-    ! ================
+      ! Make sure the variable stays within the desired limits
+      if (ice%f_grnd_a( vi) > 0._dp) then
+        ! Fully/partially grounded vertices: apply the evolving limit
+        ice%phi_fric_a( vi) = max( phi_min, min( C%slid_inv_phi_max, ice%phi_fric_a( vi)))
+      else
+        ! Fully floating vertices: apply the prescribed limit immediately
+        ice%phi_fric_a( vi) = max( C%slid_inv_phi_min, min( C%slid_inv_phi_max, ice%phi_fric_a( vi)))
+      end if
 
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Ice thickness difference w.r.t. reference thickness
-      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
-
-      ! Invert only where the model has grounded ice
-      IF (ice%mask_sheet_a( vi) == 1) THEN
-
-        ! Mark this vertex as grounded ice
-        mask( vi) = 2
-
-        IF (ABS(h_delta) >= 0._dp .AND. ABS(ice%dHi_dt_a( vi)) >= 0._dp) THEN
-
-          IF ( h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
-
-            IF (t_scale < .9_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP( -ABS( h_delta * MIN( .1_dp, ice%dHi_dt_a( vi)) )))
-            ELSE
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi))))
-            END IF
-
-          ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
-
-            IF (t_scale < .9_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale/3._dp * (1._dp - EXP( -ABS( h_delta * MIN( .1_dp, ice%dHi_dt_a( vi)) )))
-            ELSE
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale/3._dp * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi))))
-            END IF
-
-          ELSEIF ( h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
-
-            IF (t_scale < .9_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + m_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi))))
-            END IF
-
-          ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
-
-            IF (t_scale < .9_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - m_scale * (1._dp - EXP( -ABS( ice%dHi_dt_a( vi))))
-            END IF
-
-          END IF
-
-          ! Constrain adjusted value to roughness limits
-          ice%phi_fric_inv_a( vi) = MIN( MAX( ice%phi_fric_inv_a( vi), C%slid_inv_phi_min), C%slid_inv_phi_max)
-
-        END IF
-
-      ELSE
-
-        ! This vertex is not grounded ice sheet, so mark it for later extrapolation
-        mask( vi) = 1
-
-      END IF ! ice%mask_sheet_a( vi) == 1
-
-    END DO
-    CALL sync
-
-    ! Extrapolate the resulting field
-    ! ===============================
-
-    ! Perform the extrapolation
-    IF (par%master .AND. C%do_slid_inv_Bernales2017_extrap) THEN
-      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%phi_fric_inv_a, 40000._dp, mask_filled)
-    END IF
-    CALL sync
-
-    ! Smoothing
-    ! =========
-
-    IF (C%do_slid_inv_Bernales2017_smooth) THEN
-      ! Smooth the resulting field
-
-      ! Store the inverted parameters in a local variable
-      rough_smoothed( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
-      CALL sync
-
-      ! Smooth the local variable
-      CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%slid_inv_Bernales2017_smooth_r)
-
-      ! Combined the smoothed and raw inverted parameter through a weighed average
-      DO vi = mesh%vi1, mesh%vi2
-          ice%phi_fric_a( vi) = (1._dp - C%slid_inv_Bernales2017_smooth_w) * ice%phi_fric_inv_a( vi) + C%slid_inv_Bernales2017_smooth_w * rough_smoothed( vi)
-          ! Make sure the variable stays within the prescribed limits
-          ice%phi_fric_a( vi) = MIN( MAX( ice%phi_fric_a( vi), C%slid_inv_phi_min), C%slid_inv_phi_max)
-      END DO
-      CALL sync
-
-    ELSE
-      ! Don't smooth the resulting field; simply copy it into the main variable
-      ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
-
-    END IF ! (C%do_slid_inv_Bernales2017_smooth)
-    CALL sync
-
-    ! Running phi_fric average
-    ! ========================
-
-    ! Update the running window: drop oldest record and push the rest to the back
-    ice%phi_fric_window_a( mesh%vi1:mesh%vi2,2:C%slid_inv_window_size) = ice%phi_fric_window_a( mesh%vi1:mesh%vi2,1:C%slid_inv_window_size-1)
-
-    ! Update the running window: add new record to beginning of window
-    ice%phi_fric_window_a( mesh%vi1:mesh%vi2,1) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
-
-    ! Compute running average
-    ice%phi_fric_ave_a( mesh%vi1:mesh%vi2) = SUM(ice%phi_fric_window_a( mesh%vi1:mesh%vi2,:),2) / REAL(C%slid_inv_window_size,dp)
+    end do
+    call sync
 
     ! Finalisation
     ! ============
 
-    ! Clean up after yourself
-    CALL deallocate_shared( wmask_filled)
-    CALL deallocate_shared( wmask)
-    CALL deallocate_shared( wrough_smoothed)
-
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
   END SUBROUTINE basal_sliding_inversion_Bernales2017
 
-  SUBROUTINE basal_sliding_inversion_Berends2022( mesh, grid, ice, refgeo)
+  SUBROUTINE determine_inverted_bed_roughness_rate_of_change( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
+    ! Iteratively invert for basal friction conditions under the grounded ice sheet,
+    ! and carefully extrapolate the resulting field over the rest of the domain
+
+    ! Compute bed roughness rate of change (in degrees/yr) as the product of:
+    ! - The adjustment dphi (in degrees)
+    ! - The inversion time step dt_slid_inv (in yr)
+    ! - A [0 1] weight based on the subgrid grounded fraction and the local slope (unitless)
+
+    implicit none
+
+    ! In/output variables
+    type(type_mesh),               intent(in)    :: mesh
+    type(type_grid),               intent(in)    :: grid
+    type(type_ice_model),          intent(inout) :: ice
+    type(type_reference_geometry), intent(in)    :: refgeo
+    real(dp),                      intent(in)    :: dt_slid_inv
+    real(dp), dimension(2),        intent(in)    :: amp_slid_inv
+
+    ! Local variables
+    character(len=256), parameter                :: routine_name = 'determine_inverted_bed_roughness_rate_of_change'
+    integer                                      :: vi, vc, ci
+    real(dp)                                     :: h_delta, h_estim, h_delta_perc
+    real(dp)                                     :: fg_exp_mod, w_smooth, w_tot, dphi
+    integer,  dimension(:), pointer              ::  mask,  mask_filled
+    integer                                      :: wmask, wmask_filled
+    real(dp), dimension(:), pointer              ::  dphi_dt_smooth
+    integer                                      :: wdphi_dt_smooth
+    logical                                      :: has_interior_neighbour
+
+    ! Initialisation
+    ! ==============
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Initialise adjustment (in degrees/yr)
+    ice%dphi_dt_a = 0._dp
+    call sync
+
+    ! Allocation
+    ! ==========
+
+    ! Allocate masks for extrapolation
+    call allocate_shared_int_1D( mesh%nV, mask,        wmask       )
+    call allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
+
+    ! Allocate auxiliary bed roughness field
+    call allocate_shared_dp_1D( mesh%nV, dphi_dt_smooth, wdphi_dt_smooth)
+
+    ! Do the inversion
+    ! ================
+
+    ! Set default extrapolation mask to zero (i.e. no extrapolation)
+    ! Later we will first extrapolate to margins and grounding lines,
+    ! after that into ice shelf cavities, and finally to open ocean.
+    mask = 0
+    call sync
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Valid inversion vertices
+      ! ========================
+
+      ! Partially floating grounded vertices
+      if (ice%mask_sheet_a( vi) == 1 .and. ice%f_grnd_a( vi) < 1._dp) then
+
+        ! Can't trust the extrapolation here, so let this vertex be inverted,
+        ! but prevent receiving from or contributing to the extrapolation
+        mask( vi) = 0
+
+      ! Some considerations for margin, calving front, and GL vertices
+      elseif (ice%mask_sheet_a( vi) == 1 .and. &
+              (ice%mask_gl_a( vi) == 1 .or. &
+               ice%mask_margin_a( vi) == 1 .or. &
+               ice%mask_cf_a( vi) == 1) ) then
+
+        ! Initialise marker
+        has_interior_neighbour = .false.
+
+        ! Check for non-marginal, fully grounded ice-sheet neighbours
+        do ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          ! Check neighbour
+          if (ice%mask_sheet_a( vc) == 1 .and. &
+              ice%mask_gl_a( vc) == 0 .and. &
+              ice%mask_margin_a( vc) == 0 .and. &
+              ice%f_grnd_a( vc) == 1._dp) then
+            ! Found neighbour
+            has_interior_neighbour = .true.
+            ! Finish search
+            exit
+          end if
+        end do
+
+        ! If search was successful, let the neighbours
+        ! dictate the value for this point
+        if (has_interior_neighbour) then
+          ! Mark for first extrapolation
+          mask( vi) = 1
+          ! Skip inversion and go to next vertex
+          cycle
+
+        ! No valid neighbours, so we can't expect
+        ! reasonable values from the extrapolation
+        else
+          ! Can't trust the extrapolation here, so let this vertex be inverted,
+          ! but prevent receiving from or contributing to the extrapolation
+          mask( vi) = 0
+        end if
+
+      ! Ice-free land
+      elseif (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+        ! Prevent extrapolation over ice-free land
+        mask( vi) = 0
+        ! Skip inversion and go to next vertex
+        cycle
+
+      ! Ocean and ice shelf cavities
+      elseif (ice%mask_ocean_a( vi) == 1) then
+        ! Prevent extrapolation over ocean vertices
+        mask( vi) = 0
+        ! Skip inversion and go to next vertex
+        cycle
+
+      ! Interior, flat, non-boundary ice sheet vertex,
+      ! thus ideal inversion point
+      else
+
+        ! Mark this vertex as valid inversion point
+        mask( vi) = 2
+
+      end if
+
+      ! Bed roughness adjustment
+      ! ========================
+
+      ! Ice thickness difference w.r.t. reference thickness (in m)
+      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+
+      ! Estimated time of perfect match (never if negative) (in yr)
+      h_estim = -h_delta / (ice%dHi_dt_a(vi) + 1E-6)
+
+      ! Percentage of misfit change relative to previous inversion time-step (in %)
+      h_delta_perc = abs( (h_delta - ice%h_delta_prev( vi)) / ice%h_delta_prev( vi)) * 100._dp
+
+      ! Initialise adjustment (in degrees)
+      dphi = 0._dp
+
+      if (abs(h_delta) <= C%slid_inv_Bernales2017_tol_diff) then
+        ! Match is good enough, focus on keeping it
+
+        ! Check if thickening or thinning
+        if ( ice%dHi_dt_a( vi) >= .0_dp ) then
+          ! Thickening, so reduce friction a bit
+          dphi = -amp_slid_inv(1) * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+        else
+          ! Thinning, so increase friction a bit
+          dphi = +amp_slid_inv(2)/2._dp * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+        end if
+
+      else
+        ! Match is not good enough, check if we need to do something
+
+        ! Overestimation of ice
+        if ( h_delta > .0_dp .and. (h_estim < 0._dp .or. h_estim > 1000._dp)) then
+          ! Not improving, or not improving fast enough
+          dphi = -amp_slid_inv(1) * (1._dp - exp( -abs( h_delta / 100._dp)))
+
+        elseif ( h_delta > .0_dp .and. (h_estim > 0._dp .and. h_estim < dt_slid_inv)) then
+          ! Improving too fast, prevent overshooting
+          dphi = +amp_slid_inv(1)/2._dp * exp( -h_estim / (2._dp * dt_slid_inv))
+
+        ! Underestimation of ice
+        elseif ( h_delta < .0_dp .and. (h_estim < 0._dp .or. h_estim > 1000._dp) ) then
+          ! Not improving, or not improving fast enough
+          dphi = +amp_slid_inv(2)/2._dp * (1._dp - exp( -abs( h_delta / 100._dp)))
+
+        elseif ( h_delta < .0_dp .and. (h_estim > 0._dp .and. h_estim < dt_slid_inv)) then
+          ! Improving too fast, prevent overshooting
+          dphi = -amp_slid_inv(2)/4._dp * exp( -h_estim / (2._dp * dt_slid_inv))
+
+        end if
+
+      end if
+
+      ! Compute bed roughness rate of change (in degrees/yr)
+      ice%dphi_dt_a( vi) = dphi / dt_slid_inv
+
+      ! Save current thickness misfit
+      ice%h_delta_prev( vi) = h_delta
+
+    end do
+    call sync
+
+    ! First extrapolation: margins and GL
+    ! ===================================
+
+    if (par%master) then
+      ! Perform the extrapolation - mask: 2 -> use as seed; 1 -> extrapolate; 0 -> ignore
+      call extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%dphi_dt_a, 40000._dp, mask_filled)
+    end if
+    call sync
+
+    ! Regularise tricky extrapolated areas
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Ice margin and grounding lines
+      if (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 1) then
+        ! Strengthen the effect of grounded fractions for steep slopes
+        fg_exp_mod = MIN( 1.0_dp, MAX( 0._dp, MAX( 0._dp, ice%surf_slop(vi)-.02_dp) / (.06_dp-.02_dp)))
+        ! Scale based on grounded fraction
+        ice%dphi_dt_a( vi) = ice%dphi_dt_a( vi) * ice%f_grnd_a( vi) ** (1._dp + fg_exp_mod)
+
+      ! Ice-free land
+      elseif (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+        ! Reset adjustment over ice-free land
+        ice%dphi_dt_a( vi) = 0._dp
+
+      ! Ocean and ice shelf cavities
+      elseif (ice%mask_ocean_a( vi) == 1) then
+        ! Reset adjustment over ocean points
+        ice%dphi_dt_a( vi) = 0._dp
+      end if
+
+    end do
+    call sync
+
+    ! Second extrapolation: floating side of grounding lines
+    ! ======================================================
+
+    ! Reinitialise mask
+    mask = 0
+    call sync
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Land ice: interior, calving front, margin and (grounded) grodunding line
+      if (ice%mask_sheet_a( vi) == 1) then
+        ! Mark this vertex as ready (already extrapolated or inverted)
+        mask( vi) = 2
+
+      ! Partially grounded (floating) grounding line
+      elseif (ice%mask_glf_a( vi) == 1 .and. &
+              ice%f_grnd_a( vi) > 0._dp) then
+
+        ! Can't use the default value here since the grounded area likely
+        ! contains high surface slopes, and thus it will create very high
+        ! velocities, so allow it to get overwritten during extrapolation
+        mask( vi) = 1
+
+      ! Ice shelf, open ocean, or ice-free land
+      else
+        ! Prevent extrapolation: use existing value
+        mask( vi) = 0
+
+      end if
+
+    end do
+    call sync
+
+    if (par%master) then
+      ! Perform the extrapolation - mask: 2 -> use as seed; 1 -> extrapolate; 0 -> ignore
+      call extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%dphi_dt_a, 40000._dp, mask_filled)
+    end if
+    call sync
+
+    ! Third extrapolation: ice shelves
+    ! ================================
+
+    ! Reinitialise mask
+    mask = 0
+    call sync
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Land ice: interior, calving front, margin and (grounded) grodunding line
+      if (ice%mask_sheet_a( vi) == 1) then
+        ! Mark this vertex as ready (already extrapolated or inverted)
+        mask( vi) = 2
+
+      ! Floating side of grounding line
+      elseif (ice%mask_glf_a( vi) == 1) then
+        ! Mark this vertex as ready (already extrapolated)
+        mask( vi) = 2
+
+      ! Open ocean
+      elseif (ice%mask_ocean_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+        ! Mark this vertex as ready (default value)
+        mask( vi) = 2
+
+      ! Ice shelf
+      elseif (ice%mask_ocean_a( vi) == 1 .and. ice%mask_ice_a( vi) == 1) then
+        ! Mark this vertex for extrapolation
+        mask( vi) = 1
+
+      ! Ice-free land
+      else
+        ! Prevent extrapolation
+        mask( vi) = 0
+
+      end if
+
+    end do
+    call sync
+
+    if (par%master) then
+      ! Perform the extrapolation - mask: 2 -> use as seed; 1 -> extrapolate; 0 -> ignore
+      call extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%dphi_dt_a, 40000._dp, mask_filled)
+    end if
+    call sync
+
+    ! Smoothing
+    ! =========
+
+    ! Store the inverted adjustment in a local variable
+    dphi_dt_smooth( mesh%vi1:mesh%vi2) = ice%dphi_dt_a( mesh%vi1:mesh%vi2)
+    call sync
+
+    ! Smooth the local variable
+    if (C%slid_inv_Bernales2017_smooth_w > 0._dp) THEN
+      call smooth_Gaussian_2D( mesh, grid, dphi_dt_smooth, C%slid_inv_Bernales2017_smooth_r)
+    end if
+    call sync
+
+    ! Final bed roughness field
+    ! =========================
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Partially floating grounded ice
+      if (ice%mask_sheet_a( vi) == 1 .and. ice%f_grnd_a( vi) < 1._dp) then
+
+        ! Prevent neighbour leakage from the smoothing
+        w_tot = 0._dp
+
+      ! Partially grounded floating ice
+      elseif (ice%mask_shelf_a( vi) == 1 .and. ice%f_grnd_a( vi) > 0._dp) then
+
+        ! Prevent neighbour leakage from the smoothing
+        w_tot = 0._dp
+
+      ! Ice-free land
+      elseif (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+
+        ! Prevent neighbour leakage from the smoothing
+        w_tot = 0._dp
+
+      else
+
+        ! Apply full smoothing for the rest
+        w_tot = C%slid_inv_Bernales2017_smooth_w
+
+      end if
+
+      ! Combine the smoothed and raw inverted parameter through a weighed average
+      ice%dphi_dt_a( vi) = (1._dp - w_tot) * ice%dphi_dt_a( vi) + &
+                                    w_tot  * dphi_dt_smooth( vi)
+
+    end do
+    call sync
+
+    ! Finalisation
+    ! ============
+
+    ! Safety
+    call check_for_NaN_dp_1D( ice%dphi_dt_a, 'ice%dphi_dt_a')
+
+    ! Clean up after yourself
+    call deallocate_shared( wmask_filled)
+    call deallocate_shared( wmask)
+    call deallocate_shared( wdphi_dt_smooth)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  END SUBROUTINE determine_inverted_bed_roughness_rate_of_change
+
+  SUBROUTINE basal_sliding_inversion_Berends2022( mesh, grid, ice, refgeo, time, do_adjustment)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
     ! and extrapolate the resulting field over the rest of the domain
 
@@ -1973,6 +2228,8 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
+    REAL(dp),                            INTENT(IN)    :: time
+    LOGICAL,                             INTENT(IN)    :: do_adjustment
 
     ! Local variables
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion_Berends2022'
@@ -1992,6 +2249,16 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! If model time is outside of inversion window
+    IF (time < C%slid_inv_t_start .OR. &
+        time > C%slid_inv_t_end   .OR. &
+        (.NOT. do_adjustment)) THEN
+      ! Finalise routine path
+      CALL finalise_routine( routine_name)
+      ! And exit
+      RETURN
+    END IF
 
     ! Allocate shared memory
     CALL allocate_shared_int_1D( mesh%nV, mask       , wmask       )
@@ -2112,7 +2379,7 @@ CONTAINS
     CALL smooth_Gaussian_2D( mesh, grid, dphi_dt, sigma)
 
     DO vi = mesh%vi1, mesh%vi2
-      ice%phi_fric_a( vi) = MAX( C%slid_inv_phi_min, MIN( C%slid_inv_phi_max, ice%phi_fric_a( vi) + dphi_dt( vi) * C%dt_slid_inv ))
+      ice%phi_fric_a( vi) = MAX( C%slid_inv_phi_min, MIN( C%slid_inv_phi_max, ice%phi_fric_a( vi) + dphi_dt( vi) * MIN( C%dt_slid_inv_guess, C%dt_slid_inv_equil) ))
     END DO
     CALL sync
 
@@ -2309,12 +2576,12 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_mesh),         INTENT(IN)    :: mesh
+    TYPE(type_ice_model),    INTENT(INOUT) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_basal_inversion'
-    INTEGER                                            :: k
+    CHARACTER(LEN=256), PARAMETER          :: routine_name = 'initialise_basal_inversion'
+    INTEGER                                :: vi
 
     ! === Initialisation ===
     ! ======================
@@ -2322,60 +2589,35 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! === Allocation ===
-    ! ==================
+    IF (C%choice_slid_inv_method == 'Bernales2017') THEN
 
-    IF (C%choice_sliding_law == 'Weertman' .OR. &
-        C%choice_sliding_law == 'Tsai2015' .OR. &
-        C%choice_sliding_law == 'Schoof2005') THEN
+      ! Allocate rate of change of till friction angle
+      CALL allocate_shared_dp_1D( mesh%nV, ice%dphi_dt_a,    ice%wdphi_dt_a   )
+      ! Allocate "previous time-step" ice thickness misfit
+      CALL allocate_shared_dp_1D( mesh%nV, ice%h_delta_prev, ice%wh_delta_prev)
 
-      CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_inv_a , ice%wbeta_sq_inv_a )
+      ! Initialise values
+      ice%dphi_dt_a = 0._dp
+      ice%h_delta_prev = 0._dp
 
-    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
-            C%choice_sliding_law == 'Coulomb_regularised' .OR. &
-            C%choice_sliding_law == 'Zoet-Iverson') THEN
+      IF (C%choice_basal_roughness /= 'restart') THEN
+        ! Set initial till friction angle values based on inversion limits
+        DO vi = mesh%vi1, mesh%vi2
+          IF (ice%mask_land_a( vi) == 1) THEN
+            ice%phi_fric_a( vi) = ice%phi_fric_a( vi)
+          ELSE
+            ice%phi_fric_a( vi) = C%slid_inv_phi_min
+          END IF
+        END DO
+        CALL sync
+      END IF
 
-      CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_inv_a, ice%wphi_fric_inv_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_ave_a, ice%wphi_fric_ave_a)
-      CALL allocate_shared_dp_2D( mesh%nV, C%slid_inv_window_size, &
-                                  ice%phi_fric_window_a, ice%wphi_fric_window_a)
+      ! ! Target velocity fields
+      ! CALL initialise_basal_inversion_target_velocity( mesh, ice)
 
-    ELSE
-      CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
-    END IF
-
-    ! === Initial value ===
-    ! =====================
-
-    IF (C%choice_sliding_law == 'Weertman' .OR. &
-        C%choice_sliding_law == 'Tsai2015' .OR. &
-        C%choice_sliding_law == 'Schoof2005') THEN
-
-      ice%beta_sq_inv_a(  mesh%vi1:mesh%vi2) = ice%beta_sq_a(  mesh%vi1:mesh%vi2)
-
-    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
-            C%choice_sliding_law == 'Coulomb_regularised' .OR. &
-            C%choice_sliding_law == 'Zoet-Iverson') THEN
-
-      ice%phi_fric_inv_a( mesh%vi1:mesh%vi2) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
-      ice%phi_fric_ave_a( mesh%vi1:mesh%vi2) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
-
-      DO k = 1, C%slid_inv_window_size
-        ice%phi_fric_window_a( mesh%vi1:mesh%vi2, k) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
-      END DO
-
-    ELSE
-      CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
-    END IF
-
-    ! === Target velocity fields ===
-    ! ==============================
-
-    IF     (C%choice_slid_inv_method == 'Bernales2017') THEN
-      ! Not needed in these methods
     ELSEIF (C%choice_slid_inv_method == 'Berends2022') THEN
-      ! Needed in these methods
 
+      ! Target velocity fields
       CALL initialise_basal_inversion_target_velocity( mesh, ice)
 
     ELSE
@@ -2412,11 +2654,11 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Determine filename
-    IF     (C%choice_slid_inv_method == 'Berends2022') THEN
+    ! IF     (C%choice_slid_inv_method == 'Berends2022') THEN
       netcdf%filename = C%slid_inv_target_velocity_filename
-    ELSE
-      CALL crash('unknown choice_slid_inv_method "' // TRIM(C%choice_slid_inv_method) // '"!')
-    END IF
+    ! ELSE
+    !   CALL crash('unknown choice_slid_inv_method "' // TRIM(C%choice_slid_inv_method) // '"!')
+    ! END IF
 
     IF (par%master) WRITE(0,*) '  Initialising basal inversion target velocity from file ', TRIM( netcdf%filename), '...'
 

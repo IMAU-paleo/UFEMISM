@@ -51,7 +51,7 @@ MODULE climate_module
                                              calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh, &
                                              map_grid2mesh_3D
   USE forcing_module,                  ONLY: forcing, get_insolation_at_time, update_CO2_at_model_time
-  USE mesh_operators_module,           ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D
+  USE mesh_operators_module,           ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D, d2dx2_a_to_a_2D, d2dxdy_a_to_a_2D, d2dy2_a_to_a_2D
   USE SMB_module,                      ONLY: run_SMB_model
 
   IMPLICIT NONE
@@ -238,12 +238,12 @@ CONTAINS
     ELSEIF (C%choice_climate_model == 'PD_obs') THEN
       ! Keep the climate fixed to present-day observed conditions
 
-      CALL initialise_climate_model_regional_PD_obs( region%mesh, region%ice, climate_matrix_global, region%climate_matrix, region%name)
+      CALL initialise_climate_model_regional_PD_obs( region%mesh, region%grid_smooth, region%ice, climate_matrix_global, region%climate_matrix, region%refgeo_PD, region%name)
 
     ELSEIF (C%choice_climate_model == 'PD_dTglob') THEN
       ! Use the present-day climate plus a global temperature offset (de Boer et al., 2013)
 
-      CALL initialise_climate_model_regional_PD_obs( region%mesh, region%ice, climate_matrix_global, region%climate_matrix, region%name)
+      CALL initialise_climate_model_regional_PD_obs( region%mesh, region%grid_smooth, region%ice, climate_matrix_global, region%climate_matrix, region%refgeo_PD, region%name)
 
     ELSEIF (C%choice_climate_model == 'matrix_warm_cold') THEN
       ! Use the warm/cold climate matrix (Berends et al., 2018)
@@ -486,7 +486,7 @@ CONTAINS
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
       ! Safety net in case resulting precipitation is negative
-      climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
+      climate_matrix%applied%Precip( vi,m) = MAX( 0.0_dp, climate_matrix%applied%Precip(vi,m))
     END DO
     END DO
     CALL sync
@@ -586,7 +586,7 @@ CONTAINS
 
   END SUBROUTINE initialise_climate_PD_obs_global
 
-  SUBROUTINE initialise_climate_model_regional_PD_obs( mesh, ice, climate_matrix_global, climate_matrix, region_name)
+  SUBROUTINE initialise_climate_model_regional_PD_obs( mesh, grid, ice, climate_matrix_global, climate_matrix, refgeo, region_name)
     ! Initialise the regional climate model
     !
     ! Keep the climate fixed to present-day observed conditions
@@ -594,15 +594,20 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
-    TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
-    TYPE(type_climate_matrix_regional),  INTENT(INOUT) :: climate_matrix
-    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    TYPE(type_mesh),                    INTENT(IN)    :: mesh
+    TYPE(type_grid),                    INTENT(IN)    :: grid
+    TYPE(type_ice_model),               INTENT(IN)    :: ice
+    TYPE(type_climate_matrix_global),   INTENT(IN)    :: climate_matrix_global
+    TYPE(type_climate_matrix_regional), INTENT(INOUT) :: climate_matrix
+    TYPE(type_reference_geometry),      INTENT(IN)    :: refgeo
+    CHARACTER(LEN=3),                   INTENT(IN)    :: region_name
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model_regional_PD_obs'
-    INTEGER                                            :: vi,m
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'initialise_climate_model_regional_PD_obs'
+    INTEGER                                           :: vi,m
+    REAL(dp), DIMENSION(:), POINTER                   ::  d2dx2,  d2dxdy,  d2dy2
+    INTEGER                                           :: wd2dx2, wd2dxdy, wd2dy2
+    REAL(dp)                                          :: surf_peak
 
     ! Initialisation
     ! ==============
@@ -625,6 +630,53 @@ CONTAINS
 
     ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
     CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+    ! == Mountain correction
+    ! ======================
+
+    ! Local allocation
+    CALL allocate_shared_dp_1D( mesh%nV, d2dx2,  wd2dx2)
+    CALL allocate_shared_dp_1D( mesh%nV, d2dxdy, wd2dxdy)
+    CALL allocate_shared_dp_1D( mesh%nV, d2dy2,  wd2dy2)
+
+    ! Calculate surface derivatives based on (ice model) reference PD topography
+    CALL d2dx2_a_to_a_2D(  mesh, refgeo%Hs, d2dx2 )
+    CALL d2dxdy_a_to_a_2D( mesh, refgeo%Hs, d2dxdy)
+    CALL d2dy2_a_to_a_2D(  mesh, refgeo%Hs, d2dy2 )
+
+    climate_matrix%PD_obs%mountain_fact = 0._dp
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Compute local surface negative curvature (proxy for peaks)
+      surf_peak = MAX( 0._dp, -d2dx2( vi) - d2dy2( vi) - d2dxdy( vi))
+
+      ! Compute a peak factor, where 0 means no peak, and 1 means full peak
+      IF (ice%mask_land_a( vi) == 1) THEN
+        climate_matrix%PD_obs%mountain_fact( vi) = MIN( 1._dp, MAX( 0.0_dp, &
+                                                   (surf_peak - C%DIVA_beta_surf_curvature_pass) / &
+                                                   (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass)))
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Smooth the mountain factor field a bit
+    CALL smooth_Gaussian_2D( mesh, grid, climate_matrix%PD_obs%mountain_fact, mesh%resolution_min)
+
+    ! Reduce precipitation over mountain peaks
+    IF (C%do_climate_PD_mountain_correction) THEN
+      DO vi = mesh%vi1, mesh%vi2
+        climate_matrix%PD_obs%Precip( vi,:) = climate_matrix%PD_obs%Precip( vi,:) * &
+                                              (1._dp - climate_matrix%PD_obs%mountain_fact( vi))
+      END DO
+      CALL sync
+    END IF
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd2dx2)
+    CALL deallocate_shared( wd2dxdy)
+    CALL deallocate_shared( wd2dy2)
 
     ! == Downscaling to model topography
     ! ==================================
@@ -678,7 +730,7 @@ CONTAINS
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
       ! Safety net in case resulting precipitation is negative
-      climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
+      climate_matrix%applied%Precip( vi,m) = MAX( 0.0_dp, climate_matrix%applied%Precip(vi,m))
     END DO
     END DO
     CALL sync
@@ -1404,7 +1456,7 @@ CONTAINS
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
       ! Safety net in case resulting precipitation is negative
-      climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
+      climate_matrix%applied%Precip( vi,m) = MAX( 0.0_dp, climate_matrix%applied%Precip(vi,m))
     END DO
     END DO
     CALL sync
@@ -1574,6 +1626,9 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_matrix_regional'
     INTEGER                                            :: vi, m
+    REAL(dp), DIMENSION(:), POINTER                    ::  d2dx2,  d2dxdy,  d2dy2
+    INTEGER                                            :: wd2dx2, wd2dxdy, wd2dy2
+    REAL(dp)                                           :: surf_peak
 
     ! == Initialisation
     ! =================
@@ -1581,7 +1636,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Allocate memory for the regional ERA40 climate and the final applied climate
+    ! Allocate memory for the regional PD climate, snapshots, and the final applied climate
     CALL allocate_climate_snapshot_regional( region%mesh, region%climate_matrix%PD_obs,   name = 'PD_obs' )
     CALL allocate_climate_snapshot_regional( region%mesh, region%climate_matrix%GCM_PI,   name = 'GCM_PI' )
     CALL allocate_climate_snapshot_regional( region%mesh, region%climate_matrix%GCM_warm, name = 'GCM_warm')
@@ -1610,6 +1665,53 @@ CONTAINS
     END DO
     END DO
     CALL sync
+
+    ! == Mountain correction
+    ! ======================
+
+    ! Local allocation
+    CALL allocate_shared_dp_1D( region%mesh%nV, d2dx2,  wd2dx2)
+    CALL allocate_shared_dp_1D( region%mesh%nV, d2dxdy, wd2dxdy)
+    CALL allocate_shared_dp_1D( region%mesh%nV, d2dy2,  wd2dy2)
+
+    ! Calculate surface derivatives based on (ice model) reference PD topography
+    CALL d2dx2_a_to_a_2D(  region%mesh, region%refgeo_PD%Hs, d2dx2 )
+    CALL d2dxdy_a_to_a_2D( region%mesh, region%refgeo_PD%Hs, d2dxdy)
+    CALL d2dy2_a_to_a_2D(  region%mesh, region%refgeo_PD%Hs, d2dy2 )
+
+    region%climate_matrix%PD_obs%mountain_fact = 0._dp
+
+    DO vi = region%mesh%vi1, region%mesh%vi2
+
+      ! Compute local surface negative curvature (proxy for peaks)
+      surf_peak = MAX( 0._dp, -d2dx2( vi) - d2dy2( vi) - d2dxdy( vi))
+
+      ! Compute a peak factor, where 0 means no peak, and 1 means full peak
+      IF (region%ice%mask_land_a( vi) == 1) THEN
+        region%climate_matrix%PD_obs%mountain_fact( vi) = MIN( 1._dp, MAX( 0.0_dp, &
+                                                          (surf_peak - C%DIVA_beta_surf_curvature_pass) / &
+                                                          (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass)))
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Smooth the mountain factor field a bit
+    CALL smooth_Gaussian_2D( region%mesh, region%grid_smooth, region%climate_matrix%PD_obs%mountain_fact, region%mesh%resolution_min)
+
+    ! Reduce precipitation over mountain peaks
+    IF (C%do_climate_PD_mountain_correction) THEN
+      DO vi = region%mesh%vi1, region%mesh%vi2
+        region%climate_matrix%PD_obs%Precip( vi,:) = region%climate_matrix%PD_obs%Precip( vi,:) * &
+                                                     (1._dp - region%climate_matrix%PD_obs%mountain_fact( vi))
+      END DO
+      CALL sync
+    END IF
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd2dx2)
+    CALL deallocate_shared( wd2dxdy)
+    CALL deallocate_shared( wd2dy2)
 
     ! == Lapse rates
     ! ==============
@@ -1725,31 +1827,32 @@ CONTAINS
 
     climate%name = name
 
-    CALL allocate_shared_dp_1D( mesh%nV,     climate%Hs,          climate%wHs         )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%T2m,         climate%wT2m        )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Precip,      climate%wPrecip     )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_WE,     climate%wWind_WE    )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_SN,     climate%wWind_SN    )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_LR,     climate%wWind_LR    )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_DU,     climate%wWind_DU    )
-    CALL allocate_shared_dp_1D( mesh%nV,     climate%Mask_ice,    climate%wMask_ice   )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate%Hs,            climate%wHs           )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%T2m,           climate%wT2m          )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Precip,        climate%wPrecip       )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_WE,       climate%wWind_WE      )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_SN,       climate%wWind_SN      )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_LR,       climate%wWind_LR      )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_DU,       climate%wWind_DU      )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate%Mask_ice,      climate%wMask_ice     )
 
-    CALL allocate_shared_dp_0D(              climate%CO2,         climate%wCO2        )
-    CALL allocate_shared_dp_0D(              climate%orbit_time,  climate%worbit_time )
-    CALL allocate_shared_dp_0D(              climate%orbit_ecc,   climate%worbit_ecc  )
-    CALL allocate_shared_dp_0D(              climate%orbit_obl,   climate%worbit_obl  )
-    CALL allocate_shared_dp_0D(              climate%orbit_pre,   climate%worbit_pre  )
-    CALL allocate_shared_dp_0D(              climate%sealevel,    climate%wsealevel   )
+    CALL allocate_shared_dp_0D(              climate%CO2,           climate%wCO2          )
+    CALL allocate_shared_dp_0D(              climate%orbit_time,    climate%worbit_time   )
+    CALL allocate_shared_dp_0D(              climate%orbit_ecc,     climate%worbit_ecc    )
+    CALL allocate_shared_dp_0D(              climate%orbit_obl,     climate%worbit_obl    )
+    CALL allocate_shared_dp_0D(              climate%orbit_pre,     climate%worbit_pre    )
+    CALL allocate_shared_dp_0D(              climate%sealevel,      climate%wsealevel     )
 
-    CALL allocate_shared_dp_1D( mesh%nV,     climate%lambda,      climate%wlambda     )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate%lambda,        climate%wlambda       )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate%mountain_fact, climate%wmountain_fact)
 
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%T2m_corr,    climate%wT2m_corr   )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Precip_corr, climate%wPrecip_corr)
-    CALL allocate_shared_dp_1D( mesh%nV,     climate%Hs_corr,     climate%wHs_corr    )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%T2m_corr,      climate%wT2m_corr     )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Precip_corr,   climate%wPrecip_corr  )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate%Hs_corr,       climate%wHs_corr      )
 
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Q_TOA,       climate%wQ_TOA      )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Albedo,      climate%wAlbedo     )
-    CALL allocate_shared_dp_1D( mesh%nV,     climate%I_abs,       climate%wI_abs      )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Q_TOA,         climate%wQ_TOA        )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Albedo,        climate%wAlbedo       )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate%I_abs,         climate%wI_abs        )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=19)
@@ -4003,7 +4106,7 @@ CONTAINS
 
   END SUBROUTINE map_subclimate_to_mesh
 
-  SUBROUTINE remap_climate_model( mesh_old, mesh_new, map, climate_matrix, climate_matrix_global, refgeo_PD, grid_smooth, mask_noice, region_name, time)
+  SUBROUTINE remap_climate_model( mesh_old, mesh_new, map, grid, ice, climate_matrix, climate_matrix_global, refgeo, mask_noice, region_name, time)
     ! Reallocate all the data fields (no remapping needed, instead we just run
     ! the climate model immediately after a mesh update)
 
@@ -4013,10 +4116,11 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_climate_matrix_regional),  INTENT(INOUT) :: climate_matrix
     TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
-    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
-    TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     REAL(dp),                            INTENT(IN)    :: time
@@ -4024,6 +4128,9 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_climate_model'
     INTEGER                                            :: int_dummy, vi, m
+    REAL(dp), DIMENSION(:), POINTER                    ::  d2dx2,  d2dxdy,  d2dy2
+    INTEGER                                            :: wd2dx2, wd2dxdy, wd2dy2
+    REAL(dp)                                           :: surf_peak
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -4049,6 +4156,53 @@ CONTAINS
 
       ! Re-initialise insolation at present-day (needed for the IMAU-ITM SMB model)
       CALL get_insolation_at_time( mesh_new, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+      ! == Mountain correction
+      ! ======================
+
+      ! Local allocation
+      CALL allocate_shared_dp_1D( mesh_new%nV, d2dx2,  wd2dx2)
+      CALL allocate_shared_dp_1D( mesh_new%nV, d2dxdy, wd2dxdy)
+      CALL allocate_shared_dp_1D( mesh_new%nV, d2dy2,  wd2dy2)
+
+      ! Calculate surface derivatives based on (ice model) reference PD topography
+      CALL d2dx2_a_to_a_2D(  mesh_new, refgeo%Hs, d2dx2 )
+      CALL d2dxdy_a_to_a_2D( mesh_new, refgeo%Hs, d2dxdy)
+      CALL d2dy2_a_to_a_2D(  mesh_new, refgeo%Hs, d2dy2 )
+
+      climate_matrix%PD_obs%mountain_fact = 0._dp
+
+      DO vi = mesh_new%vi1, mesh_new%vi2
+
+        ! Compute local surface negative curvature (proxy for peaks)
+        surf_peak = MAX( 0._dp, -d2dx2( vi) - d2dy2( vi) - d2dxdy( vi))
+
+        ! Compute a peak factor, where 0 means no peak, and 1 means full peak
+        IF (ice%mask_land_a( vi) == 1) THEN
+          climate_matrix%PD_obs%mountain_fact( vi) = MIN( 1._dp, MAX( 0.0_dp, &
+                                                     (surf_peak - C%DIVA_beta_surf_curvature_pass) / &
+                                                     (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass)))
+        END IF
+
+      END DO
+      CALL sync
+
+      ! Smooth the mountain factor field a bit
+      CALL smooth_Gaussian_2D( mesh_new, grid, climate_matrix%PD_obs%mountain_fact, mesh_new%resolution_min)
+
+      ! Reduce precipitation over mountain peaks
+      IF (C%do_climate_PD_mountain_correction) THEN
+        DO vi = mesh_new%vi1, mesh_new%vi2
+          climate_matrix%PD_obs%Precip( vi,:) = climate_matrix%PD_obs%Precip( vi,:) * &
+                                                (1._dp - climate_matrix%PD_obs%mountain_fact( vi))
+        END DO
+        CALL sync
+      END IF
+
+      ! Clean up after yourself
+      CALL deallocate_shared( wd2dx2)
+      CALL deallocate_shared( wd2dxdy)
+      CALL deallocate_shared( wd2dy2)
 
       ! Re-initialise applied insolation with present-day values
       climate_matrix%applied%Q_TOA( mesh_new%vi1:mesh_new%vi2,:) = climate_matrix%PD_obs%Q_TOA( mesh_new%vi1:mesh_new%vi2,:)
@@ -4085,7 +4239,7 @@ CONTAINS
       climate_matrix%GCM_warm%lambda( mesh_new%vi1:mesh_new%vi2) = C%constant_lapserate
       CALL sync
       IF     (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-        CALL initialise_snapshot_spatially_variable_lapserate( mesh_new, grid_smooth, climate_matrix%GCM_PI, climate_matrix%GCM_cold)
+        CALL initialise_snapshot_spatially_variable_lapserate( mesh_new, grid, climate_matrix%GCM_PI, climate_matrix%GCM_cold)
       ELSEIF (region_name == 'GLR' .OR. region_name == 'ANT') THEN
         climate_matrix%GCM_cold%lambda( mesh_new%vi1:mesh_new%vi2) = C%constant_lapserate
         CALL sync
@@ -4222,24 +4376,25 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%Hs,          subclimate%wHs         )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%T2m,         subclimate%wT2m        )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Precip,      subclimate%wPrecip     )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_WE,     subclimate%wWind_WE    )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_SN,     subclimate%wWind_SN    )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_LR,     subclimate%wWind_LR    )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_DU,     subclimate%wWind_DU    )
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%Mask_ice,    subclimate%wMask_ice   )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%Hs,            subclimate%wHs           )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%T2m,           subclimate%wT2m          )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Precip,        subclimate%wPrecip       )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_WE,       subclimate%wWind_WE      )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_SN,       subclimate%wWind_SN      )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_LR,       subclimate%wWind_LR      )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_DU,       subclimate%wWind_DU      )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%Mask_ice,      subclimate%wMask_ice     )
 
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%lambda,      subclimate%wlambda     )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%lambda,        subclimate%wlambda       )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%mountain_fact, subclimate%wmountain_fact)
 
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%T2m_corr,    subclimate%wT2m_corr   )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Precip_corr, subclimate%wPrecip_corr)
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%Hs_corr,     subclimate%wHs_corr    )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%T2m_corr,      subclimate%wT2m_corr     )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Precip_corr,   subclimate%wPrecip_corr  )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%Hs_corr,       subclimate%wHs_corr      )
 
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Q_TOA,       subclimate%wQ_TOA      )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Albedo,      subclimate%wAlbedo     )
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%I_abs,       subclimate%wI_abs      )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Q_TOA,         subclimate%wQ_TOA        )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Albedo,        subclimate%wAlbedo       )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%I_abs,         subclimate%wI_abs        )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

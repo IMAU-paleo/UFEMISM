@@ -254,6 +254,13 @@ CONTAINS
 
       CALL run_isotopes_model( region)
 
+      ! == Update ice geometry
+      ! ======================
+      ! (move it to after the output for debugging imposed ice removal)
+
+      CALL update_ice_thickness( region%mesh, region%ice, region%BMB, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
+      CALL sync
+
       ! == Ice sheet scalars
       ! ====================
 
@@ -284,12 +291,6 @@ CONTAINS
       ! Write to regional scalar output
       CALL write_regional_scalar_data( region, region%time)
 
-      ! == Update ice geometry
-      ! ======================
-
-      CALL update_ice_thickness( region%mesh, region%ice, region%BMB, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
-      CALL sync
-
       ! == Basal sliding inversion
       ! ==========================
 
@@ -318,10 +319,6 @@ CONTAINS
     ! ===========================================
     ! ===== End of the main model time loop =====
     ! ===========================================
-
-    ! Determine total ice sheet area, volume, volume-above-flotation
-    ! and GMSL contribution, used for global scalar output
-    CALL calculate_icesheet_volume_and_area( region, do_ddt = .FALSE.)
 
     ! Write to NetCDF output one last time at the end of the simulation
     IF (region%time == C%end_time_of_run) THEN
@@ -459,7 +456,7 @@ CONTAINS
 
     ! Remap all other submodels
     CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
-    CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate_matrix, climate_matrix_global, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name, region%time)
+    CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%grid_smooth, region%ice, region%climate_matrix, climate_matrix_global, region%refgeo_PD, region%mask_noice, region%name, region%time)
     CALL remap_ocean_model(    region%mesh, region%mesh_new, map, region%ocean_matrix)
     CALL remap_SMB_model(      region%mesh, region%mesh_new, map, region%SMB)
     CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%ice, region%BMB)

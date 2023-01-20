@@ -436,18 +436,11 @@ CONTAINS
         ! Determine accumulation with snow/rain fraction from Ohmura et al. (1999)
         snowfrac = MAX(0._dp, MIN(1._dp, 0.725_dp * (1 - ATAN((climate%T2m( vi,m) - T0) / 5.95_dp) / 1.8566_dp)))
         ! Jorjo's ink
-        ! snowfrac = MAX(0._dp, MIN(1._dp, 0.5_dp * (.63 - ATAN((climate%T2m( vi,m) - T0) / 1.00_dp) / 1.0000_dp)))
-
-        ! Reduce total precipitation over high peak areas (e.g. mountains)
-        IF (ice%mask_land_a( vi) == 1) THEN
-          mountain_fact = MIN( 1._dp, MAX( 0.0_dp, (ice%surf_peak( vi)-5e-7_dp) / (1e-6_dp-5e-7_dp)))
-        ELSE
-          mountain_fact = 0._dp
-        END IF
+        ! snowfrac = MAX(0._dp, MIN(1._dp, 0.4_dp * (1.11_dp - ATAN((climate%T2m( vi,m) - T0) / 1.0_dp) / 1.0_dp)))
 
         ! Determine accumulation and rainfall with snow/rain fraction, including high-curvature factor
-        SMB%Snowfall( vi,m) = climate%Precip( vi,m) *          snowfrac  * (1._dp - mountain_fact)
-        SMB%Rainfall( vi,m) = climate%Precip( vi,m) * (1._dp - snowfrac) * (1._dp - mountain_fact)
+        SMB%Snowfall( vi,m) = climate%Precip( vi,m) *          snowfrac
+        SMB%Rainfall( vi,m) = climate%Precip( vi,m) * (1._dp - snowfrac)
 
         ! Add this month's snow accumulation to next month's initial snow depth.
         SMB%AddedFirn( vi,m) = SMB%Snowfall( vi,m) - SMB%Melt( vi,m)

@@ -777,26 +777,26 @@ CONTAINS
     ! Inversion first-guess stage
     ! ===========================
 
-    IF ( C%do_slid_inv .AND. C%choice_slid_inv_method == 'Bernales2017' .AND. &
-         time > C%dt_max .AND. time < C%slid_inv_t_change + C%dt_max .AND. &
-         ABS( MOD( time, 2000._dp)) < C%dt_max) THEN
-      ! Time for a hard reset!
+    ! IF ( C%do_slid_inv .AND. C%choice_slid_inv_method == 'Bernales2017' .AND. &
+    !      time > C%dt_max .AND. time < C%slid_inv_t_change + C%dt_max .AND. &
+    !      ABS( MOD( time, 2000._dp)) < C%dt_max) THEN
+    !   ! Time for a hard reset!
 
-      print*, '  Here we go!'
+    !   print*, '  Here we go!'
 
-      ! Return ice thickness to the reference topography distribution
-      ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2) = refgeo_PD%Hi( mesh%vi1:mesh%vi2)
-      ! Erase any memory about change
-      ice%dHi_dt_a = 0._dp
-      ! Erase any ongoing friction adjustments
-      ice%dphi_dt_a = 0._dp
-      ! Erase any ongoing ocean adjustments
-      IF (C%do_ocean_inv) THEN
-        BMB%dT_base_dt = 0._dp
-      END IF
+    !   ! Return ice thickness to the reference topography distribution
+    !   ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2) = refgeo_PD%Hi( mesh%vi1:mesh%vi2)
+    !   ! Erase any memory about change
+    !   ice%dHi_dt_a( mesh%vi1:mesh%vi2) = 0._dp
+    !   ! Erase any ongoing friction adjustments
+    !   ice%dphi_dt_a( mesh%vi1:mesh%vi2) = 0._dp
+    !   ! Erase any ongoing ocean adjustments
+    !   IF (C%do_ocean_inv) THEN
+    !     BMB%dT_base_dt( mesh%vi1:mesh%vi2) = 0._dp
+    !   END IF
 
-    END IF
-    CALL sync
+    ! END IF
+    ! CALL sync
 
     ! === Finalisation ===
     ! ====================
@@ -1228,6 +1228,9 @@ CONTAINS
         ! Set next output at desired time
         region%t_next_output  = region%t_last_output + C%dt_output
       END IF
+
+      ! Applied time step
+      ! =================
 
       ! Set time step so that we move forward to the next action
       region%dt = t_next - region%time

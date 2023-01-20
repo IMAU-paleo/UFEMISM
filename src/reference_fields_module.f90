@@ -1382,148 +1382,6 @@ CONTAINS
 
   END SUBROUTINE setup_idealised_geometry_grid
 
-  ! Fill in secondary data for the reference geometry (used to force mesh creation)
-  SUBROUTINE calc_reference_geometry_secondary_data( grid, refgeo)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_grid),                INTENT(IN)    :: grid
-    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'calc_reference_geometry_secondary_data'
-    INTEGER                                       :: i,j,ii,jj
-    REAL(dp)                                      :: d2Hs_dx2, d2Hs_dxdy, d2Hs_dy2
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Allocate shared memory
-    CALL allocate_shared_dp_2D(  grid%nx, grid%ny, refgeo%surf_curv      , refgeo%wsurf_curv       )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_land      , refgeo%wmask_land       )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ocean     , refgeo%wmask_ocean      )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ice       , refgeo%wmask_ice        )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_sheet     , refgeo%wmask_sheet      )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_shelf     , refgeo%wmask_shelf      )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_margin    , refgeo%wmask_margin     )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_gl        , refgeo%wmask_gl         )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_cf        , refgeo%wmask_cf         )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_coast     , refgeo%wmask_coast      )
-
-    ! Calculate surface curvature
-    DO i = grid%i1, grid%i2
-    DO j = 1, grid%ny
-
-      IF (i == 1 .OR. i == grid%nx .OR. j == 1 .OR. j == grid%ny) THEN
-        d2Hs_dx2  = 0._dp
-        d2Hs_dxdy = 0._dp
-        d2Hs_dy2  = 0._dp
-      ELSE
-        d2Hs_dx2  = (refgeo%Hs_grid( i+1,j) + refgeo%Hs_grid( i-1,j) - 2._dp * refgeo%Hs_grid( i,j)) / (grid%dx**2)
-        d2Hs_dxdy = (refgeo%Hs_grid( i+1,j+1) + refgeo%Hs_grid( i-1,j-1) - refgeo%Hs_grid( i+1,j-1) - refgeo%Hs_grid( i-1,j+1)) / (4._dp * grid%dx * grid%dx)
-        d2Hs_dy2  = (refgeo%Hs_grid( i,j+1) + refgeo%Hs_grid( i,j-1) - 2._dp * refgeo%Hs_grid( i,j)) / (grid%dx**2)
-      END IF
-
-      refgeo%surf_curv( i,j) = MAX( -1E-6_dp, MIN( 1E-6_dp, SQRT( d2Hs_dx2**2 + d2Hs_dxdy**2 + d2Hs_dy2**2)))
-
-    END DO
-    END DO
-    CALL sync
-
-    ! Fill in masks
-
-    ! Land/ocean
-    DO i = grid%i1, grid%i2
-    DO j = 1, grid%ny
-
-      IF (is_floating( refgeo%Hi_grid( i,j), refgeo%Hb_grid( i,j), 0._dp)) THEN
-        refgeo%mask_ocean(  i,j) = 1
-      ELSE
-        refgeo%mask_land( i,j) = 1
-      END IF
-
-    END DO
-    END DO
-    CALL sync
-
-    ! Ice/sheet/shelf
-    DO i = grid%i1, grid%i2
-    DO j = 1, grid%ny
-
-      IF (refgeo%Hi_grid( i,j) > 0._dp) THEN
-
-        refgeo%mask_ice(  i,j) = 1
-
-        IF (refgeo%mask_land( i,j) == 1) THEN
-          refgeo%mask_sheet( i,j) = 1
-        ELSE
-          refgeo%mask_shelf( i,j) = 1
-        END IF
-
-      END IF
-
-    END DO
-    END DO
-    CALL sync
-
-    ! Transitions (margin, grounding line, calving front, coastline)
-    DO i = grid%i1, grid%i2
-    DO j = 1, grid%ny
-
-      ! Ice next to non-ice equals ice margin
-      IF (refgeo%mask_ice( i,j) == 1) THEN
-        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
-        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
-          IF (refgeo%mask_ice( ii,jj) == 0) THEN
-            refgeo%mask_margin( i,j) = 1
-          END IF
-        END DO
-        END DO
-      END IF
-
-      ! Sheet next to shelf equals grounding line
-      IF (refgeo%mask_sheet( i,j) == 1) THEN
-        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
-        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
-          IF (refgeo%mask_shelf( ii,jj) == 1) THEN
-            refgeo%mask_gl( i,j) = 1
-          END IF
-        END DO
-        END DO
-      END IF
-
-      ! Ice next to open ocean equals calving front
-      IF (refgeo%mask_ice( i,j) == 1) THEN
-        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
-        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
-          IF (refgeo%mask_ocean( ii,jj) == 1 .AND. refgeo%mask_ice( ii,jj) == 0) THEN
-            refgeo%mask_cf( i,j) = 1
-          END IF
-        END DO
-        END DO
-      END IF
-
-      ! Dry land next to open ocean equals coastline
-      IF (refgeo%mask_land( i,j) == 1) THEN
-        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
-        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
-          IF (refgeo%mask_ocean( ii,jj) == 1 .AND. refgeo%mask_ice( ii,jj) == 0) THEN
-            refgeo%mask_coast( i,j) = 1
-          END IF
-        END DO
-        END DO
-      END IF
-
-    END DO
-    END DO
-    CALL sync
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 10)
-
-  END SUBROUTINE calc_reference_geometry_secondary_data
-
 ! ===== Idealised reference geometries (mesh) =====
 ! =================================================
 
@@ -1985,6 +1843,151 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_MISMIPplus
+
+! ===== Secondary data =====
+! ==========================
+
+  ! Fill in secondary data for the reference geometry (used to force mesh creation)
+  SUBROUTINE calc_reference_geometry_secondary_data( grid, refgeo)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_grid),                INTENT(IN)    :: grid
+    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'calc_reference_geometry_secondary_data'
+    INTEGER                                       :: i,j,ii,jj
+    REAL(dp)                                      :: d2Hs_dx2, d2Hs_dxdy, d2Hs_dy2
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D(  grid%nx, grid%ny, refgeo%surf_curv      , refgeo%wsurf_curv       )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_land      , refgeo%wmask_land       )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ocean     , refgeo%wmask_ocean      )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ice       , refgeo%wmask_ice        )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_sheet     , refgeo%wmask_sheet      )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_shelf     , refgeo%wmask_shelf      )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_margin    , refgeo%wmask_margin     )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_gl        , refgeo%wmask_gl         )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_cf        , refgeo%wmask_cf         )
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_coast     , refgeo%wmask_coast      )
+
+    ! Calculate surface curvature
+    DO i = grid%i1, grid%i2
+    DO j = 1, grid%ny
+
+      IF (i == 1 .OR. i == grid%nx .OR. j == 1 .OR. j == grid%ny) THEN
+        d2Hs_dx2  = 0._dp
+        d2Hs_dxdy = 0._dp
+        d2Hs_dy2  = 0._dp
+      ELSE
+        d2Hs_dx2  = (refgeo%Hs_grid( i+1,j) + refgeo%Hs_grid( i-1,j) - 2._dp * refgeo%Hs_grid( i,j)) / (grid%dx**2)
+        d2Hs_dxdy = (refgeo%Hs_grid( i+1,j+1) + refgeo%Hs_grid( i-1,j-1) - refgeo%Hs_grid( i+1,j-1) - refgeo%Hs_grid( i-1,j+1)) / (4._dp * grid%dx * grid%dx)
+        d2Hs_dy2  = (refgeo%Hs_grid( i,j+1) + refgeo%Hs_grid( i,j-1) - 2._dp * refgeo%Hs_grid( i,j)) / (grid%dx**2)
+      END IF
+
+      refgeo%surf_curv( i,j) = MAX( -1E-6_dp, MIN( 1E-6_dp, SQRT( d2Hs_dx2**2 + d2Hs_dxdy**2 + d2Hs_dy2**2)))
+
+    END DO
+    END DO
+    CALL sync
+
+    ! Fill in masks
+
+    ! Land/ocean
+    DO i = grid%i1, grid%i2
+    DO j = 1, grid%ny
+
+      IF (is_floating( refgeo%Hi_grid( i,j), refgeo%Hb_grid( i,j), 0._dp)) THEN
+        refgeo%mask_ocean(  i,j) = 1
+      ELSE
+        refgeo%mask_land( i,j) = 1
+      END IF
+
+    END DO
+    END DO
+    CALL sync
+
+    ! Ice/sheet/shelf
+    DO i = grid%i1, grid%i2
+    DO j = 1, grid%ny
+
+      IF (refgeo%Hi_grid( i,j) > 0._dp) THEN
+
+        refgeo%mask_ice(  i,j) = 1
+
+        IF (refgeo%mask_land( i,j) == 1) THEN
+          refgeo%mask_sheet( i,j) = 1
+        ELSE
+          refgeo%mask_shelf( i,j) = 1
+        END IF
+
+      END IF
+
+    END DO
+    END DO
+    CALL sync
+
+    ! Transitions (margin, grounding line, calving front, coastline)
+    DO i = grid%i1, grid%i2
+    DO j = 1, grid%ny
+
+      ! Ice next to non-ice equals ice margin
+      IF (refgeo%mask_ice( i,j) == 1) THEN
+        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
+        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
+          IF (refgeo%mask_ice( ii,jj) == 0) THEN
+            refgeo%mask_margin( i,j) = 1
+          END IF
+        END DO
+        END DO
+      END IF
+
+      ! Sheet next to shelf equals grounding line
+      IF (refgeo%mask_sheet( i,j) == 1) THEN
+        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
+        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
+          IF (refgeo%mask_shelf( ii,jj) == 1) THEN
+            refgeo%mask_gl( i,j) = 1
+          END IF
+        END DO
+        END DO
+      END IF
+
+      ! Ice next to open ocean equals calving front
+      IF (refgeo%mask_ice( i,j) == 1) THEN
+        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
+        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
+          IF (refgeo%mask_ocean( ii,jj) == 1 .AND. refgeo%mask_ice( ii,jj) == 0) THEN
+            refgeo%mask_cf( i,j) = 1
+          END IF
+        END DO
+        END DO
+      END IF
+
+      ! Dry land next to open ocean equals coastline
+      IF (refgeo%mask_land( i,j) == 1) THEN
+        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
+        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
+          IF (refgeo%mask_ocean( ii,jj) == 1 .AND. refgeo%mask_ice( ii,jj) == 0) THEN
+            refgeo%mask_coast( i,j) = 1
+          END IF
+        END DO
+        END DO
+      END IF
+
+    END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 10)
+
+  END SUBROUTINE calc_reference_geometry_secondary_data
 
 ! ===== Mapping of reference data onto model mesh =====
 ! =====================================================

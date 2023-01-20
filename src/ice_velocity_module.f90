@@ -25,7 +25,7 @@ MODULE ice_velocity_module
   ! Import specific functionality
   USE data_types_module,                   ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, &
                                                  type_remapping_mesh_mesh, type_BMB_model
-  USE mesh_mapping_module,                 ONLY: remap_field_dp_2D
+  USE mesh_mapping_module,                 ONLY: remap_field_dp_2D, remap_field_dp_3D
   USE mesh_operators_module,               ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                                  ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
                                                  ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D, &
@@ -223,9 +223,12 @@ CONTAINS
         IF (ice%mask_shelf_a( vi) == 1) THEN
 
           ! Weaken the effect of grounded fractions for steep slopes
-          fg_exp_mod_slop = MIN( 2.0_dp, MAX( 0._dp, ice%surf_slop(vi)-1e-2_dp) / (3e-2_dp-1e-2_dp))
-          fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi)-5e-7_dp) / (1e-6_dp-5e-7_dp))
+          fg_exp_mod_slop = MIN( 2.0_dp, MAX( 0._dp, ice%surf_slop(vi) - C%DIVA_beta_surf_slope_pass) &
+                                                     / (C%DIVA_beta_surf_slope_threshold - C%DIVA_beta_surf_slope_pass))
+          fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi) - C%DIVA_beta_surf_curvature_pass) &
+                                                     / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass))
           fg_exp_mod = MAX( fg_exp_mod_slop, fg_exp_mod_peak)
+
           ! Reduce friction based on grounded fractions
           ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** (2._dp-fg_exp_mod)
 
@@ -233,17 +236,21 @@ CONTAINS
         ELSEIF (ice%mask_sheet_a( vi) == 1 .AND. (ice%mask_gl_a( vi) == 1 .OR. ice%mask_cf_a( vi) == 1 .OR. ice%mask_margin_a( vi) == 1)) THEN
 
           ! Weaken the effect of grounded fractions for steep slopes
-          fg_exp_mod_slop = MIN( 2.0_dp, MAX( 0._dp, ice%surf_slop(vi)-1e-2_dp) / (3e-2_dp-1e-2_dp))
-          fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi)-5e-7_dp) / (1e-6_dp-5e-7_dp))
+          fg_exp_mod_slop = MIN( 2.0_dp, MAX( 0._dp, ice%surf_slop(vi) - C%DIVA_beta_surf_slope_pass) &
+                                                     / (C%DIVA_beta_surf_slope_threshold - C%DIVA_beta_surf_slope_pass))
+          fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi) - C%DIVA_beta_surf_curvature_pass) &
+                                                     / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass))
           fg_exp_mod = MAX( fg_exp_mod_slop, fg_exp_mod_peak)
+
           ! Reduce friction based on grounded fractions
           ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** (2._dp-fg_exp_mod)
 
         ! Ice sheet interior: softer grounded fraction influence
         ELSEIF (ice%mask_sheet_a( vi) == 1) THEN
 
-          ! Weaken the effect of grounded fractions for steep slopes
-          fg_exp_mod = MIN( 1.0_dp, MAX( 0._dp, ice%surf_slop(vi)-.01_dp) / (.03_dp-.01_dp))
+          ! ! Weaken the effect of grounded fractions for steep slopes
+          ! fg_exp_mod = MIN( 1.0_dp, MAX( 0._dp, ice%surf_slop(vi)-.01_dp) / (.03_dp-.01_dp))
+
           ! Reduce friction based on grounded fractions
           ice%beta_eff_a( vi) = ice%beta_eff_a( vi)! * ice%f_grnd_a( vi) ** (1._dp-fg_exp_mod)
 
@@ -747,7 +754,6 @@ CONTAINS
     CALL sync
 
     ! Surface and basal vertical velocities
-
     DO vi = mesh%vi1, mesh%vi2
 
       ice%w_surf_a( vi) = ice%w_3D_a( vi,1   )
@@ -1173,8 +1179,8 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Prevent small values over steep slopes (e.g. mountain walls and cliffs)
-      beta_mod = MAX( (ice%surf_slop( vi)-1e-2_dp) / (3e-2_dp-1e-2_dp), &
-                      (ice%surf_peak( vi)-5e-7_dp) / (1e-6_dp-5e-7_dp) )
+      beta_mod = MAX( (ice%surf_slop( vi) - C%DIVA_beta_surf_slope_pass) / (C%DIVA_beta_surf_slope_threshold - C%DIVA_beta_surf_slope_pass), &
+                      (ice%surf_peak( vi) - C%DIVA_beta_surf_curvature_pass) / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass) )
 
       ! Limit beta based on slopeness
       ice%beta_a( vi) = MAX( ice%beta_a( vi), 1000._dp * MIN( 1._dp, MAX( 0._dp, beta_mod)) )
@@ -2930,6 +2936,12 @@ CONTAINS
     CALL deallocate_shared( wu_a)
     CALL deallocate_shared( wv_a)
 
+    ! Remap effective viscosity on the a-grid
+    ! =======================================
+
+    ! Circular dependency, so we must not set it to zero
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%visc_eff_3D_a, ice%wvisc_eff_3D_a, 'cons_2nd_order')
+
     ! == Reallocate everything else
     ! =============================
 
@@ -2962,11 +2974,6 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
 
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
-
     ! Physical terms in the SSA/DIVA
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
@@ -2976,7 +2983,6 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
     CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
     CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
@@ -2992,8 +2998,8 @@ CONTAINS
     CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
     CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
     CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
-    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
 
+    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
     CALL initialise_matrix_conversion_lists(  mesh_new, ice)
     CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
 
@@ -3048,6 +3054,12 @@ CONTAINS
     CALL deallocate_shared( wu_a)
     CALL deallocate_shared( wv_a)
 
+    ! Remap effective viscosity on the a-grid
+    ! =======================================
+
+    ! Circular dependency, so we must not set it to zero
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%visc_eff_3D_a, ice%wvisc_eff_3D_a, 'cons_2nd_order')
+
     ! == Reallocate everything else
     ! =============================
 
@@ -3082,8 +3094,6 @@ CONTAINS
 
     CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
     CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
 
     ! Physical terms in the SSA/DIVA
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
@@ -3094,7 +3104,6 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
     CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
     CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
@@ -3110,8 +3119,8 @@ CONTAINS
     CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
     CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
     CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
-    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
 
+    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
     CALL initialise_matrix_conversion_lists(  mesh_new, ice)
     CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
 
@@ -3166,6 +3175,12 @@ CONTAINS
     CALL deallocate_shared( wu_a)
     CALL deallocate_shared( wv_a)
 
+    ! Remap effective viscosity on the a-grid
+    ! =======================================
+
+    ! Circular dependency, so we must not set it to zero
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%visc_eff_3D_a, ice%wvisc_eff_3D_a, 'cons_2nd_order')
+
     ! == Reallocate everything else
     ! =============================
 
@@ -3177,8 +3192,6 @@ CONTAINS
 
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
 
@@ -3198,11 +3211,6 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
 
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
-
     ! Physical terms in the SSA/DIVA
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
@@ -3212,7 +3220,6 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
     CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
     CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
@@ -3228,8 +3235,8 @@ CONTAINS
     CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
     CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
     CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
-    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
 
+    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
     CALL initialise_matrix_conversion_lists(  mesh_new, ice)
     CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
 

@@ -146,8 +146,10 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dN_dx_b                     ! Gradients of N
     REAL(dp), DIMENSION(:    ), POINTER     :: dN_dy_b
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_b_b                    ! Friction coefficient (tau_b = u * betab)
-    REAL(dp), DIMENSION(:    ), POINTER     :: F2_a                        ! F-integral
-    REAL(dp), DIMENSION(:    ), POINTER     :: F2_b
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: F1_3D_a                     ! F-integrals
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: F2_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: F1_3D_b
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: F2_3D_b
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_a
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_b                  ! Beta_eff
     REAL(dp), DIMENSION(:    ), POINTER     :: taubx_b                     ! Basal shear stress
@@ -158,7 +160,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_b_prev
     INTEGER :: wu_vav_b, wv_vav_b, wu_base_b, wv_base_b, wdu_dx_a, wdu_dy_a, wdv_dx_a, wdv_dy_a
     INTEGER :: wdu_dz_3D_b, wdv_dz_3D_b, wdu_dz_3D_a, wdv_dz_3D_a, weta_3D_a, weta_3D_b, weta_vint_a, wN_a, wN_b, wdN_dx_b, wdN_dy_b
-    INTEGER :: wbeta_b_b, wF2_a, wF2_b, wbeta_eff_a, wbeta_eff_b, wtaubx_b, wtauby_b, wtaudx_b, wtaudy_b, wu_vav_b_prev, wv_vav_b_prev
+    INTEGER :: wbeta_b_b, wF1_3D_a, wF2_3D_a, wF1_3D_b, wF2_3D_b, wbeta_eff_a, wbeta_eff_b, wtaubx_b, wtauby_b, wtaudx_b, wtaudy_b, wu_vav_b_prev, wv_vav_b_prev
 
     ! Parameters for the iterative solver used to solve the matrix equation representing the linearised DIVA
     REAL(dp)                                :: PETSc_rtol

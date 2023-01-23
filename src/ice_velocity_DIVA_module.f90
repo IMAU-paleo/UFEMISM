@@ -87,8 +87,10 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nTri   ,       DIVA%dN_dx_b          , DIVA%wdN_dx_b          )
     CALL allocate_shared_dp_1D( mesh%nTri   ,       DIVA%dN_dy_b          , DIVA%wdN_dy_b          )
     CALL allocate_shared_dp_1D( mesh%nTri   ,       DIVA%beta_b_b         , DIVA%wbeta_b_b         )
-    CALL allocate_shared_dp_1D( mesh%nV     ,       DIVA%F2_a             , DIVA%wF2_a             )
-    CALL allocate_shared_dp_1D( mesh%nTri   ,       DIVA%F2_b             , DIVA%wF2_b             )
+    CALL allocate_shared_dp_2D( mesh%nV     , C%nz, DIVA%F1_3D_a          , DIVA%wF1_3D_a          )
+    CALL allocate_shared_dp_2D( mesh%nV     , C%nz, DIVA%F2_3D_a          , DIVA%wF2_3D_a          )
+    CALL allocate_shared_dp_2D( mesh%nTri   , C%nz, DIVA%F1_3D_b          , DIVA%wF1_3D_b          )
+    CALL allocate_shared_dp_2D( mesh%nTri   , C%nz, DIVA%F2_3D_b          , DIVA%wF2_3D_b          )
     CALL allocate_shared_dp_1D( mesh%nV     ,       DIVA%beta_eff_a       , DIVA%wbeta_eff_a       )
     CALL allocate_shared_dp_1D( mesh%nTri   ,       DIVA%beta_eff_b       , DIVA%wbeta_eff_b       )
     CALL allocate_shared_dp_1D( mesh%nTri   ,       DIVA%taubx_b          , DIVA%wtaubx_b          )
@@ -195,6 +197,9 @@ CONTAINS
       ! Calculate the effective viscosity for the current velocity solution
       CALL calc_effective_viscosity( mesh, ice, DIVA)
 
+      ! Calculate the F-integrals
+      CALL calc_F_integrals( mesh, ice, DIVA)
+
       ! Calculate the sliding + vertical shearing term beta_eff
       CALL calc_beta_eff( mesh, ice, DIVA)
 
@@ -298,8 +303,10 @@ CONTAINS
     CALL reallocate_shared_dp_1D( mesh_new%nTri   ,       DIVA%dN_dx_b          , DIVA%wdN_dx_b          )
     CALL reallocate_shared_dp_1D( mesh_new%nTri   ,       DIVA%dN_dy_b          , DIVA%wdN_dy_b          )
     CALL reallocate_shared_dp_1D( mesh_new%nTri   ,       DIVA%beta_b_b         , DIVA%wbeta_b_b         )
-    CALL reallocate_shared_dp_1D( mesh_new%nV     ,       DIVA%F2_a             , DIVA%wF2_a             )
-    CALL reallocate_shared_dp_1D( mesh_new%nTri   ,       DIVA%F2_b             , DIVA%wF2_b             )
+    CALL reallocate_shared_dp_2D( mesh_new%nV     , C%nz, DIVA%F1_3D_a          , DIVA%wF1_3D_a          )
+    CALL reallocate_shared_dp_2D( mesh_new%nV     , C%nz, DIVA%F2_3D_a          , DIVA%wF2_3D_a          )
+    CALL reallocate_shared_dp_2D( mesh_new%nTri   , C%nz, DIVA%F1_3D_b          , DIVA%wF1_3D_b          )
+    CALL reallocate_shared_dp_2D( mesh_new%nTri   , C%nz, DIVA%F2_3D_b          , DIVA%wF2_3D_b          )
     CALL reallocate_shared_dp_1D( mesh_new%nV     ,       DIVA%beta_eff_a       , DIVA%wbeta_eff_a       )
     CALL reallocate_shared_dp_1D( mesh_new%nTri   ,       DIVA%beta_eff_b       , DIVA%wbeta_eff_b       )
     CALL reallocate_shared_dp_1D( mesh_new%nTri   ,       DIVA%taubx_b          , DIVA%wtaubx_b          )
@@ -488,6 +495,43 @@ CONTAINS
 
   END SUBROUTINE calc_effective_viscosity
 
+  SUBROUTINE calc_F_integrals( mesh, ice, DIVA)
+    ! Calculate the F1 and F2 integrals
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT)           :: mesh
+    TYPE(type_ice_model),                INTENT(IN)              :: ice
+    TYPE(type_velocity_solver_DIVA),     INTENT(INOUT)           :: DIVA
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_F_integrals'
+    INTEGER                                                      :: vi,k
+    REAL(dp), DIMENSION( C%nz)                                   :: eta_prof
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! On the a-grid (vertices)
+    DO vi = mesh%vi1, mesh%vi2
+
+      eta_prof = DIVA%eta_3D_a( vi,:)
+
+      DIVA%F1_3D_a( vi,:) = Fn( ice%Hi_a( vi), ice%Hs_a( vi), eta_prof, 1._dp)
+      DIVA%F2_3D_a( vi,:) = Fn( ice%Hi_a( vi), ice%Hs_a( vi), eta_prof, 2._dp)
+
+    END DO
+
+    ! Map to the b-grid (triangles)
+    CALL map_a_to_b_3D( mesh, DIVA%F1_3D_a, DIVA%F1_3D_b)
+    CALL map_a_to_b_3D( mesh, DIVA%F2_3D_a, DIVA%F2_3D_b)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calc_F_integrals
+
   FUNCTION Fn( Hi, Hs, eta_3D, n) RESULT( Fn_val)
     ! The Fn-function (Lipscomb et al. (2019), Eq. 30)
 
@@ -496,16 +540,16 @@ CONTAINS
     ! In- and output variables:
     REAL(dp),                            INTENT(IN)              :: Hi
     REAL(dp),                            INTENT(IN)              :: Hs
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)              :: eta_3D
+    REAL(dp), DIMENSION( C%nz),          INTENT(IN)              :: eta_3D
     REAL(dp),                            INTENT(IN)              :: n
-    REAL(dp)                                                     :: Fn_val
+    REAL(dp), DIMENSION( C%nz)                                   :: Fn_val
 
     ! Local variables:
     REAL(dp), DIMENSION( C%nz)                                   :: z
 
     z = Hs - (Hi * C%zeta)
 
-    CALL vertical_integrate( z, (1._dp / eta_3D) * ((Hs - z) / Hi)**n, Fn_val)
+    CALL vertical_integration_from_bottom_to_zeta( z, (1._dp / eta_3D) * ((Hs - z) / Hi)**n, Fn_val)
 
   END FUNCTION Fn
 
@@ -532,19 +576,13 @@ CONTAINS
     ! Set a lower limit for F2 to improve numerical stability
     CALL vertical_integrate( C%zeta, (1._dp / C%DIVA_visc_eff_min) * C%zeta**2._dp, F2_min)
 
-    DO vi = mesh%vi1, mesh%vi2
-      ! Lipscomb et al. (2019), Eq. 30
-      DIVA%F2_a( vi) = MAX( F2_min, Fn( ice%Hi_a( vi), ice%Hs_a( vi), DIVA%eta_3D_a( vi,:), 2._dp))
-    END DO
-    CALL sync
-
   ! == Calculate beta_eff
 
     IF (C%choice_sliding_law == 'no_sliding') THEN
       ! No basal sliding allowed; calculate beta_eff according to Lipscomb et al. (2019), Eq. 35
 
       DO vi = mesh%vi1, mesh%vi2
-        DIVA%beta_eff_a( vi) = 1._dp / DIVA%F2_a( vi)
+        DIVA%beta_eff_a( vi) = 1._dp / MAX( F2_min, DIVA%F2_3D_a( vi,1))
       END DO
       CALL sync
 
@@ -555,7 +593,7 @@ CONTAINS
       CALL calc_basal_friction_coefficient( mesh, ice, DIVA%u_base_b, DIVA%v_base_b)
 
       DO vi = mesh%vi1, mesh%vi2
-        DIVA%beta_eff_a( vi) = ice%beta_b_a( vi) / (1._dp + ice%beta_b_a( vi) * DIVA%F2_a( vi))
+        DIVA%beta_eff_a( vi) = ice%beta_b_a( vi) / (1._dp + ice%beta_b_a( vi) * MAX( F2_min, DIVA%F2_3D_a( vi,1)))
       END DO
       CALL sync
 
@@ -631,14 +669,13 @@ CONTAINS
       RETURN
     END IF
 
-    ! Map beta_b and F2 to the b-grid
-    CALL map_a_to_b_2D( mesh, DIVA%F2_a   , DIVA%F2_b    )
+    ! Map beta_b to the b-grid
     CALL map_a_to_b_2D( mesh, ice%beta_b_a, DIVA%beta_b_b)
 
     ! Calculate basal velocities on the b-grid according to Lipscomb et al. (2019), Eq. 32
     DO ti = mesh%ti1, mesh%ti2
-      DIVA%u_base_b( ti) = DIVA%u_vav_b( ti) / (1._dp + DIVA%beta_b_b( ti) * DIVA%F2_b( ti))
-      DIVA%v_base_b( ti) = DIVA%v_vav_b( ti) / (1._dp + DIVA%beta_b_b( ti) * DIVA%F2_b( ti))
+      DIVA%u_base_b( ti) = DIVA%u_vav_b( ti) / (1._dp + DIVA%beta_b_b( ti) * DIVA%F2_3D_b( ti,1))
+      DIVA%v_base_b( ti) = DIVA%v_vav_b( ti) / (1._dp + DIVA%beta_b_b( ti) * DIVA%F2_3D_b( ti,1))
     END DO
     CALL sync
 
@@ -660,44 +697,27 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_3D_horizontal_velocities'
     INTEGER                                                      :: ti
-    REAL(dp), DIMENSION(:    ), POINTER                          ::  Hi_b,  Hs_b
-    INTEGER                                                      :: wHi_b, wHs_b
-    REAL(dp), DIMENSION( C%nz)                                   :: z
-    REAL(dp), DIMENSION( C%nz)                                   :: int_sminz_over_eta
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nTri, Hi_b, wHi_b)
-    CALL allocate_shared_dp_1D( mesh%nTri, Hs_b, wHs_b)
-
-    ! Map ice thickness and surface elevation to the b-grid
-    CALL map_a_to_b_2D( mesh, ice%Hi_a, Hi_b)
-    CALL map_a_to_b_2D( mesh, ice%Hs_a, Hs_b)
+    ! Exception for the case of no sliding: Lipscomb et al., Eq. 29, and text between Eqs. 33 and 34
+    IF (C%choice_sliding_law == 'no_sliding') THEN
+      DO ti = mesh%ti1, mesh%ti2
+        DIVA%u_3D_b( ti,:) = DIVA%taubx_b( ti) * DIVA%F1_3D_b( ti,:)
+        DIVA%v_3D_b( ti,:) = DIVA%tauby_b( ti) * DIVA%F1_3D_b( ti,:)
+      END DO
+      CALL sync
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Calculate 3D horizontal velocity components according to Lipscomb et al. (2019), Eq. 29
     DO ti = mesh%ti1, mesh%ti2
-      z = Hs_b( ti) - Hi_b( ti) * C%zeta
-      CALL vertical_integration_from_bottom_to_zeta( z, (Hs_b( ti) - z) / DIVA%eta_3D_b( ti,:), int_sminz_over_eta)
-      DIVA%u_3D_b( ti,:) = DIVA%u_base_b( ti) + DIVA%taubx_b( ti) * int_sminz_over_eta
-      DIVA%v_3D_b( ti,:) = DIVA%v_base_b( ti) + DIVA%tauby_b( ti) * int_sminz_over_eta
+      DIVA%u_3D_b( ti,:) = DIVA%u_base_b( ti) * (1._dp + DIVA%beta_b_b( ti) * DIVA%F1_3D_b( ti,:))
+      DIVA%v_3D_b( ti,:) = DIVA%v_base_b( ti) * (1._dp + DIVA%beta_b_b( ti) * DIVA%F1_3D_b( ti,:))
     END DO
     CALL sync
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wHi_b)
-    CALL deallocate_shared( wHs_b)
-
-    ! DENK DROM
-!     IF (par%master) THEN
-!       CALL warning('u_vav_b = [{dp_01} - {dp_02}], v_vav_b = [{dp_03} - {dp_04}]', &
-!         dp_01 = MINVAL( DIVA%u_vav_b), dp_02 = MAXVAL( DIVA%u_vav_b), dp_03 = MINVAL( DIVA%v_vav_b), dp_04 = MAXVAL( DIVA%v_vav_b))
-!       CALL warning('u_3D_b = [{dp_01} - {dp_02}], v_3D_b = [{dp_03} - {dp_04}]', &
-!         dp_01 = MINVAL( DIVA%u_3D_b), dp_02 = MAXVAL( DIVA%u_3D_b), dp_03 = MINVAL( DIVA%v_3D_b), dp_04 = MAXVAL( DIVA%v_3D_b))
-!       CALL warning('u_base_b = [{dp_01} - {dp_02}], v_base_b = [{dp_03} - {dp_04}]', &
-!         dp_01 = MINVAL( DIVA%u_base_b), dp_02 = MAXVAL( DIVA%u_base_b), dp_03 = MINVAL( DIVA%v_base_b), dp_04 = MAXVAL( DIVA%v_base_b))
-!     END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

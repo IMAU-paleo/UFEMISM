@@ -435,6 +435,9 @@ CONTAINS
     IF     (choice_refgeo_idealised == 'flatearth') THEN
       ! Simply a flat, empty earth. Used for example in the EISMINT-1 benchmark experiments
       CALL initialise_reference_geometry_idealised_grid_flatearth(     refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'slabonaslope') THEN
+      ! An infinite slab of ice lying on an infinite slope
+      CALL initialise_reference_geometry_idealised_grid_slabonaslope(  refgeo%grid, refgeo)
     ELSEIF (choice_refgeo_idealised == 'Halfar') THEN
       ! The Halfar dome solution at t = 0
       CALL initialise_reference_geometry_idealised_grid_Halfar(        refgeo%grid, refgeo)
@@ -506,6 +509,39 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_reference_geometry_idealised_grid_flatearth
+
+  SUBROUTINE initialise_reference_geometry_idealised_grid_slabonaslope(     grid, refgeo)
+    ! Initialise reference geometry according to an idealised world
+    !
+    ! An infinite slab of ice lying on an infinite slope
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_grid),                INTENT(IN)    :: grid
+    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_slabonaslope'
+    INTEGER                                       :: i,j
+    REAL(dp)                                      :: dhdx = -0.01_dp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO i = grid%i1, grid%i2
+    DO j = 1, grid%ny
+      refgeo%Hi_grid( i,j) = 2000._dp
+      refgeo%Hb_grid( i,j) = dhdx * grid%x( i)
+      refgeo%Hs_grid( i,j) = refgeo%Hb_grid( i,j) + refgeo%Hi_grid( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_reference_geometry_idealised_grid_slabonaslope
 
   SUBROUTINE initialise_reference_geometry_idealised_grid_Halfar(        grid, refgeo)
     ! Initialise reference geometry according to an idealised world
@@ -1190,6 +1226,9 @@ CONTAINS
     IF     (choice_refgeo_idealised == 'flatearth') THEN
       ! Simply a flat, empty earth. Used for example in the EISMINT-1 benchmark experiments
       CALL initialise_reference_geometry_idealised_mesh_flatearth(     mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'slabonaslope') THEN
+      ! An infinite slab of ice lying on an infinite slope
+      CALL initialise_reference_geometry_idealised_mesh_slabonaslope(  mesh, refgeo)
     ELSEIF (choice_refgeo_idealised == 'Halfar') THEN
       ! The Halfar dome solution at t = 0
       CALL initialise_reference_geometry_idealised_mesh_Halfar(        mesh, refgeo)
@@ -1259,6 +1298,37 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_flatearth
+
+  SUBROUTINE initialise_reference_geometry_idealised_mesh_slabonaslope(     mesh, refgeo)
+    ! Initialise reference geometry according to an idealised world
+    !
+    ! An infinite slab of ice lying on an infinite slope
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                INTENT(IN)    :: mesh
+    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_slabonaslope'
+    INTEGER                                       :: vi
+    REAL(dp)                                      :: dhdx = -0.01_dp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO vi = mesh%vi1, mesh%vi2
+      refgeo%Hi( vi) = 2000._dp
+      refgeo%Hb( vi) = dhdx * mesh%V( vi,1)
+      refgeo%Hs( vi) = refgeo%Hb( vi) + refgeo%Hi( vi)
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_reference_geometry_idealised_mesh_slabonaslope
 
   SUBROUTINE initialise_reference_geometry_idealised_mesh_Halfar(        mesh, refgeo)
     ! Initialise reference geometry according to an idealised world

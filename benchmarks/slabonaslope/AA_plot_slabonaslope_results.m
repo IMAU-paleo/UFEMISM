@@ -64,6 +64,13 @@ for k = 1: nz
 end
 line('xdata',Hi*(1-zeta),'ydata',u_prof,'linestyle','none','marker','^','markersize',8,'markerfacecolor',colour_BPA,'markeredgecolor',colour_BPA);
 
+% Legend
+legend('Analytical solution','SIA','DIVA','BPA','location','southeast');
+xlabel('z (m)')
+ylabel('u (m/yr)')
+set(gca,'fontsize',24,'xgrid','on','ygrid','on');
+set(gcf,'color','w');
+
 function [u,du_dz,eta] = calc_SIA_analytical( A, n, Hi, Hb, Hs, dh_dx, ice_density, grav, z)
 % Calculate the analytical solution to the SIA for a constant flow factor A
 

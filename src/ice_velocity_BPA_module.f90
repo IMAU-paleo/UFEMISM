@@ -214,8 +214,8 @@ CONTAINS
       ! Calculate the L2-norm of the two consecutive velocity solutions
       CALL calc_visc_iter_UV_resid( mesh, BPA, resid_UV)
 
-      ! DENK DROM
-      IF (par%master) WRITE(0,*) '    BPA - viscosity iteration ', viscosity_iteration_i, ', u = [', MINVAL( BPA%u_bk_vec), ' - ', MAXVAL( BPA%u_bk_vec), '], resid = ', resid_UV
+!      ! DENK DROM
+!      IF (par%master) WRITE(0,*) '    BPA - viscosity iteration ', viscosity_iteration_i, ', u = [', MINVAL( BPA%u_bk_vec), ' - ', MAXVAL( BPA%u_bk_vec), '], resid = ', resid_UV
 
       ! If the viscosity iteration has converged, or has reached the maximum allowed number of iterations, stop it.
       has_converged = .FALSE.

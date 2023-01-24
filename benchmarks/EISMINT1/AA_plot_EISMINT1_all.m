@@ -3,12 +3,12 @@ clear all
 close all
 
 foldernames = {
-  'EISMINT1_A_SIASSA_reg';
-%   'EISMINT1_B_SIASSA';
-%   'EISMINT1_C_SIASSA';
-%   'EISMINT1_D_SIASSA';
-%   'EISMINT1_E_SIASSA';
-%   'EISMINT1_F_SIASSA';
+  'EISMINT1_A_SIASSA';
+  'EISMINT1_B_SIASSA';
+  'EISMINT1_C_SIASSA';
+  'EISMINT1_D_SIASSA';
+  'EISMINT1_E_SIASSA';
+  'EISMINT1_F_SIASSA';
   };
 
 % Plot parameters
@@ -21,30 +21,30 @@ results = read_data( foldernames);
 % load('tempdata.mat')
 
 % Plot all figures
-% plot_Fig_2a( 'Huybrechts1996_figures_raw/Fig_2a.png',results,wa,ha)
-% plot_Fig_2c( 'Huybrechts1996_figures_raw/Fig_2c.png',results,wa,ha)
-% plot_Fig_2e( 'Huybrechts1996_figures_raw/Fig_2e.png',results,wa,ha)
-% plot_Fig_2f( 'Huybrechts1996_figures_raw/Fig_2f.png',results,wa,ha)
-% plot_Fig_3a( 'Huybrechts1996_figures_raw/Fig_3a.png',results,wa,ha)
-% plot_Fig_3b( 'Huybrechts1996_figures_raw/Fig_3b.png',results,wa,ha)
-% plot_Fig_3c( 'Huybrechts1996_figures_raw/Fig_3c.png',results,wa,ha)
-% plot_Fig_3d( 'Huybrechts1996_figures_raw/Fig_3d.png',results,wa,ha)
-% plot_Fig_4a( 'Huybrechts1996_figures_raw/Fig_4a.png',results,wa,ha)
-% plot_Fig_4c( 'Huybrechts1996_figures_raw/Fig_4c.png',results,wa,ha)
-% plot_Fig_4d( 'Huybrechts1996_figures_raw/Fig_4d.png',results,wa,ha)
-% 
-% plot_Fig_5a( 'Huybrechts1996_figures_raw/Fig_5a.png',results,wa,ha)
-% plot_Fig_5b( 'Huybrechts1996_figures_raw/Fig_5b.png',results,wa,ha)
-% plot_Fig_5c( 'Huybrechts1996_figures_raw/Fig_5c.png',results,wa,ha)
-% plot_Fig_5d( 'Huybrechts1996_figures_raw/Fig_5d.png',results,wa,ha)
+plot_Fig_2a( 'Huybrechts1996_figures_raw/Fig_2a.png',results,wa,ha)
+plot_Fig_2c( 'Huybrechts1996_figures_raw/Fig_2c.png',results,wa,ha)
+plot_Fig_2e( 'Huybrechts1996_figures_raw/Fig_2e.png',results,wa,ha)
+plot_Fig_2f( 'Huybrechts1996_figures_raw/Fig_2f.png',results,wa,ha)
+plot_Fig_3a( 'Huybrechts1996_figures_raw/Fig_3a.png',results,wa,ha)
+plot_Fig_3b( 'Huybrechts1996_figures_raw/Fig_3b.png',results,wa,ha)
+plot_Fig_3c( 'Huybrechts1996_figures_raw/Fig_3c.png',results,wa,ha)
+plot_Fig_3d( 'Huybrechts1996_figures_raw/Fig_3d.png',results,wa,ha)
+plot_Fig_4a( 'Huybrechts1996_figures_raw/Fig_4a.png',results,wa,ha)
+plot_Fig_4c( 'Huybrechts1996_figures_raw/Fig_4c.png',results,wa,ha)
+plot_Fig_4d( 'Huybrechts1996_figures_raw/Fig_4d.png',results,wa,ha)
+
+plot_Fig_5a( 'Huybrechts1996_figures_raw/Fig_5a.png',results,wa,ha)
+plot_Fig_5b( 'Huybrechts1996_figures_raw/Fig_5b.png',results,wa,ha)
+plot_Fig_5c( 'Huybrechts1996_figures_raw/Fig_5c.png',results,wa,ha)
+plot_Fig_5d( 'Huybrechts1996_figures_raw/Fig_5d.png',results,wa,ha)
 plot_Fig_6a( 'Huybrechts1996_figures_raw/Fig_6a.png',results,wa,ha)
 plot_Fig_6b( 'Huybrechts1996_figures_raw/Fig_6b.png',results,wa,ha)
 plot_Fig_6c( 'Huybrechts1996_figures_raw/Fig_6c.png',results,wa,ha)
 plot_Fig_6d( 'Huybrechts1996_figures_raw/Fig_6d.png',results,wa,ha)
-% plot_Fig_7a( 'Huybrechts1996_figures_raw/Fig_7a.png',results,wa,ha)
-% plot_Fig_7b( 'Huybrechts1996_figures_raw/Fig_7b.png',results,wa,ha)
-% plot_Fig_7c( 'Huybrechts1996_figures_raw/Fig_7c.png',results,wa,ha)
-% plot_Fig_7d( 'Huybrechts1996_figures_raw/Fig_7d.png',results,wa,ha)
+plot_Fig_7a( 'Huybrechts1996_figures_raw/Fig_7a.png',results,wa,ha)
+plot_Fig_7b( 'Huybrechts1996_figures_raw/Fig_7b.png',results,wa,ha)
+plot_Fig_7c( 'Huybrechts1996_figures_raw/Fig_7c.png',results,wa,ha)
+plot_Fig_7d( 'Huybrechts1996_figures_raw/Fig_7d.png',results,wa,ha)
 
 function results = read_data( foldernames)
 

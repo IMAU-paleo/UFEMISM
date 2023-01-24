@@ -3,8 +3,8 @@
   ! == Time steps and range
   ! =======================
 
-    start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
-    end_time_of_run_config                      = 50000.0                          ! End   time (in years) of the simulations
+    start_time_of_run_config                    = -120000.0                        ! Start time (in years) of the simulations
+    end_time_of_run_config                      = 0.0                              ! End   time (in years) of the simulations
     dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
     dt_max_config                               = 10.0                             ! Maximum time step (in years) of the ice model
     dt_min_config                               = 0.01                             ! Minimum time step (in years) of the ice model
@@ -14,7 +14,7 @@
     dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
     dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB
     dt_BMB_config                               = 10.0                             ! Time step (in years) for updating the BMB
-    dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
+    dt_output_config                            = 10000.0                          ! Time step (in years) for writing output
     dt_mesh_min_config                          = 50.0                             ! Minimum amount of time (in years) between mesh updates
     dt_bedrock_ELRA_config                      = 100.0                            ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
     dt_SELEN_config                             = 1000.0                           ! Time step (in years) for calling SELEN
@@ -135,9 +135,9 @@
   ! == The scaled vertical coordinate zeta
   ! ======================================
 
-    choice_zeta_grid_config                     = 'regular'                        ! The type of vertical grid to use; can be "regular", "irregular_log", "old_15_layer_zeta"
+    choice_zeta_grid_config                     = 'irregular_log'                  ! The type of vertical grid to use; can be "regular", "irregular_log", "old_15_layer_zeta"
     nz_config                                   = 12                               ! The number of vertical layers to use
-    zeta_irregular_log_R_config                 = 0.95                             ! Ratio between subsequent dzeta when choice_zeta_grid = 'irregular_log'
+    zeta_irregular_log_R_config                 = 10.0                             ! Ratio between subsequent dzeta when choice_zeta_grid = 'irregular_log'
 
   ! == Reference geometries (initial, present-day, and GIA equilibrium)
   ! ===================================================================
@@ -256,7 +256,7 @@
   ! == Ice dynamics - velocity
   ! ==========================
 
-    choice_stress_balance_approximation_config  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
+    choice_stress_balance_approximation_config  = 'DIVA'                            ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
     n_flow_config                               = 3.0                              ! Exponent in Glen's flow law
     m_enh_sheet_config                          = 1.0                              ! Ice flow enhancement factor for grounded ice
     m_enh_shelf_config                          = 1.0                              ! Ice flow enhancement factor for floating ice
@@ -268,7 +268,7 @@
     r_smooth_geometry_config                    = 0.5                              ! Geometry smoothing radius (in number of grid cells)
 
     ! Some parameters for numerically solving the SSA/DIVA
-    DIVA_visc_it_norm_dUV_tol_config            = 1E-7                             ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
+    DIVA_visc_it_norm_dUV_tol_config            = 1E-2                             ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
     DIVA_visc_it_nit_config                     = 500                              ! Maximum number of effective viscosity iterations
     DIVA_visc_it_relax_config                   = 0.4                              ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
     DIVA_epsilon_sq_0_config                    = 1E-15                            ! Normalisation term so that zero velocity gives non-zero viscosity
@@ -284,8 +284,8 @@
     DIVA_boundary_BC_v_south_config             = 'infinite'
     DIVA_boundary_BC_v_north_config             = 'infinite'
     DIVA_choice_matrix_solver_config            = 'PETSc'                          ! Choice of matrix solver for the ice velocity equations: "SOR", "PETSc"
-    DIVA_PETSc_rtol_config                      = 1E-3                             ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    DIVA_PETSc_abstol_config                    = 0.01                             ! DIVA PETSc solver - stop criterion, absolute difference
+    DIVA_PETSc_rtol_config                      = 1E-2                             ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    DIVA_PETSc_abstol_config                    = 1.0                              ! DIVA PETSc solver - stop criterion, absolute difference
 
   ! == Ice dynamics - time integration
   ! ==================================
@@ -690,8 +690,8 @@
     help_field_01_config                        = 'u_3D'
     help_field_02_config                        = 'v_3D'
     help_field_03_config                        = 'w_3D'
-    help_field_04_config                        = 'SMB_year'
-    help_field_05_config                        = 'none'
+    help_field_04_config                        = 'Ti_basal'
+    help_field_05_config                        = 'Ti_pmp'
     help_field_06_config                        = 'none'
     help_field_07_config                        = 'none'
     help_field_08_config                        = 'none'

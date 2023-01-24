@@ -10,10 +10,10 @@
 
     fixed_output_dir_suffix_config              = '_020'                               ! Suffix to put after the fixed output directory name, useful when doing ensemble runs with the template+variation set-up
 
-    xmin_ANT_config                             = -10000.0                       ! Western  boundary     of the Antarctica domain [m]
-    xmax_ANT_config                             =  10000.0                       ! Eastern  boundary     of the Antarctica domain [m]
-    ymin_ANT_config                             = -10000.0                       ! Southern boundary     of the Antarctica domain [m]
-    ymax_ANT_config                             =  10000.0                       ! Northern boundary     of the Antarctica domain [m]
+    xmin_ANT_config                             = -12500.0                       ! Western  boundary     of the Antarctica domain [m]
+    xmax_ANT_config                             =  12500.0                       ! Eastern  boundary     of the Antarctica domain [m]
+    ymin_ANT_config                             = -12500.0                       ! Southern boundary     of the Antarctica domain [m]
+    ymax_ANT_config                             =  12500.0                       ! Northern boundary     of the Antarctica domain [m]
 
   ! == Mesh generation parameters
   ! =============================

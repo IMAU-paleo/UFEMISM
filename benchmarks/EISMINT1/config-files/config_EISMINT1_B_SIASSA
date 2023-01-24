@@ -135,9 +135,9 @@
   ! == The scaled vertical coordinate zeta
   ! ======================================
 
-    choice_zeta_grid_config                     = 'regular'                        ! The type of vertical grid to use; can be "regular", "irregular_log", "old_15_layer_zeta"
+    choice_zeta_grid_config                     = 'irregular_log'                  ! The type of vertical grid to use; can be "regular", "irregular_log", "old_15_layer_zeta"
     nz_config                                   = 12                               ! The number of vertical layers to use
-    zeta_irregular_log_R_config                 = 0.95                             ! Ratio between subsequent dzeta when choice_zeta_grid = 'irregular_log'
+    zeta_irregular_log_R_config                 = 10.0                             ! Ratio between subsequent dzeta when choice_zeta_grid = 'irregular_log'
 
   ! == Reference geometries (initial, present-day, and GIA equilibrium)
   ! ===================================================================

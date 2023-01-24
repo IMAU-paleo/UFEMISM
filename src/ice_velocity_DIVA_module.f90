@@ -509,17 +509,22 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_F_integrals'
     INTEGER                                                      :: vi,k
     REAL(dp), DIMENSION( C%nz)                                   :: eta_prof
+    REAL(dp)                                                     :: F1_min, F2_min
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Set a lower limit for F2 to improve numerical stability
+    CALL vertical_integrate( C%zeta, (1._dp / C%DIVA_visc_eff_min) * C%zeta**1._dp, F1_min)
+    CALL vertical_integrate( C%zeta, (1._dp / C%DIVA_visc_eff_min) * C%zeta**2._dp, F2_min)
 
     ! On the a-grid (vertices)
     DO vi = mesh%vi1, mesh%vi2
 
       eta_prof = DIVA%eta_3D_a( vi,:)
 
-      DIVA%F1_3D_a( vi,:) = Fn( ice%Hi_a( vi), ice%Hs_a( vi), eta_prof, 1._dp)
-      DIVA%F2_3D_a( vi,:) = Fn( ice%Hi_a( vi), ice%Hs_a( vi), eta_prof, 2._dp)
+      DIVA%F1_3D_a( vi,:) = MAX( F1_min, Fn( ice%Hi_a( vi), ice%Hs_a( vi), eta_prof, 1._dp))
+      DIVA%F2_3D_a( vi,:) = MAX( F2_min, Fn( ice%Hi_a( vi), ice%Hs_a( vi), eta_prof, 2._dp))
 
     END DO
 
@@ -565,7 +570,6 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_beta_eff'
-    REAL(dp)                                                     :: F2_min
     INTEGER                                                      :: vi,ti
 
     ! Add routine to path
@@ -573,8 +577,6 @@ CONTAINS
 
   ! == Calculate F2
 
-    ! Set a lower limit for F2 to improve numerical stability
-    CALL vertical_integrate( C%zeta, (1._dp / C%DIVA_visc_eff_min) * C%zeta**2._dp, F2_min)
 
   ! == Calculate beta_eff
 
@@ -582,7 +584,7 @@ CONTAINS
       ! No basal sliding allowed; calculate beta_eff according to Lipscomb et al. (2019), Eq. 35
 
       DO vi = mesh%vi1, mesh%vi2
-        DIVA%beta_eff_a( vi) = 1._dp / MAX( F2_min, DIVA%F2_3D_a( vi,1))
+        DIVA%beta_eff_a( vi) = 1._dp / DIVA%F2_3D_a( vi,1)
       END DO
       CALL sync
 
@@ -593,7 +595,7 @@ CONTAINS
       CALL calc_basal_friction_coefficient( mesh, ice, DIVA%u_base_b, DIVA%v_base_b)
 
       DO vi = mesh%vi1, mesh%vi2
-        DIVA%beta_eff_a( vi) = ice%beta_b_a( vi) / (1._dp + ice%beta_b_a( vi) * MAX( F2_min, DIVA%F2_3D_a( vi,1)))
+        DIVA%beta_eff_a( vi) = ice%beta_b_a( vi) / (1._dp + ice%beta_b_a( vi) * DIVA%F2_3D_a( vi,1))
       END DO
       CALL sync
 

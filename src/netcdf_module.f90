@@ -2237,7 +2237,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_restart_file_grid'
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: x,y,z,m,t,e
+    INTEGER                                       :: x,y,z,m,t
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -2273,7 +2273,6 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta,      C%nZ,                  netcdf%id_dim_zeta ) ! Scaled vertical coordinate
     CALL create_dim( netcdf%ncid, netcdf%name_dim_month,     12,                    netcdf%id_dim_month) ! Months (for monthly data)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_time,      nf90_unlimited,        netcdf%id_dim_time ) ! Time frames
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_elf,       11,                    netcdf%id_dim_elf  ) ! Bedrock CDF bins
 
     ! Placeholders for the dimension ID's, for shorter code
     x = netcdf%id_dim_x
@@ -2281,19 +2280,17 @@ CONTAINS
     z = netcdf%id_dim_zeta
     m = netcdf%id_dim_month
     t = netcdf%id_dim_time
-    e = netcdf%id_dim_elf
 
     ! Define variables:
     ! The order of the CALL statements for the different variables determines their
     ! order of appearence in the netcdf file.
 
     ! Dimension variables: zeta, month, time
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,     [x              ], netcdf%id_var_x,     long_name='X-coordinate', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,     [   y           ], netcdf%id_var_y,     long_name='Y-coordinate', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,  [      z        ], netcdf%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [         m     ], netcdf%id_var_month, long_name='Month', units='1-12')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [            t  ], netcdf%id_var_time,  long_name='Time', units='years')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_elf,   [              e], netcdf%id_var_elf,   long_name='CDF bin', units='0%-100%, every 10%')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,     [x            ], netcdf%id_var_x,     long_name='X-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,     [   y         ], netcdf%id_var_y,     long_name='Y-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,  [      z      ], netcdf%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [         m   ], netcdf%id_var_month, long_name='Month', units='1-12')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [            t], netcdf%id_var_time,  long_name='Time', units='years')
 
     ! Ice model data
 
@@ -2306,10 +2303,6 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb_dt, [x, y, t], netcdf%id_var_dHb_dt, long_name='Ice bedrock change', units='m/yr')
 
     CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt_ave, [x, y, t], netcdf%id_var_dHi_dt_ave, long_name='Averaged ice thickness change', units='m/yr')
-
-    IF (C%do_subgrid_grounded_fraction) THEN
-      CALL create_double_var( netcdf%ncid, netcdf%name_var_bedrock_cdf, [x, y, e], netcdf%id_var_bedrock_cdf, long_name='Bedrock CDF', units='m/%')
-    END IF
 
     ! Sea level and GIA
     CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,  [x, y, t], netcdf%id_var_SL,  long_name='Sea surface change', units='m')
@@ -2345,11 +2338,6 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_y,     region%grid_output%y                     ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_zeta,  C%zeta                                   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_month, (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_elf,   (/0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100/)))
-
-    IF (C%do_subgrid_grounded_fraction) THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_bedrock_cdf, region%ice%bedrock_cdf))
-    END IF
 
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( netcdf%ncid))

@@ -297,23 +297,23 @@ CONTAINS
 
         ELSEIF (viscosity_iteration_i >= 2) THEN
 
-          ! Give message some space
-          IF (C%do_time_display .AND. viscosity_iteration_i == 2) THEN
-            print*, ''
-            print*, ''
-          END IF
+          ! ! Give message some space
+          ! IF (C%do_time_display .AND. viscosity_iteration_i == 2) THEN
+          !   print*, ''
+          !   print*, ''
+          ! END IF
 
-          ! Print message
-          write(*,"(A,I2,A,F6.4,A,F8.1,A,F8.1,2A,F8.1,A,F8.1,A)") &
-                  '          SSA - visc_iter ', viscosity_iteration_i, &
-                  ': resid_UV = ', resid_UV, &
-                  ', u = [', MINVAL(ice%u_base_SSA_b), ' - ', MAXVAL(ice%u_base_SSA_b), ']', &
-                  ', v = [', MINVAL(ice%v_base_SSA_b), ' - ', MAXVAL(ice%v_base_SSA_b), ']'
+          ! ! Print message
+          ! write(*,"(A,I2,A,F6.4,A,F8.1,A,F8.1,2A,F8.1,A,F8.1,A)") &
+          !         '          SSA - visc_iter ', viscosity_iteration_i, &
+          !         ': resid_UV = ', resid_UV, &
+          !         ', u = [', MINVAL(ice%u_base_SSA_b), ' - ', MAXVAL(ice%u_base_SSA_b), ']', &
+          !         ', v = [', MINVAL(ice%v_base_SSA_b), ' - ', MAXVAL(ice%v_base_SSA_b), ']'
 
-          ! Give message some space
-          IF (has_converged) THEN
-            print*, ''
-          END IF
+          ! ! Give message some space
+          ! IF (has_converged) THEN
+          !   print*, ''
+          ! END IF
 
         END IF
 

@@ -176,6 +176,9 @@ CONTAINS
         IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi)) .AND. ice%mask_land_a( vi) == 1) THEN
           ! This element floats and it's on land, thus a lake
           ice%mask_lake_a( vi) = 1
+          ! We'll consider it ocean for now, as lakes support is still work in progress
+          ice%mask_land_a(  vi) = 0
+          ice%mask_ocean_a( vi) = 1
         END IF
       END DO
       CALL sync
@@ -360,6 +363,11 @@ CONTAINS
         ice%mask_a( vi) = C%type_ocean
       END IF
 
+      ! Lakes
+      IF (ice%mask_lake_a( vi) == 1) THEN
+        ice%mask_a( vi) = C%type_lake
+      END IF
+
       ! Coast
       IF (ice%mask_coast_a( vi) == 1) THEN
         ice%mask_a( vi) = C%type_coast
@@ -370,12 +378,6 @@ CONTAINS
         ice%mask_a( vi) = C%type_sheet
       ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
         ice%mask_a( vi) = C%type_shelf
-      END IF
-
-      ! Lakes
-
-      IF (ice%mask_lake_a( vi) == 1) THEN
-        ice%mask_a( vi) = C%type_lake
       END IF
 
       ! Ice margin / grounding line / calving front

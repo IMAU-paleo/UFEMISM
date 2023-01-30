@@ -1275,6 +1275,7 @@ CONTAINS
     TYPE(type_grid)                                 :: grid_raw
     REAL(dp), DIMENSION(:,:,:), POINTER             ::  T_raw,  S_raw
     INTEGER                                         :: wT_raw, wS_raw
+    INTEGER                                         :: vi, k
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1322,12 +1323,30 @@ CONTAINS
     CALL deallocate_shared( wT_raw            )
     CALL deallocate_shared( wS_raw            )
 
-    ! Allocate memory for the applied values of SMB and ST (i.e. after applying the anomaly and elevation correction)
+    ! Allocate memory for the applied values
     CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean_matrix%ISMIP_style%T, ocean_matrix%ISMIP_style%wT)
     CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean_matrix%ISMIP_style%S, ocean_matrix%ISMIP_style%wS)
 
+    ! Set the applied ocean to the baseline fields
+    ocean_matrix%ISMIP_style%T( mesh%vi1:mesh%vi2,:) = ocean_matrix%ISMIP_style%T_ref( mesh%vi1:mesh%vi2,:)
+    ocean_matrix%ISMIP_style%S( mesh%vi1:mesh%vi2,:) = ocean_matrix%ISMIP_style%S_ref( mesh%vi1:mesh%vi2,:)
+    CALL sync
+
     ! Allocate the applied snapshot
     CALL allocate_ocean_snapshot_regional( mesh, ocean_matrix%applied, name = 'applied')
+
+    ! Set the final values in the "applied" ocean snapshot
+    DO vi = mesh%vi1, mesh%vi2
+    DO k = 1, C%nz_ocean
+      ocean_matrix%applied%T_ocean(          vi,k) = ocean_matrix%ISMIP_style%T( vi,k)
+      ocean_matrix%applied%T_ocean_ext(      vi,k) = ocean_matrix%ISMIP_style%T( vi,k)
+      ocean_matrix%applied%T_ocean_corr_ext( vi,k) = ocean_matrix%ISMIP_style%T( vi,k)
+      ocean_matrix%applied%S_ocean(          vi,k) = ocean_matrix%ISMIP_style%S( vi,k)
+      ocean_matrix%applied%S_ocean_ext(      vi,k) = ocean_matrix%ISMIP_style%S( vi,k)
+      ocean_matrix%applied%S_ocean_corr_ext( vi,k) = ocean_matrix%ISMIP_style%S( vi,k)
+    END DO
+    END DO
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

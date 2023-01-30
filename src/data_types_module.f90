@@ -922,7 +922,7 @@ MODULE data_types_module
     ! The grid used by the raw data files
     TYPE(type_grid)                         :: grid_raw
 
-    ! The baseline elevastion, SMB, and surface temperature
+    ! The baseline elevation, SMB, and surface temperature
     REAL(dp), DIMENSION(:    ), POINTER     :: Hs_ref
     REAL(dp), DIMENSION(:    ), POINTER     :: SMB_ref
     REAL(dp), DIMENSION(:    ), POINTER     :: ST_ref
@@ -952,6 +952,24 @@ MODULE data_types_module
     INTEGER :: wSMB, wST
 
   END TYPE type_ISMIP_style_forcing
+
+  TYPE type_ISMIP_style_ocean
+    ! Data fields for the ISMIP-style (temperature + salinity) forcing
+
+    ! The grid used by the raw data files
+    TYPE(type_grid)                         :: grid_raw
+
+    ! The baseline temperature and salinity
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: T_ref
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: S_ref
+    INTEGER :: wT_ref, wS_ref
+
+    ! The applied values of temperature and salinity (i.e. after applying any anomalies and/or corrections)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: T
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: S
+    INTEGER :: wT, wS
+
+  END TYPE type_ISMIP_style_ocean
 
   TYPE type_climate_matrix_regional
     ! All the relevant climate data fields (PD observations, GCM snapshots, and final, applied climate) on the model region grid
@@ -1020,6 +1038,9 @@ MODULE data_types_module
     TYPE(type_ocean_snapshot_regional)      :: GCM_warm                      ! Warm snapshot
     TYPE(type_ocean_snapshot_regional)      :: GCM_cold                      ! Cold snapshot
     TYPE(type_ocean_snapshot_regional)      :: applied                       ! Final applied ocean
+
+    ! Data fields for the ISMIP-style (temperature + salinity) forcing
+    TYPE(type_ISMIP_style_ocean)            :: ISMIP_style
 
   END TYPE type_ocean_matrix_regional
 

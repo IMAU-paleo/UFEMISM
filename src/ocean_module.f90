@@ -20,7 +20,9 @@ MODULE ocean_module
                                              inquire_GCM_global_ocean_file, read_GCM_global_ocean_file, &
                                              inquire_hires_geometry_file, read_hires_geometry_file, &
                                              inquire_extrapolated_ocean_file, read_extrapolated_ocean_file, &
-                                             create_extrapolated_ocean_file
+                                             create_extrapolated_ocean_file, get_grid_from_file, &
+                                             inquire_ISMIP_ocean_baseline_file_init, read_ISMIP_ocean_baseline_file_init
+  USE data_types_netcdf_module,        ONLY: type_netcdf_ISMIP_style_baseline_ocean
   USE forcing_module,                  ONLY: forcing, update_CO2_at_model_time
   USE utilities_module,                ONLY: remap_cons_2nd_order_1D, inverse_oblique_sg_projection, &
                                              map_glob_to_grid_3D, surface_elevation, &
@@ -82,6 +84,11 @@ CONTAINS
 
       CALL run_ocean_model_matrix_warm_cold( mesh, grid, ocean_matrix, climate_matrix, region_name, time)
 
+    ELSEIF (C%choice_ocean_model == 'ISMIP_style_init') THEN
+      ! Use the ISMIP-style (temperature + salinity) forcing
+
+      CALL run_ocean_model_ISMIP_style_init( mesh, ocean_matrix)
+
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
     END IF
@@ -132,6 +139,11 @@ CONTAINS
 
       CALL initialise_ocean_matrix_regional( region, ocean_matrix_global)
 
+    ELSEIF (C%choice_ocean_model == 'ISMIP_style_init') THEN
+      ! Use the ISMIP-style (temperature + salinity) forcing
+
+      CALL initialise_ocean_model_ISMIP_style_init( region%mesh, region%ocean_matrix)
+
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
     END IF
@@ -175,6 +187,9 @@ CONTAINS
       ! Allocate all the global snapshots used in the warm/cold ocean matrix
 
       CALL initialise_ocean_matrix_global( ocean_matrix)
+
+    ELSEIF (C%choice_ocean_model == 'ISMIP_style_init') THEN
+      ! Use the ISMIP-style (temperature + salinity) forcing. So, do nothing here.
 
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
@@ -1037,6 +1052,9 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_matrix_regional'
     INTEGER                                            :: vi,k
 
+    ! Initialisation
+    ! ==============
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1046,6 +1064,9 @@ CONTAINS
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%GCM_cold, name = 'GCM_cold')
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%GCM_warm, name = 'GCM_warm')
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%applied,  name = 'applied')
+
+    ! PD ocean state
+    ! ==============
 
     ! Use inverted ocean temperatures from a previous run. Or not.
     IF (C%use_inverted_ocean) THEN
@@ -1071,6 +1092,9 @@ CONTAINS
       CALL get_extrapolated_ocean_data( region, ocean_matrix_global%PD_obs,   region%ocean_matrix%PD_obs,   C%filename_PD_obs_ocean           )
 
     END IF
+
+    ! GCM snapshots
+    ! =============
 
     ! Map ocean data from the global lon/lat-grid to the high-resolution regional x/y-grid,
     ! extrapolate mapped ocean data to cover the entire 3D domain, and finally
@@ -1104,11 +1128,23 @@ CONTAINS
     END DO
     CALL sync
 
-    ! Allocate memory for the weighing fields history, and initialise
+    ! Ocean matrix history
+    ! ====================
+
+    ! Allocate number of past weight snapshots
     CALL allocate_shared_int_0D( region%ocean_matrix%applied%nw_tot_history, region%ocean_matrix%applied%wnw_tot_history)
+
+    ! Initialise number of past weight snapshots
     region%ocean_matrix%applied%nw_tot_history = CEILING( C%ocean_w_tot_hist_averaging_window / C%dt_ocean) + 1
+
+    ! Allocate memory for weighing fields history on a per-vertex basis
     CALL allocate_shared_dp_2D(  region%mesh%nV, region%ocean_matrix%applied%nw_tot_history, region%ocean_matrix%applied%w_tot_history, region%ocean_matrix%applied%ww_tot_history)
-    region%ocean_matrix%applied%w_tot_history = 1._dp ! Initiate at warm conditions (to allow for future projections starting at PD)
+
+    ! Initialise memory for weighing fields history assuming warm conditions (to allow for future projections starting at PD)
+    region%ocean_matrix%applied%w_tot_history = 1._dp
+
+    ! Finalisation
+    ! ============
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=37)
@@ -1177,6 +1213,126 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE correct_GCM_bias_ocean
+
+  ! == ISMIP-style initialisation phase forcing
+! =============================================
+
+  SUBROUTINE run_ocean_model_ISMIP_style_init( mesh, ocean_matrix)
+    ! Run the regional ocean model
+    !
+    ! Use the ISMIP-style (temperature + salinity) forcing for the initialisation phase
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                  INTENT(IN)    :: mesh
+    TYPE(type_ocean_matrix_regional), INTENT(INOUT) :: ocean_matrix
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                   :: routine_name = 'run_ocean_model_ISMIP_style_init'
+    INTEGER                                         :: vi, k
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Set the applied ocean to the baseline fields
+    ocean_matrix%ISMIP_style%T( mesh%vi1:mesh%vi2,:) = ocean_matrix%ISMIP_style%T_ref( mesh%vi1:mesh%vi2,:)
+    ocean_matrix%ISMIP_style%S( mesh%vi1:mesh%vi2,:) = ocean_matrix%ISMIP_style%S_ref( mesh%vi1:mesh%vi2,:)
+    CALL sync
+
+    ! Set the final values in the "applied" ocean snapshot
+    DO vi = mesh%vi1, mesh%vi2
+    DO k = 1, C%nz_ocean
+      ocean_matrix%applied%T_ocean(          vi,k) = ocean_matrix%ISMIP_style%T( vi,k)
+      ocean_matrix%applied%T_ocean_ext(      vi,k) = ocean_matrix%ISMIP_style%T( vi,k)
+      ocean_matrix%applied%T_ocean_corr_ext( vi,k) = ocean_matrix%ISMIP_style%T( vi,k)
+      ocean_matrix%applied%S_ocean(          vi,k) = ocean_matrix%ISMIP_style%S( vi,k)
+      ocean_matrix%applied%S_ocean_ext(      vi,k) = ocean_matrix%ISMIP_style%S( vi,k)
+      ocean_matrix%applied%S_ocean_corr_ext( vi,k) = ocean_matrix%ISMIP_style%S( vi,k)
+    END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_ocean_model_ISMIP_style_init
+
+  SUBROUTINE initialise_ocean_model_ISMIP_style_init( mesh, ocean_matrix)
+    ! Initialise the regional ocean model
+    !
+    ! Use the ISMIP-style (tempearture + salinity) forcing for the initialisation phase
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                  INTENT(IN)    :: mesh
+    TYPE(type_ocean_matrix_regional), INTENT(INOUT) :: ocean_matrix
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                   :: routine_name = 'initialise_ocean_model_ISMIP_style_init'
+    TYPE(type_netcdf_ISMIP_style_baseline_ocean)    :: netcdf
+    TYPE(type_grid)                                 :: grid_raw
+    REAL(dp), DIMENSION(:,:,:), POINTER             ::  T_raw,  S_raw
+    INTEGER                                         :: wT_raw, wS_raw
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! The name of the file we're reading the data from
+    netcdf%filename = C%ISMIP_ocean_filename_baseline
+
+    ! First get the grid from the file
+    CALL get_grid_from_file( netcdf%filename, grid_raw)
+
+    ! Inquire if everything we need is present in the file
+    CALL inquire_ISMIP_ocean_baseline_file_init( netcdf)
+
+    ! Allocate memory for, and read, the data
+    CALL allocate_shared_dp_3D( grid_raw%nx, grid_raw%ny, C%nz_ocean, T_raw, wT_raw)
+    CALL allocate_shared_dp_3D( grid_raw%nx, grid_raw%ny, C%nz_ocean, S_raw, wS_raw)
+
+    CALL read_ISMIP_ocean_baseline_file_init( netcdf, T_raw, S_raw)
+
+    ! Calculate the mapping operator between this grid and the mesh
+    CALL calc_remapping_operator_grid2mesh( grid_raw, mesh)
+
+    ! Map the data to the mesh
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean_matrix%ISMIP_style%T_ref, ocean_matrix%ISMIP_style%wT_ref)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean_matrix%ISMIP_style%S_ref, ocean_matrix%ISMIP_style%wS_ref)
+
+    CALL map_grid2mesh_3D( grid_raw, mesh, T_raw, ocean_matrix%ISMIP_style%T_ref)
+    CALL map_grid2mesh_3D( grid_raw, mesh, S_raw, ocean_matrix%ISMIP_style%S_ref)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( grid_raw%wnx      )
+    CALL deallocate_shared( grid_raw%wny      )
+    CALL deallocate_shared( grid_raw%wdx      )
+    CALL deallocate_shared( grid_raw%wxmin    )
+    CALL deallocate_shared( grid_raw%wxmax    )
+    CALL deallocate_shared( grid_raw%wymin    )
+    CALL deallocate_shared( grid_raw%wymax    )
+    CALL deallocate_shared( grid_raw%wx       )
+    CALL deallocate_shared( grid_raw%wy       )
+    CALL deallocate_shared( grid_raw%wn       )
+    CALL deallocate_shared( grid_raw%wn2ij    )
+    CALL deallocate_shared( grid_raw%wij2n    )
+    CALL deallocate_shared( grid_raw%wtol_dist)
+    CALL deallocate_remapping_operators_grid2mesh( grid_raw)
+    CALL deallocate_shared( wT_raw            )
+    CALL deallocate_shared( wS_raw            )
+
+    ! Allocate memory for the applied values of SMB and ST (i.e. after applying the anomaly and elevation correction)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean_matrix%ISMIP_style%T, ocean_matrix%ISMIP_style%wT)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean_matrix%ISMIP_style%S, ocean_matrix%ISMIP_style%wS)
+
+    ! Allocate the applied snapshot
+    CALL allocate_ocean_snapshot_regional( mesh, ocean_matrix%applied, name = 'applied')
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_ocean_model_ISMIP_style_init
 
 ! == Regrid 3-D ocean data fields in the vertical direction
 ! =========================================================

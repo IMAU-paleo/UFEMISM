@@ -1656,6 +1656,46 @@ MODULE data_types_netcdf_module
 
   END TYPE type_netcdf_ISMIP_style_baseline
 
+  TYPE type_netcdf_ISMIP_style_baseline_ocean
+    ! NetCDF file containing the baseline ocean for the ISMIP-style climate forcing
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+    ! Dimensions
+    ! ==========
+
+    INTEGER :: id_dim_x
+    INTEGER :: id_dim_y
+    INTEGER :: id_dim_z
+
+    CHARACTER(LEN=256) :: name_dim_x = 'x'
+    CHARACTER(LEN=256) :: name_dim_y = 'y'
+    CHARACTER(LEN=256) :: name_dim_z = 'z'
+
+    ! Variables
+    ! =========
+
+    ! Dimensions
+    INTEGER :: id_var_x
+    INTEGER :: id_var_y
+    INTEGER :: id_var_z
+
+    CHARACTER(LEN=256) :: name_var_x = 'x    '
+    CHARACTER(LEN=256) :: name_var_y = 'y    '
+    CHARACTER(LEN=256) :: name_var_z = 'depth'
+
+    ! Field variables
+    INTEGER :: id_var_T
+    INTEGER :: id_var_S
+
+    CHARACTER(LEN=256) :: name_var_T = 't_an'
+    CHARACTER(LEN=256) :: name_var_S = 's_an'
+
+  END TYPE type_netcdf_ISMIP_style_baseline_ocean
+
   TYPE type_netcdf_prescribed_retreat_mask
     ! NetCDF files containing a prescribed retreat mask
 

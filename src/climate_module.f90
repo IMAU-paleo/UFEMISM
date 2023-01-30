@@ -37,7 +37,8 @@ MODULE climate_module
                                              inquire_ISMIP_forcing_aSMB_file, read_ISMIP_forcing_aSMB_file, &
                                              inquire_ISMIP_forcing_dSMBdz_file, read_ISMIP_forcing_dSMBdz_file, &
                                              inquire_ISMIP_forcing_aST_file, read_ISMIP_forcing_aST_file, &
-                                             inquire_ISMIP_forcing_dSTdz_file, read_ISMIP_forcing_dSTdz_file
+                                             inquire_ISMIP_forcing_dSTdz_file, read_ISMIP_forcing_dSTdz_file, &
+                                             inquire_ISMIP_forcing_baseline_file_init, read_ISMIP_forcing_baseline_file_init
   USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_reference_geometry, &
                                              type_remapping_mesh_mesh, type_remapping_lonlat2mesh, type_SMB_model, &
                                              type_climate_matrix_global, type_climate_snapshot_global, &
@@ -124,6 +125,12 @@ CONTAINS
 
       CALL run_climate_model_ISMIP_style( region%mesh, region%climate_matrix, time, region%ice)
 
+    ELSEIF (C%choice_climate_model == 'ISMIP_style_init') THEN
+      ! Use a directly prescribed regional climate
+      ! Use the ISMIP-style (SMB + ST) forcing
+
+      CALL run_climate_model_ISMIP_style_init( region%mesh, region%climate_matrix, time, region%ice)
+
     ELSE
       CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
     END IF
@@ -192,6 +199,9 @@ CONTAINS
       IF (C%do_calculate_benthic_d18O) THEN
         CALL crash('forcing option "do_calculate_benthic_d18O" collides with "ISMIP_style"!')
       END IF
+
+    ELSEIF (C%choice_climate_model == 'ISMIP_style_init') THEN
+      ! Use the ISMIP-style (SMB + ST) forcing. So, do nothing here.
 
     ELSE
       CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
@@ -265,6 +275,11 @@ CONTAINS
 
       CALL initialise_climate_model_ISMIP_style( region%mesh, region%climate_matrix)
 
+    ELSEIF (C%choice_climate_model == 'ISMIP_style_init') THEN
+      ! Use the ISMIP-style (SMB + ST) forcing
+
+      CALL initialise_climate_model_ISMIP_style_init( region%mesh, region%climate_matrix)
+
     ELSE
       CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
     END IF
@@ -274,8 +289,8 @@ CONTAINS
 
   END SUBROUTINE initialise_climate_model_regional
 
-  ! == Idealised climates
-  ! =====================
+! == Idealised climates
+! =====================
 
   SUBROUTINE run_climate_model_idealised( mesh, ice, climate, time)
     ! Run the regional climate model
@@ -4038,6 +4053,124 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
 
   END SUBROUTINE initialise_climate_model_ISMIP_style_baseline
+
+! == ISMIP-style initialisation phase (SMB + ST) forcing
+! ======================================================
+
+  SUBROUTINE run_climate_model_ISMIP_style_init( mesh, climate_matrix, time, ice)
+    ! Run the regional climate model
+    !
+    ! Use the ISMIP-style (SMB + ST) forcing for the initialisation phase
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                          INTENT(IN)    :: mesh
+    TYPE(type_climate_matrix_regional),       INTENT(INOUT) :: climate_matrix
+    REAL(dp),                                 INTENT(IN)    :: time
+    TYPE(type_ice_model),                     INTENT(IN)    :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'run_climate_model_ISMIP_style_init'
+    REAL(dp)                                                :: wt0, wt1
+    INTEGER                                                 :: vi
+    REAL(dp)                                                :: dz
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Apply the anomaly and elevation correction to calculate the applied SMB and temperature
+
+    climate_matrix%ISMIP_style%SMB( mesh%vi1:mesh%vi2) = climate_matrix%ISMIP_style%SMB_ref( mesh%vi1:mesh%vi2)
+    climate_matrix%ISMIP_style%ST(  mesh%vi1:mesh%vi2) = climate_matrix%ISMIP_style%ST_ref(  mesh%vi1:mesh%vi2)
+    CALL sync
+
+    ! Set the final values in the "applied" climate snapshot
+    DO vi = mesh%vi1, mesh%vi2
+      climate_matrix%applied%T2m( vi,:) = climate_matrix%ISMIP_style%ST( vi)
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_climate_model_ISMIP_style_init
+
+  SUBROUTINE initialise_climate_model_ISMIP_style_init( mesh, climate_matrix)
+    ! Initialise the regional climate model
+    !
+    ! Use the ISMIP-style (SMB + ST) forcing for the initialisation phase
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                    INTENT(IN)    :: mesh
+    TYPE(type_climate_matrix_regional), INTENT(INOUT) :: climate_matrix
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'initialise_climate_model_ISMIP_style_init'
+    TYPE(type_netcdf_ISMIP_style_baseline)            :: netcdf
+    TYPE(type_grid)                                   :: grid_raw
+    REAL(dp), DIMENSION(:,:), POINTER                 ::  SMB_raw,  ST_raw
+    INTEGER                                           :: wSMB_raw, wST_raw
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! The name of the file we're reading the data from
+    netcdf%filename = C%ISMIP_forcing_filename_baseline
+
+    ! First get the grid from the file
+    CALL get_grid_from_file( netcdf%filename, grid_raw)
+
+    ! Inquire if everything we need is present in the file
+    CALL inquire_ISMIP_forcing_baseline_file_init( netcdf)
+
+    ! Allocate memory for, and read, the data
+    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, SMB_raw, wSMB_raw)
+    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, ST_raw , wST_raw )
+
+    CALL read_ISMIP_forcing_baseline_file_init( netcdf, SMB_raw, ST_raw)
+
+    ! Calculate the mapping operator between this grid and the mesh
+    CALL calc_remapping_operator_grid2mesh( grid_raw, mesh)
+
+    ! Map the data to the mesh
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%SMB_ref, climate_matrix%ISMIP_style%wSMB_ref)
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%ST_ref , climate_matrix%ISMIP_style%wST_ref )
+
+    CALL map_grid2mesh_2D( grid_raw, mesh, SMB_raw, climate_matrix%ISMIP_style%SMB_ref)
+    CALL map_grid2mesh_2D( grid_raw, mesh, ST_raw , climate_matrix%ISMIP_style%ST_ref )
+
+    ! Clean up after yourself
+    CALL deallocate_shared( grid_raw%wnx      )
+    CALL deallocate_shared( grid_raw%wny      )
+    CALL deallocate_shared( grid_raw%wdx      )
+    CALL deallocate_shared( grid_raw%wxmin    )
+    CALL deallocate_shared( grid_raw%wxmax    )
+    CALL deallocate_shared( grid_raw%wymin    )
+    CALL deallocate_shared( grid_raw%wymax    )
+    CALL deallocate_shared( grid_raw%wx       )
+    CALL deallocate_shared( grid_raw%wy       )
+    CALL deallocate_shared( grid_raw%wn       )
+    CALL deallocate_shared( grid_raw%wn2ij    )
+    CALL deallocate_shared( grid_raw%wij2n    )
+    CALL deallocate_shared( grid_raw%wtol_dist)
+    CALL deallocate_remapping_operators_grid2mesh( grid_raw)
+    CALL deallocate_shared( wSMB_raw          )
+    CALL deallocate_shared( wST_raw           )
+
+    ! Allocate memory for the applied values of SMB and ST (i.e. after applying the anomaly and elevation correction)
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%SMB, climate_matrix%ISMIP_style%wSMB)
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%ST,  climate_matrix%ISMIP_style%wST )
+
+    ! Lastly, allocate memory for the "applied" snapshot
+    CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, name = 'applied')
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
+
+  END SUBROUTINE initialise_climate_model_ISMIP_style_init
 
 ! == Some generally useful tools
 ! ==============================

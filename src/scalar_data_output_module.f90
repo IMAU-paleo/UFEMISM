@@ -103,7 +103,8 @@ CONTAINS
             C%choice_SMB_model == 'idealised' .OR. &
             C%choice_SMB_model == 'direct_global' .OR. &
             C%choice_SMB_model == 'direct_regional' .OR. &
-            C%choice_SMB_model == 'ISMIP_style_forcing') THEN
+            C%choice_SMB_model == 'ISMIP_style_forcing' .OR. &
+            C%choice_SMB_model == 'ISMIP_style_forcing_init') THEN
       ! Do nothing
     ELSEIF (C%choice_SMB_model == 'IMAU-ITM' .OR. &
             C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN

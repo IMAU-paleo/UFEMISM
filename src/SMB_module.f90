@@ -96,8 +96,9 @@ CONTAINS
 
       CALL run_SMB_model_direct( mesh, climate_matrix%SMB_direct, SMB, time, mask_noice)
 
-    ELSEIF (C%choice_SMB_model == 'ISMIP_style_forcing') THEN
-      ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+    ELSEIF (C%choice_SMB_model == 'ISMIP_style_forcing' .OR. &
+            C%choice_SMB_model == 'ISMIP_style_forcing_init') THEN
+      ! Use the ISMIP-style forcing
 
       CALL run_SMB_model_ISMIP_forcing( mesh, climate_matrix, SMB)
 
@@ -135,7 +136,8 @@ CONTAINS
             C%choice_SMB_model == 'idealised' .OR. &
             C%choice_SMB_model == 'direct_global' .OR. &
             C%choice_SMB_model == 'direct_regional' .OR. &
-            C%choice_SMB_model == 'ISMIP_style_forcing') THEN
+            C%choice_SMB_model == 'ISMIP_style_forcing' .OR. &
+            C%choice_SMB_model == 'ISMIP_style_forcing_init') THEN
       ! Only need yearly total SMB in these cases
 
       CALL allocate_shared_dp_1D( mesh%nV, SMB%SMB_year, SMB%wSMB_year)

@@ -522,10 +522,8 @@ MODULE configuration_module
     REAL(dp)            :: calving_threshold_thickness_shelf_config    = 100._dp                          ! Threshold ice thickness for ice shelf calving front in the "threshold_thickness" calving law
     REAL(dp)            :: calving_threshold_thickness_sheet_config    = 0._dp                            ! Threshold ice thickness for ice sheet calving front in the "threshold_thickness" calving law
     INTEGER             :: max_calving_rounds_config                   = 20                               ! Maximum number of calving loops during chain reaction
-    LOGICAL             :: do_remove_shelves_config                    = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
-    LOGICAL             :: remove_shelves_larger_than_PD_config        = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
-    LOGICAL             :: continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
-    REAL(dp)            :: continental_shelf_min_height_config         = -2000._dp                        ! Maximum depth of the continental shelf
+    CHARACTER(LEN=256)  :: choice_imposed_shelf_removal_config         = 'none'                           ! Choice of imposed shelf removal: "none", "total", "beyond_PD", "beyond_PD_keep_gl", "beyond_continental"
+    REAL(dp)            :: continental_shelf_min_height_config         = -2000._dp                        ! For "beyond_continental": threshold depth of seabed; ice shelf removal deeper than that.
     REAL(dp)            :: minimum_ice_thickness_config                = 0._dp                            ! If ice anywhere is thinner than this, remove it
 
   ! == Thermodynamics and rheology
@@ -662,8 +660,8 @@ MODULE configuration_module
     REAL(dp)            :: SMB_IMAUITM_C_refr_GRL_config               = 0.051_dp
     REAL(dp)            :: SMB_IMAUITM_C_refr_ANT_config               = 0.051_dp
 
-  ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-  ! ==============================================================
+  ! ISMIP-style forcing
+  ! ===================
 
     CHARACTER(LEN=256)  :: ISMIP_forcing_filename_baseline_config      = ''                              ! NetCDF file containing the baseline climate
     CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_aSMB_config        = ''                              ! Folder containing the single-year NetCDF files of the SMB anomaly
@@ -674,6 +672,8 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_aST_config       = ''                              ! Filename without the year (e.g. if the actual file is "aST_MARv3.12-yearly-CESM2-ssp585-1950.nc",    then this variable should be "aST_MARv3.12-yearly-CESM2-ssp585-"
     CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_dSTdz_config       = ''                              ! Folder containing the single-year NetCDF files of the temperature lapse rate
     CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_dSTdz_config     = ''                              ! Filename without the year (e.g. if the actual file is "dSTdz_MARv3.12-yearly-CESM2-ssp585-1950.nc",  then this variable should be "dSTdz_MARv3.12-yearly-CESM2-ssp585-"
+
+    CHARACTER(LEN=256)  :: ISMIP_ocean_filename_baseline_config        = ''                              ! NetCDF file containing the baseline ocean
 
   ! == Basal mass balance
   ! =====================
@@ -1316,9 +1316,7 @@ MODULE configuration_module
     REAL(dp)                            :: calving_threshold_thickness_shelf
     REAL(dp)                            :: calving_threshold_thickness_sheet
     INTEGER                             :: max_calving_rounds
-    LOGICAL                             :: do_remove_shelves
-    LOGICAL                             :: remove_shelves_larger_than_PD
-    LOGICAL                             :: continental_shelf_calving
+    CHARACTER(LEN=256)                  :: choice_imposed_shelf_removal
     REAL(dp)                            :: continental_shelf_min_height
     REAL(dp)                            :: minimum_ice_thickness
 
@@ -1456,8 +1454,8 @@ MODULE configuration_module
     REAL(dp)                            :: SMB_IMAUITM_C_refr_GRL
     REAL(dp)                            :: SMB_IMAUITM_C_refr_ANT
 
-    ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-    ! ==============================================================
+    ! ISMIP-style forcing
+    ! ===================
 
     CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_baseline
     CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_aSMB
@@ -1468,6 +1466,8 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_aST
     CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_dSTdz
     CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_dSTdz
+
+    CHARACTER(LEN=256)                  :: ISMIP_ocean_filename_baseline
 
     ! Basal mass balance - sub-shelf melt
     ! ===================================
@@ -2213,9 +2213,7 @@ CONTAINS
                      calving_threshold_thickness_shelf_config,        &
                      calving_threshold_thickness_sheet_config,        &
                      max_calving_rounds_config,                       &
-                     do_remove_shelves_config,                        &
-                     remove_shelves_larger_than_PD_config,            &
-                     continental_shelf_calving_config,                &
+                     choice_imposed_shelf_removal_config,             &
                      continental_shelf_min_height_config,             &
                      minimum_ice_thickness_config,                    &
                      use_submesh_config,                              &
@@ -2355,6 +2353,7 @@ CONTAINS
                      ISMIP_forcing_basefilename_aST_config,           &
                      ISMIP_forcing_foldername_dSTdz_config,           &
                      ISMIP_forcing_basefilename_dSTdz_config,         &
+                     ISMIP_ocean_filename_baseline_config,            &
                      choice_BMB_shelf_model_config,                   &
                      choice_idealised_BMB_shelf_config,               &
                      choice_BMB_sheet_model_config,                   &
@@ -3118,9 +3117,7 @@ CONTAINS
     C%calving_threshold_thickness_shelf        = calving_threshold_thickness_shelf_config
     C%calving_threshold_thickness_sheet        = calving_threshold_thickness_sheet_config
     C%max_calving_rounds                       = max_calving_rounds_config
-    C%do_remove_shelves                        = do_remove_shelves_config
-    C%remove_shelves_larger_than_PD            = remove_shelves_larger_than_PD_config
-    C%continental_shelf_calving                = continental_shelf_calving_config
+    C%choice_imposed_shelf_removal             = choice_imposed_shelf_removal_config
     C%continental_shelf_min_height             = continental_shelf_min_height_config
     C%minimum_ice_thickness                    = minimum_ice_thickness_config
 
@@ -3256,8 +3253,8 @@ CONTAINS
     C%SMB_IMAUITM_C_refr_GRL                   = SMB_IMAUITM_C_refr_GRL_config
     C%SMB_IMAUITM_C_refr_ANT                   = SMB_IMAUITM_C_refr_ANT_config
 
-    ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-    ! ==============================================================
+    ! ISMIP-style forcing
+    ! ===================
 
     C%ISMIP_forcing_filename_baseline          = ISMIP_forcing_filename_baseline_config
     C%ISMIP_forcing_foldername_aSMB            = ISMIP_forcing_foldername_aSMB_config
@@ -3268,6 +3265,8 @@ CONTAINS
     C%ISMIP_forcing_basefilename_aST           = ISMIP_forcing_basefilename_aST_config
     C%ISMIP_forcing_foldername_dSTdz           = ISMIP_forcing_foldername_dSTdz_config
     C%ISMIP_forcing_basefilename_dSTdz         = ISMIP_forcing_basefilename_dSTdz_config
+
+    C%ISMIP_ocean_filename_baseline            = ISMIP_ocean_filename_baseline_config
 
     ! Basal mass balance - sub-shelf melt
     ! ===================================

@@ -665,7 +665,9 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_v_3D, region%ice%v_3D_b, start = (/ 1, 1, netcdf%ti/)))
 
     ! Viscosity
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_N,  region%ice%N_a,  start = (/ 1, netcdf%ti/)))
+    IF (C%choice_ice_dynamics /= 'SIA') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_N,  region%ice%N_a,  start = (/ 1, netcdf%ti/)))
+    END IF
 
     ! Sea level and GIA
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_SL,  region%ice%SL_a,  start = (/ 1, netcdf%ti/)))
@@ -1197,7 +1199,9 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_v_3D, [ti, zeta, time], netcdf%id_var_v_3D, long_name='Ice 3D y-velocity', units='m/yr')
 
     ! Viscosity
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_N,  [vi, time], netcdf%id_var_N,  long_name='Vertically integrated ice viscosity', units='?')
+    IF (C%choice_ice_dynamics /= 'SIA') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_N,  [vi, time], netcdf%id_var_N,  long_name='Vertically integrated ice viscosity', units='?')
+    END IF
 
     ! Sea level and GIA
     CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,  [vi, time], netcdf%id_var_SL,  long_name='Sea surface change', units='m')
@@ -6666,6 +6670,155 @@ CONTAINS
 
   END SUBROUTINE read_ISMIP_forcing_dSTdz_file
 
+! ISMIP-style (SMB + ST) forcing for initialisation phase
+! =======================================================
+
+  SUBROUTINE inquire_ISMIP_forcing_baseline_file_init( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_baseline), INTENT(INOUT) :: netcdf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'inquire_ISMIP_forcing_baseline_file_init'
+    INTEGER                                               :: nx, ny
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_SMB, (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_SMB)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_ST , (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_ST )
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_ISMIP_forcing_baseline_file_init
+
+  SUBROUTINE read_ISMIP_forcing_baseline_file_init( netcdf, SMB, ST)
+    ! Read grid and data from the NetCDF file
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_baseline), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),             INTENT(INOUT) :: SMB, ST
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'read_ISMIP_forcing_baseline_file_init'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Read the field data
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_SMB, SMB))
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_ST , ST ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_ISMIP_forcing_baseline_file_init
+
+  SUBROUTINE inquire_ISMIP_ocean_baseline_file_init( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_baseline_ocean), INTENT(INOUT) :: netcdf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                               :: routine_name = 'inquire_ISMIP_ocean_baseline_file'
+    INTEGER                                                     :: nx, ny, nz
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_z, nz, netcdf%id_dim_z)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_x, (/ netcdf%id_dim_x                                   /), netcdf%id_var_x)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_y, (/                  netcdf%id_dim_y                  /), netcdf%id_var_y)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_z, (/                                   netcdf%id_dim_z /), netcdf%id_var_z)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_T, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_z /), netcdf%id_var_T)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_S, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_z /), netcdf%id_var_S)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_ISMIP_ocean_baseline_file_init
+
+  SUBROUTINE read_ISMIP_ocean_baseline_file_init( netcdf, T, S)
+    ! Read grid and data from the NetCDF file
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_baseline_ocean), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:,:),                   INTENT(OUT)   :: T, S
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                               :: routine_name = 'read_ISMIP_ocean_baseline_file_init'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Read the field data
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_T, T))
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_S, S))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_ISMIP_ocean_baseline_file_init
+
 ! ===== Create and write to debug NetCDF file =====
 ! =================================================
 
@@ -8454,7 +8607,8 @@ CONTAINS
             C%choice_SMB_model == 'idealised' .OR. &
             C%choice_SMB_model == 'direct_global' .OR. &
             C%choice_SMB_model == 'direct_regional' .OR. &
-            C%choice_SMB_model == 'ISMIP_style_forcing') THEN
+            C%choice_SMB_model == 'ISMIP_style_forcing' .OR. &
+            C%choice_SMB_model == 'ISMIP_style_forcing_init') THEN
       ! Do nothing
     ELSEIF (C%choice_SMB_model == 'IMAU-ITM' .OR. &
             C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN
@@ -8526,7 +8680,8 @@ CONTAINS
             C%choice_SMB_model == 'idealised' .OR. &
             C%choice_SMB_model == 'direct_global' .OR. &
             C%choice_SMB_model == 'direct_regional' .OR. &
-            C%choice_SMB_model == 'ISMIP_style_forcing') THEN
+            C%choice_SMB_model == 'ISMIP_style_forcing' .OR. &
+            C%choice_SMB_model == 'ISMIP_style_forcing_init') THEN
       ! Do nothing
     ELSEIF (C%choice_SMB_model == 'IMAU-ITM' .OR. &
             C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN

@@ -101,6 +101,8 @@ CONTAINS
       CALL run_BMB_model_shelf_inversion(      mesh, ice, BMB, refgeo)
     ELSEIF (C%choice_BMB_shelf_model == 'Bernales202X') THEN
       CALL run_BMB_model_Bernales202X( mesh, ice, ocean, BMB, refgeo)
+    ELSEIF (C%choice_BMB_shelf_model == 'ISMIP6_local') THEN
+      CALL run_BMB_model_ISMIP6_local( mesh, ice, ocean, BMB, refgeo)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -163,13 +165,19 @@ CONTAINS
           IF (ice%mask_ocean_a( vi) == 1) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
         ELSEIF (C%choice_BMB_subgrid == 'PMP') THEN
           IF (ice%mask_ocean_a( vi) == 1 .OR. ice%mask_gl_a( vi) == 1) THEN
-            BMB%BMB( vi) = BMB%BMB( vi) + (1._dp - ice%f_grnd_a( vi)**0.1_dp) * BMB%BMB_shelf( vi)
+            BMB%BMB( vi) = BMB%BMB( vi) + (1._dp - ice%f_grnd_a( vi)) * BMB%BMB_shelf( vi)
           END IF
         ELSEIF (C%choice_BMB_subgrid == 'NMP') THEN
           IF (ice%f_grnd_a( vi) == 0._dp) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
         ELSE
           CALL crash('unknown choice_BMB_subgrid "' // TRIM(C%choice_BMB_subgrid) // '"!')
         END IF
+      END IF
+
+      ! Lakes not yet supported: remove any basal melt, keep refreeze
+      IF (ice%mask_lake_a( vi) == 1) THEN
+        BMB%BMB_shelf( vi) = MAX( BMB%BMB_shelf( vi), 0._dp)
+        BMB%BMB( vi) = MAX( BMB%BMB( vi), 0._dp)
       END IF
 
     END DO
@@ -238,6 +246,8 @@ CONTAINS
       CALL initialise_BMB_model_inversion( mesh, BMB, restart)
     ELSEIF (C%choice_BMB_shelf_model == 'Bernales202X') THEN
       CALL initialise_BMB_model_Bernales202X( mesh, ice, ocean, BMB)
+    ELSEIF (C%choice_BMB_shelf_model == 'ISMIP6_local') THEN
+      CALL initialise_BMB_model_ISMIP6_local( mesh, ice, ocean, BMB)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -2626,6 +2636,152 @@ CONTAINS
 
   END SUBROUTINE look_for_grounding_line
 
+! ===== The ISMIP6 local sub-shelf parameterisation =====
+! =======================================================
+
+  SUBROUTINE run_BMB_model_ISMIP6_local( mesh, ice, ocean, BMB, refgeo)
+    ! Calculate sub-shelf melt with the ISMIP6_local parameterisation
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
+    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_ISMIP6_local'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: t_melt, t_force, q_factor
+    REAL(dp)                                           :: qsh_g, qsh_w, gl_w
+    REAL(dp), DIMENSION(:), POINTER                    ::  gamma_t
+    INTEGER                                            :: wgamma_t
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Initialise ice shelf basal melt
+    BMB%BMB_shelf = 0._dp
+
+    ! Allocate melt factor
+    CALL allocate_shared_dp_1D( mesh%nV, gamma_t, wgamma_t)
+
+    ! Initialise melt factor
+    gamma_t =  0.0_dp
+
+    ! === Basal ocean temperatures [K] ===
+    ! ====================================
+
+    IF (.NOT. C%do_ocean_inv) THEN
+      ! Calculate ocean temperature at the base of the ice shelf
+      CALL calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
+    END IF
+
+    ! Calculate ocean salinity at the base of the ice shelf
+    CALL calc_ocean_salinity_at_shelf_base( mesh, ice, ocean, BMB)
+
+    ! === Melt factor ===
+    ! ===================
+
+    ! Loop over all ice shelf and ocean points
+    DO vi = mesh%vi1, mesh%vi2
+      IF (ice%mask_shelf_a( vi) == 1) THEN
+        gamma_t( vi) = 5.0E04_dp
+      END IF
+    END DO
+    CALL sync
+
+    ! === Basal melt ===
+    ! ==================
+
+    ! = Merge all constants into one
+    ! ==============================
+
+    q_factor = (seawater_density * cp_ocean / (ice_density * L_fusion)) ** 2._dp
+
+    ! Loop over all ice shelf and ocean points
+    DO vi = mesh%vi1, mesh%vi2
+
+      IF (ice%mask_shelf_a( vi) == 1) THEN
+
+        ! = Pressure melting point at the bottom of the ice shelf [K]
+        ! ===========================================================
+
+          t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
+                   7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
+
+        ! = Thermal forcing [K]
+        ! =====================
+
+        t_force = BMB%T_ocean_base( vi) - t_melt
+
+        ! = Sub-shelf basal melt [m/a]
+        ! ============================
+
+        BMB%BMB_shelf( vi) = gamma_t( vi) * q_factor * (-t_force) * ABS(t_force)
+
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Limit basal melt
+    DO vi = mesh%vi1, mesh%vi2
+      BMB%BMB_shelf( vi) = MAX( BMB%BMB_shelf( vi), C%BMB_min)
+      BMB%BMB_shelf( vi) = MIN( BMB%BMB_shelf( vi), C%BMB_max)
+    END DO
+    CALL sync
+
+    ! Clean after yourself
+    CALL deallocate_shared( wgamma_t)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_BMB_model_ISMIP6_local
+
+  SUBROUTINE initialise_BMB_model_ISMIP6_local( mesh, ice, ocean, BMB)
+    ! Allocate memory for the data fields of the ISMIP6 local shelf BMB parameterisation.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
+    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_ISMIP6_local'
+    INTEGER                                            :: k, vi
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Variables
+    CALL allocate_shared_dp_1D(  mesh%nV, BMB%T_ocean_base, BMB%wT_ocean_base)
+    CALL allocate_shared_dp_1D(  mesh%nV, BMB%S_ocean_base, BMB%wS_ocean_base)
+    CALL allocate_shared_dp_1D(  mesh%nV, BMB%dist_gl,      BMB%wdist_gl     )
+
+    ! Initialise ocean temperature and salinity at the base of the ice shelf
+    CALL calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
+    CALL calc_ocean_salinity_at_shelf_base( mesh, ice, ocean, BMB)
+
+    ! Ocean temperature inversion
+    IF (C%do_ocean_inv) THEN
+      CALL initialise_ocean_temperature_inversion( mesh, BMB)
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected=3)
+
+  END SUBROUTINE initialise_BMB_model_ISMIP6_local
+
 ! ===== Inversion of ice shelf basal melt rates =====
 ! ===================================================
 
@@ -3101,7 +3257,7 @@ CONTAINS
       ! Grounded above sea level
       else
         ! Prevent extrapolation for now
-        mask( vi) = 1
+        mask( vi) = 1 ! <================= Should be 0. Now it's doing all land at the same time
 
       end if
 
@@ -3138,6 +3294,8 @@ CONTAINS
 
     end do
     call sync
+
+    ! <================= Uncomment below. Now it's doing all land at the same time
 
     ! if (par%master) then
     !   ! Perform the extrapolation - mask: 2 -> use as seed; 1 -> extrapolate; 0 -> ignore
@@ -3256,7 +3414,7 @@ CONTAINS
       h_estim = -h_delta / (ice%dHi_dt_a(vi) + 1E-6)
 
       ! Percentage of misfit change relative to previous inversion time-step (in %)
-      h_delta_perc = abs( (h_delta - ice%h_delta_prev( vi)) / ice%h_delta_prev( vi)) * 100._dp
+      h_delta_perc = abs( (h_delta - BMB%h_delta_prev( vi)) / BMB%h_delta_prev( vi)) * 100._dp
 
       ! Initialise adjustment (in K)
       dT_base = 0._dp
@@ -3315,7 +3473,7 @@ CONTAINS
       BMB%dT_base_dt( vi) = dT_base / dt_ocean_inv
 
       ! Save current thickness misfit
-      ice%h_delta_prev( vi) = h_delta
+      BMB%h_delta_prev( vi) = h_delta
 
     end do
     call sync
@@ -3852,6 +4010,18 @@ CONTAINS
         CALL calc_distance_to_grounding_line( mesh_new, ice, vi, BMB%dist_gl( vi))
       END DO
       CALL sync
+
+    ELSEIF (C%choice_BMB_shelf_model == 'ISMIP6_local') THEN
+
+      ! Exception for iterative inversion of ocean temperatures, to avoid resetting it.
+      IF (C%do_ocean_inv) THEN
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%T_ocean_base, BMB%wT_ocean_base, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%dT_base_dt,   BMB%wdT_base_dt,   'cons_2nd_order')
+      ELSE
+        CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%T_ocean_base, BMB%wT_ocean_base)
+      END IF
+
+      CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%S_ocean_base, BMB%wS_ocean_base)
 
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')

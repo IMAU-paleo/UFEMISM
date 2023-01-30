@@ -159,40 +159,61 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! If so specified, remove all floating ice
-    IF (C%do_remove_shelves) THEN
-      DO vi = mesh%vi1, mesh%vi2
+    DO vi = mesh%vi1, mesh%vi2
+
+      IF (ice%mask_shelf_a( vi) == 0) THEN
+        ! Not an ice shelf; skip
+        CYCLE
+      END IF
+
+      SELECT CASE (C%choice_imposed_shelf_removal)
+
+      CASE ('none')
+        ! Alles goed, do nothing
+
+      CASE ('total')
+        ! If so specified, remove all floating ice
+
         IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
           ice%Hi_a( vi) = 0._dp
           ice%dHi_dt_a( vi) = 0._dp
         END IF
-      END DO
-      CALL sync
-    END IF
 
-    ! If so specified, remove all floating ice beyond the present-day calving front
-    IF (C%remove_shelves_larger_than_PD) THEN
-      DO vi = mesh%vi1, mesh%vi2
-        IF (is_floating( refgeo_PD%Hi( vi), refgeo_PD%Hb( vi), 0._dp)) THEN
-          IF (refgeo_PD%Hi( vi) == 0._dp) THEN
-            ice%Hi_a( vi) = 0._dp
-            ice%dHi_dt_a( vi) = 0._dp
-          END IF
+      CASE ('beyond_PD')
+        ! If so specified, remove all floating ice beyond the present-day calving front
+
+        IF (is_floating( refgeo_PD%Hi( vi), refgeo_PD%Hb( vi), 0._dp) .AND. &
+            refgeo_PD%Hi( vi) == 0._dp) THEN
+          ice%Hi_a( vi) = 0._dp
+          ice%dHi_dt_a( vi) = 0._dp
         END IF
-      END DO
-      CALL sync
-    END IF
 
-    ! If so specified, remove all floating ice crossing the continental shelf edge
-    IF (C%continental_shelf_calving) THEN
-      DO vi = mesh%vi1, mesh%vi2
+      CASE ('beyond_continental')
+
         IF (refgeo_GIAeq%Hi( vi) == 0._dp .AND. refgeo_GIAeq%Hb( vi) < C%continental_shelf_min_height) THEN
           ice%Hi_a( vi) = 0._dp
           ice%dHi_dt_a( vi) = 0._dp
         END IF
-      END DO
-      CALL sync
-    END IF
+
+      CASE ('beyond_PD_keep_gl')
+        ! If so specified, remove all floating ice beyond the present-day calving front,
+        ! except for new ice shelves next to advancing grounding lines
+
+        IF (is_floating( refgeo_PD%Hi( vi), refgeo_PD%Hb( vi), 0._dp) .AND. &
+            refgeo_PD%Hi( vi) == 0._dp .AND. ice%mask_glf_a( vi) == 0) THEN
+          ice%Hi_a( vi) = 0._dp
+          ice%dHi_dt_a( vi) = 0._dp
+        END IF
+
+      CASE DEFAULT
+        ! Unknown case
+
+        CALL crash('unknown choice_imposed_shelf_removal"' // TRIM(C%choice_imposed_shelf_removal) // '"!')
+
+      END SELECT
+
+    END DO
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

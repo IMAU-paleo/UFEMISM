@@ -96,7 +96,7 @@ contains
     IF (par%master) THEN
        write(*,"(A,I6)")             '    Vertices  : ', region%mesh%nV
        write(*,"(A,I6)")             '    Triangles : ', region%mesh%nTri
-       write(*,"(A,F7.1,A,F7.1,A)")  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
+       write(*,"(A,F8.2,A,F8.2,A)")  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
        write(*,"(A)")                '   Finished creating the first mesh.'
     END IF
 

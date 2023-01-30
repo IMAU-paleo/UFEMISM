@@ -19,8 +19,8 @@
   dt_thermo_config                            = 2.0                              ! Time step (in years) for updating thermodynamics
   dt_climate_config                           = 10.0                             ! Time step (in years) for updating the climate
   dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
-  dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB
-  dt_BMB_config                               = 10.0                             ! Time step (in years) for updating the BMB
+  dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB [not used; computed every time step now]
+  dt_BMB_config                               = 10.0                             ! Time step (in years) for updating the BMB [not used; computed every time step now]
   dt_bedrock_ELRA_config                      = 100.0                            ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
   dt_SELEN_config                             = 1000.0                           ! Time step (in years) for calling SELEN
 
@@ -31,7 +31,7 @@
   dt_ocean_inv_equil_config                   = 50.0                             ! Time step (in years) for calling the iterative inversion of ocean temperatures - equilibrium stage
 
   ! Output
-  dt_output_config                            = 500.0                            ! Time step (in years) for writing output
+  dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
 
   ! Which ice sheets do we simulate?
   ! ================================
@@ -45,13 +45,13 @@
   ! ======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_ANT_30km_ismip_init_ocean' ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'results_ANT_30km_ismip_init'    ! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
 
   do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
-  do_write_grid_data_config                   = .FALSE.                          ! Whether or not the grid NetCDF files should be created and written to
+  do_write_grid_data_config                   = .TRUE.                           ! Whether or not the grid NetCDF files should be created and written to
   do_check_for_NaN_config                     = .TRUE.                           ! Whether or not fields should be checked for NaN values
   do_time_display_config                      = .TRUE.                           ! Print current model time to screen
 
@@ -60,12 +60,12 @@
 
   ! Generation
   use_submesh_config                          = .FALSE.                          ! Generate mesh in parallel using multi-process method
-  use_external_mesh_config                    = .TRUE.                           ! Use a mesh from an external file
+  use_external_mesh_config                    = .FALSE.                          ! Use a mesh from an external file
 
-  filename_external_NAM_config                = 'filename_external_data_placeholder'
-  filename_external_EAS_config                = 'filename_external_data_placeholder'
-  filename_external_GRL_config                = 'filename_external_data_placeholder'
-  filename_external_ANT_config                = 'results_ANT_30km_inv_seed/restart_ANT_00001.nc'
+  filename_external_NAM_config                = 'filename_external_mesh_placeholder'
+  filename_external_EAS_config                = 'filename_external_mesh_placeholder'
+  filename_external_GRL_config                = 'filename_external_mesh_placeholder'
+  filename_external_ANT_config                = 'filename_external_mesh_placeholder'
 
   ! Parameters
   nconmax_config                              = 16                               ! Maximum number of vertex connections
@@ -94,12 +94,11 @@
   POI_NAM_coordinates_config                  = 0.0                              ! lat,lon coordinates of POIs (degrees)
   POI_EAS_coordinates_config                  = 0.0
   POI_GRL_coordinates_config                  = 0.0
-  ! Allie: POI_ANT_coordinates_config         = -72.0492, 2.5258, -71.58659, 358.8087, -72.09779, 359.5949
-  POI_ANT_coordinates_config                  = -73.0825, 67.4532, -72.9643, 67.2864, -72.8242, 67.4411
+  POI_ANT_coordinates_config                  = 0.0
   POI_NAM_resolutions_config                  = 0.0                              ! Required resolution at POIs (km)
   POI_EAS_resolutions_config                  = 0.0
   POI_GRL_resolutions_config                  = 0.0
-  POI_ANT_resolutions_config                  = 5.0, 5.0, 5.0
+  POI_ANT_resolutions_config                  = 0.0
 
   ! Resolutions of the different square grids
   ! =========================================
@@ -217,7 +216,7 @@
   include_SSADIVA_crossterms_config           = .TRUE.                           ! Whether or not to include the "cross-terms" of the SSA/DIVA
   do_GL_subgrid_friction_config               = .TRUE.                           ! Whether or not to scale basal friction with the sub-grid grounded fraction (needed to get proper GL migration; only turn this off for showing the effect on the MISMIP_mod results!)
   do_subgrid_grounded_fraction_config         = .TRUE.                           ! Whether or not to compute a sub-grid grounded fraction from the high resolution PD reference topography + a cumulative density function
-  use_external_bedrock_cdf_config             = .TRUE.                           ! Whether or not to read the sub-grid grounded fraction from an external file (requires same for mesh)
+  use_external_bedrock_cdf_config             = .FALSE.                          ! Whether or not to read the sub-grid grounded fraction from an external file (requires same for mesh)
 
   ! Some parameters for numerically solving the SSA/DIVA
   DIVA_visc_it_norm_dUV_tol_config            = 5E-3                             ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
@@ -361,10 +360,8 @@
   calving_threshold_thickness_shelf_config    = 100.0                            ! Threshold ice thickness for ice shelf calving front in the "threshold_thickness" calving law
   calving_threshold_thickness_sheet_config    = 0.0                              ! Threshold ice thickness for ice sheet calving front in the "threshold_thickness" calving law
   max_calving_rounds_config                   = 10                               ! Maximum number of calving loops during chain reaction
-  do_remove_shelves_config                    = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
-  remove_shelves_larger_than_PD_config        = .TRUE.                           ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
-  continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
-  continental_shelf_min_height_config         = -2000.0                          ! Maximum depth of the continental shelf
+  choice_imposed_shelf_removal_config         = 'beyond_PD'                      ! Choice of imposed shelf removal: "none", "total", "beyond_PD", "beyond_PD_keep_gl", "beyond_continental"
+  continental_shelf_min_height_config         = -2000.0                          ! For "beyond_continental": threshold depth of seabed; ice shelf removal deeper than that.
   minimum_ice_thickness_config                = 0.1                              ! If ice anywhere is thinner than this, remove it
 
   ! Thermodynamics and rheology
@@ -476,25 +473,10 @@
   help_field_10_config                        = 'uabs_surf'
   help_field_11_config                        = 'uabs_base'
   help_field_12_config                        = 'T2m_year'
-  !help_field_13_config                        = 'Precip_year'
-  !help_field_14_config                        = 'Rainfall_year'
-  !help_field_15_config                        = 'Snowfall_year'
-  !help_field_16_config                        = 'Albedo_year'
-  !help_field_17_config                        = 'Melt_year'
-  !help_field_18_config                        = 'Refreezing_year'
-  !help_field_19_config                        = 'Runoff_year'
   help_field_20_config                        = 'SMB_year'
-  help_field_21_config                        = 'Ti_hom_basal'
   help_field_22_config                        = 'f_grnd'
   help_field_25_config                        = 'dHi_dt'
-  help_field_26_config                        = 'surf_curv'
-  help_field_27_config                        = 'surf_peak'
-  help_field_28_config                        = 'surf_sink'
-  help_field_29_config                        = 'surf_slop'
-  help_field_30_config                        = 'bed_curv'
-  help_field_31_config                        = 'beta_eff'
   help_field_32_config                        = 'T_ocean_base'
-  !help_field_33_config                        = 'uabs_surf_target'
   help_field_34_config                        = 'none'
 
 /

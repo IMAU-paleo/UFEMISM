@@ -311,18 +311,22 @@ MODULE data_types_netcdf_module
     INTEGER :: id_dim_zeta
     INTEGER :: id_dim_time
     INTEGER :: id_dim_month
+    INTEGER :: id_dim_z_ocean
 
     CHARACTER(LEN=256) :: name_dim_zeta                  = 'zeta                 '
     CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
     CHARACTER(LEN=256) :: name_dim_month                 = 'month                '
+    CHARACTER(LEN=256) :: name_dim_z_ocean               = 'z_ocean              '
 
     INTEGER :: id_var_time
     INTEGER :: id_var_zeta
     INTEGER :: id_var_month
+    INTEGER :: id_var_z_ocean
 
     CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
     CHARACTER(LEN=256) :: name_var_zeta                  = 'zeta                 '
     CHARACTER(LEN=256) :: name_var_month                 = 'month                '
+    CHARACTER(LEN=256) :: name_var_z_ocean               = 'z_ocean              '
 
     ! Variables
     ! =========

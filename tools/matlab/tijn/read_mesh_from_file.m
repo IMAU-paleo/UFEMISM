@@ -13,6 +13,7 @@ function mesh = ReadMeshFromFile(filename)
   mesh.nC             = ncread(filename,'nC');
   mesh.C              = ncread(filename,'C');
   mesh.R              = ncread(filename,'R');
+  mesh.A              = ncread(filename,'A');
   
   mesh.edge_index     = ncread(filename,'edge_index');
   mesh.Tri_edge_index = ncread(filename,'Tri_edge_index');

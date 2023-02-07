@@ -131,6 +131,11 @@ CONTAINS
 
       CALL run_climate_model_ISMIP_style_init( region%mesh, region%climate_matrix, time, region%ice)
 
+    ELSEIF (C%choice_climate_model == 'ISMIP_style_future') THEN
+      ! Use the ISMIP-style (SMB + aSMB + ST + aST) yearly forcing
+
+      CALL run_climate_model_ISMIP_style_future( region%mesh, region%climate_matrix, time, region%ice)
+
     ELSE
       CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
     END IF
@@ -202,6 +207,9 @@ CONTAINS
 
     ELSEIF (C%choice_climate_model == 'ISMIP_style_init') THEN
       ! Use the ISMIP-style (SMB + ST) forcing. So, do nothing here.
+
+    ELSEIF (C%choice_climate_model == 'ISMIP_style_future') THEN
+      ! Use the ISMIP-style (SMB + aSMB + ST + aST) yearly forcing
 
     ELSE
       CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
@@ -279,6 +287,11 @@ CONTAINS
       ! Use the ISMIP-style (SMB + ST) forcing
 
       CALL initialise_climate_model_ISMIP_style_init( region%mesh, region%climate_matrix)
+
+    ELSEIF (C%choice_climate_model == 'ISMIP_style_future') THEN
+      ! Use the ISMIP-style (SMB + aSMB + ST + aST) yearly forcing
+
+      CALL initialise_climate_model_ISMIP_style_future( region%mesh, region%climate_matrix)
 
     ELSE
       CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
@@ -441,13 +454,6 @@ CONTAINS
 
     ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
     CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
-
-    ! == Inversion of climate fields
-    ! ==============================
-
-    IF (C%do_clim_inv) THEN
-      CALL climate_inversion( mesh, ice, climate_matrix, refgeo, time)
-    END IF
 
     ! == Downscaling to model topography
     ! ==================================
@@ -4172,6 +4178,170 @@ CONTAINS
 
   END SUBROUTINE initialise_climate_model_ISMIP_style_init
 
+! == ISMIP-style Antarctica future phase (SMB + aSMB + ST + aST) forcing
+! ======================================================================
+
+  SUBROUTINE run_climate_model_ISMIP_style_future( mesh, climate_matrix, time, ice)
+    ! Run the regional climate model
+    !
+    ! Use the ISMIP-style (SMB + aSMB + ST + aST) yearly forcing
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                    INTENT(INOUT) :: mesh
+    TYPE(type_climate_matrix_regional), INTENT(INOUT) :: climate_matrix
+    REAL(dp),                           INTENT(IN)    :: time
+    TYPE(type_ice_model),               INTENT(IN)    :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'run_climate_model_ISMIP_style_future'
+    REAL(dp)                                                :: wt0, wt1
+    INTEGER                                                 :: vi
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if the requested time is enveloped by the two timeframes;
+    ! if not, read the two relevant timeframes from the NetCDF file
+    IF (time < climate_matrix%ISMIP_style%t0 .OR. time > climate_matrix%ISMIP_style%t1) THEN
+
+      ! Find and read the two global time frames
+      CALL sync
+      CALL update_ISMIP_style_future_timeframes( mesh, climate_matrix, time)
+
+    END IF ! IF (time >= climate_matrix%SMB_direct%t0 .AND. time <= climate_matrix%SMB_direct%t1) THEN
+
+    ! Interpolate the two timeframes in time
+    wt0 = (climate_matrix%ISMIP_style%t1 - time) / (climate_matrix%ISMIP_style%t1 - climate_matrix%ISMIP_style%t0)
+    wt1 = 1._dp - wt0
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      climate_matrix%ISMIP_style%aSMB(   vi) = (wt0 * climate_matrix%ISMIP_style%aSMB0(   vi)) + &
+                                               (wt1 * climate_matrix%ISMIP_style%aSMB1(   vi))
+      climate_matrix%ISMIP_style%aST(    vi) = (wt0 * climate_matrix%ISMIP_style%aST0(    vi)) + &
+                                               (wt1 * climate_matrix%ISMIP_style%aST1(    vi))
+
+    END DO
+    CALL sync
+
+    ! Apply the anomaly to calculate the applied SMB and temperature
+    DO vi = mesh%vi1, mesh%vi2
+
+      climate_matrix%ISMIP_style%SMB( vi) = climate_matrix%ISMIP_style%SMB_ref( vi) + &
+                                            climate_matrix%ISMIP_style%aSMB(    vi)
+
+      climate_matrix%ISMIP_style%ST(  vi) = climate_matrix%ISMIP_style%ST_ref(  vi) + &
+                                            climate_matrix%ISMIP_style%aST(     vi)
+
+    END DO
+    CALL sync
+
+    ! Set the final values in the "applied" climate snapshot
+    DO vi = mesh%vi1, mesh%vi2
+
+      climate_matrix%applied%T2m( vi,:) = climate_matrix%ISMIP_style%ST( vi)
+
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_climate_model_ISMIP_style_future
+
+  SUBROUTINE update_ISMIP_style_future_timeframes( mesh, climate_matrix, time)
+    ! Update the two timeframes of the ISMIP-style future yearly (SMB + aSMB + ST + aST) forcing data
+
+    USE netcdf_input_module, ONLY: read_field_from_file_2D
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                          INTENT(INOUT) :: mesh
+    TYPE(type_climate_matrix_regional),       INTENT(INOUT) :: climate_matrix
+    REAL(dp),                                 INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'update_ISMIP_style_future_timeframes'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Read timeframes from file
+    CALL read_field_from_file_2D( C%ISMIP_future_atmosphere_anomaly_filename, 'smb_anomaly', mesh, climate_matrix%ISMIP_style%aSMB0, 'ANT', time_to_read = REAL( FLOOR( time),dp)        )
+    CALL read_field_from_file_2D( C%ISMIP_future_atmosphere_anomaly_filename, 'smb_anomaly', mesh, climate_matrix%ISMIP_style%aSMB1, 'ANT', time_to_read = REAL( FLOOR( time),dp) + 1._dp)
+    CALL read_field_from_file_2D( C%ISMIP_future_atmosphere_anomaly_filename, 'ts_anomaly' , mesh, climate_matrix%ISMIP_style%aST0 , 'ANT', time_to_read = REAL( FLOOR( time),dp)        )
+    CALL read_field_from_file_2D( C%ISMIP_future_atmosphere_anomaly_filename, 'ts_anomaly' , mesh, climate_matrix%ISMIP_style%aST1 , 'ANT', time_to_read = REAL( FLOOR( time),dp) + 1._dp)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 13)
+
+  END SUBROUTINE update_ISMIP_style_future_timeframes
+
+  SUBROUTINE initialise_climate_model_ISMIP_style_future( mesh, climate_matrix)
+    ! Initialise the regional climate model
+    !
+    ! Use the ISMIP-style (SMB + aSMB + ST + aST) yearly forcing
+
+    USE netcdf_input_module, ONLY: read_field_from_file_2D
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                    INTENT(INOUT) :: mesh
+    TYPE(type_climate_matrix_regional), INTENT(INOUT) :: climate_matrix
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'initialise_climate_model_ISMIP_style_future'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate memory for baseline temperature and SMB
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%SMB_ref, climate_matrix%ISMIP_style%wSMB_ref)
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%ST_ref , climate_matrix%ISMIP_style%wST_ref )
+
+    ! Read baseline temperature and SMB
+    CALL read_field_from_file_2D( C%ISMIP_future_atmosphere_baseline_filename, 'smb_clim', mesh, climate_matrix%ISMIP_style%SMB_ref, 'ANT')
+    CALL read_field_from_file_2D( C%ISMIP_future_atmosphere_baseline_filename, 'ts_clim' , mesh, climate_matrix%ISMIP_style%ST_ref , 'ANT')
+
+    ! Allocate memory for the timestamps of the two timeframes
+    CALL allocate_shared_dp_0D( climate_matrix%ISMIP_style%t0, climate_matrix%ISMIP_style%wt0)
+    CALL allocate_shared_dp_0D( climate_matrix%ISMIP_style%t1, climate_matrix%ISMIP_style%wt1)
+
+    IF (par%master) THEN
+      ! Give impossible values to timeframes, so that the first call to run_climate_model_ISMIP_style
+      ! is guaranteed to first read two new timeframes from the NetCDF file
+      climate_matrix%ISMIP_style%t0 = C%start_time_of_run - 100._dp
+      climate_matrix%ISMIP_style%t1 = C%start_time_of_run - 90._dp
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Allocate memory for the two timeframes
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%aSMB0  , climate_matrix%ISMIP_style%waSMB0  )
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%aST0   , climate_matrix%ISMIP_style%waST0   )
+
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%aSMB1  , climate_matrix%ISMIP_style%waSMB1  )
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%aST1   , climate_matrix%ISMIP_style%waST1   )
+
+    ! Allocate memory for the time-interpolated values of aSMB, dSMBdz, ST, and dSTdz
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%aSMB   , climate_matrix%ISMIP_style%waSMB   )
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%aST    , climate_matrix%ISMIP_style%waST    )
+
+    ! Allocate memory for the applied values of SMB and ST (i.e. after applying the anomaly and elevation correction)
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%SMB    , climate_matrix%ISMIP_style%wSMB    )
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_style%ST     , climate_matrix%ISMIP_style%wST     )
+
+    ! Lastly, allocate memory for the "applied" snapshot
+    CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, name = 'applied')
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
+
+  END SUBROUTINE initialise_climate_model_ISMIP_style_future
+
 ! == Some generally useful tools
 ! ==============================
 
@@ -4785,1230 +4955,5 @@ CONTAINS
 
   END SUBROUTINE rotate_wind_to_model_mesh
 
-! == Iterative adjustment of precipitation and temperature
-! ========================================================
-
-  SUBROUTINE climate_inversion( mesh, ice, climate, refgeo, time)
-    ! Invert climate fields using the reference topography over tricky areas
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_mesh),                    INTENT(IN)    :: mesh
-    TYPE(type_ice_model),               INTENT(IN)    :: ice
-    TYPE(type_climate_matrix_regional), INTENT(INOUT) :: climate
-    TYPE(type_reference_geometry),      INTENT(IN)    :: refgeo
-    REAL(dp),                           INTENT(IN)    :: time
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'climate_inversion'
-    INTEGER                                           :: vi, m
-    REAL(dp)                                          :: h_delta, h_scale, t_melt
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (time < C%clim_inv_t_start) THEN
-      ! Nothing to do for now. Just return.
-      CALL finalise_routine( routine_name)
-      RETURN
-    ELSEIF (time > C%clim_inv_t_end) THEN
-      ! Inversion is done. Use running average of cliamte fields.
-      ! climate%PD_obs%Precip( mesh%vi1:mesh%vi2) = climate%PD_obs%Precip_ave( mesh%vi1:mesh%vi2)
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
-
-      ! Invert only over high-ground, thin-ice grounded vertices
-      IF ( ice%mask_land_a( vi) == 1 .AND. &
-           refgeo%Hb(       vi) >= C%clim_inv_Hb_min .AND. &
-           refgeo%Hi(       vi) <= C%clim_inv_Hi_max) THEN
-
-        ! Scale down adjustment to prevent overshooting
-        h_scale = 1.0_dp/10000._dp
-
-        ! Restrict adjustment to [-1.5 1.5] range
-        h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
-
-        ! Further adjust only where the previous value is not improving the result
-        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
-             (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
-
-          DO m = 1, 12
-
-            climate%PD_obs%Precip( vi,m) = climate%PD_obs%Precip( vi,m) - 1.72476_dp * TAN(h_delta)
-                                                                        ! The hardcoded jorjonian constant yeah baby.
-          END DO
-
-        END IF ! else climate fields do not change from previous time step
-
-      END IF ! else leave vertex alone
-
-    END DO
-    CALL sync
-
-    ! Limit climate fields
-    DO vi = mesh%vi1, mesh%vi2
-      DO m = 1, 12
-        climate%PD_obs%Precip( vi,m) = MAX( climate%PD_obs%Precip( vi,m),  0._dp)
-        climate%PD_obs%Precip( vi,m) = MIN( climate%PD_obs%Precip( vi,m), .01_dp)
-      END DO
-    END DO
-    CALL sync
-
-    ! Running climate field averages
-    ! ==============================
-
-    ! ! Update the running window: drop oldest record and push the rest to the back
-    ! climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,2:C%clim_inv_window_size) = climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,1:C%clim_inv_window_size-1)
-
-    ! ! Update the running window: add new record to beginning of window
-    ! climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,1) = climate%PD_obs%Precip( mesh%vi1:mesh%vi2)
-
-    ! ! Compute running average
-    ! climate%PD_obs%Precip_ave( mesh%vi1:mesh%vi2) = SUM(climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,:),2) / REAL(C%clim_inv_window_size,dp)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE climate_inversion
-
-!==============================
-! OBSOLETE: just for the record
-!==============================
-
-  ! ! Parameterised climate (ERA40 + global temperature offset) from de Boer et al., 2013
-  ! SUBROUTINE run_climate_model_dT_glob( mesh, ice, climate, region_name)
-  !   ! Use the climate parameterisation from de Boer et al., 2013 (global temperature offset calculated with the inverse routine,
-  !   ! plus a precipitation correction based on temperature + orography changes (NAM & EAS; Roe & Lindzen model), or only temperature (GRL & ANT).
-  !   ! (for more details, see de Boer, B., van de Wal, R., Lourens, L. J., Bintanja, R., and Reerink, T. J.:
-  !   ! A continuous simulation of global ice volume over the past 1 million years with 3-D ice-sheet models, Climate Dynamics 41, 1365-1384, 2013)
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                INTENT(IN)    :: ice
-  !   TYPE(type_climate_model),            INTENT(INOUT) :: climate
-  !   CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-
-  !   ! Local variables:
-  !   INTEGER                                            :: vi,m
-
-  !   REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx,  dHs_dy,  dHs_dx_ref,  dHs_dy_ref
-  !   INTEGER                                            :: wdHs_dx, wdHs_dy, wdHs_dx_ref, wdHs_dy_ref
-  !   REAL(dp), DIMENSION(:,:  ), POINTER                ::  Precip_RL_ref,  Precip_RL_mod,  dPrecip_RL
-  !   INTEGER                                            :: wPrecip_RL_ref, wPrecip_RL_mod, wdPrecip_RL
-  !   REAL(dp)                                           :: dT_lapse
-
-  !   REAL(dp), PARAMETER                                :: P_offset = 0.008_dp       ! Normalisation term in precipitation anomaly to avoid divide-by-nearly-zero
-
-  !   ! Allocate shared memory
-  !   CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx       , wdHs_dx       )
-  !   CALL allocate_shared_dp_1D( mesh%nV    , dHs_dy       , wdHs_dy       )
-  !   CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx_ref   , wdHs_dx_ref   )
-  !   CALL allocate_shared_dp_1D( mesh%nV    , dHs_dy_ref   , wdHs_dy_ref   )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, Precip_RL_ref, wPrecip_RL_ref)
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, Precip_RL_mod, wPrecip_RL_mod)
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, dPrecip_RL   , wdPrecip_RL   )
-
-  !   ! Calculate surface slopes for both geometries
-  !   CALL ddx_a_to_a_2D( mesh, ice%Hs_a             , dHs_dx    )
-  !   CALL ddy_a_to_a_2D( mesh, ice%Hs_a             , dHs_dy    )
-  !   CALL ddx_a_to_a_2D( mesh, climate%PD_obs%Hs_ref, dHs_dx_ref)
-  !   CALL ddy_a_to_a_2D( mesh, climate%PD_obs%Hs_ref, dHs_dy_ref)
-
-  !   ! Temperature: constant lapse rate plus global offset
-  !   DO vi = mesh%vi1, mesh%vi2
-
-  !     dT_lapse = (ice%Hs_a( vi) - climate%PD_obs%Hs_ref( vi)) * C%constant_lapserate
-  !     DO m = 1, 12
-  !       climate%applied%T2m( vi,m) = climate%PD_obs%T2m( vi,m) + dT_lapse + forcing%dT_glob_inverse
-  !     END DO
-
-  !   END DO
-  !   CALL sync
-
-  !   ! Precipitation:
-  !   ! NAM & EAS: Roe&Lindzen model to account for changes in orography and temperature
-  !   ! GRL & ANT: simple correction based on temperature alone
-
-  !   IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-
-  !     DO vi = mesh%vi1, mesh%vi2
-  !     DO m = 1, 12
-
-  !       CALL precipitation_model_Roe( climate%PD_obs%T2m(  vi,m), dHs_dx_ref( vi), dHs_dy_ref( vi), climate%PD_obs%Wind_LR( vi,m), climate%PD_obs%Wind_DU( vi,m), Precip_RL_ref( vi,m))
-  !       CALL precipitation_model_Roe( climate%applied%T2m( vi,m), dHs_dx(     vi), dHs_dy(     vi), climate%PD_obs%Wind_LR( vi,m), climate%PD_obs%Wind_DU( vi,m), Precip_RL_mod( vi,m))
-  !       dPrecip_RL( vi,m) = MIN( 2._dp, Precip_RL_mod( vi,m) / Precip_RL_ref( vi,m) )
-
-  !       climate%applied%Precip( vi,m) = climate%PD_obs%Precip( vi,m) * dPrecip_RL( vi,m)
-
-  !     END DO
-  !     END DO
-  !     CALL sync
-
-  !   ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
-
-  !     CALL adapt_precip_CC( mesh, ice%Hs_a, climate%PD_obs%Hs, climate%PD_obs%T2m, climate%PD_obs%Precip, climate%applied%Precip, region_name)
-
-  !   END IF
-
-  !   ! Clean up after yourself
-  !   CALL deallocate_shared( wdHs_dx)
-  !   CALL deallocate_shared( wdHs_dy)
-  !   CALL deallocate_shared( wdHs_dx_ref)
-  !   CALL deallocate_shared( wdHs_dy_ref)
-  !   CALL deallocate_shared( wPrecip_RL_ref)
-  !   CALL deallocate_shared( wPrecip_RL_mod)
-  !   CALL deallocate_shared( wdPrecip_RL)
-
-  ! END SUBROUTINE run_climate_model_dT_glob
-
-  ! Climate matrix with PI + LGM snapshots, forced with CO2 (from record or from inverse routine) from Berends et al., 2018
-  ! SUBROUTINE run_climate_model_matrix_PI_LGM( mesh, ice, SMB, climate, region_name, grid_smooth)
-  !   ! Use CO2 (either prescribed or inversely modelled) to force the 2-snapshot (PI-LGM) climate matrix (Berends et al., 2018)
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                INTENT(IN)    :: ice
-  !   TYPE(type_SMB_model),                INTENT(IN)    :: SMB
-  !   TYPE(type_climate_model),            INTENT(INOUT) :: climate
-  !   CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-  !   TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
-
-  !   ! Local variables:
-  !   INTEGER                                            :: vi,m
-
-  !   ! Use the (CO2 + absorbed insolation)-based interpolation scheme for temperature
-  !   CALL run_climate_model_matrix_PI_LGM_temperature( mesh, ice, SMB, climate, region_name, grid_smooth)
-
-  !   ! Use the (CO2 + ice-sheet geometry)-based interpolation scheme for precipitation
-  !   CALL run_climate_model_matrix_PI_LGM_precipitation( mesh, ice, climate, region_name, grid_smooth)
-
-  !   ! Safety checks
-  !   DO vi = mesh%vi1, mesh%vi2
-  !   DO m = 1, 12
-  !     IF (climate%applied%T2m( vi,m) < 150._dp) THEN
-  !       WRITE(0,*) ' WARNING - run_climate_model_matrix_PI_LGM: excessively low temperatures (<150K) detected!'
-  !     ELSEIF (climate%applied%T2m( vi,m) < 0._dp) THEN
-  !       WRITE(0,*) ' ERROR - run_climate_model_matrix_PI_LGM: negative temperatures (<0K) detected!'
-  !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !     ELSEIF (climate%applied%T2m( vi,m) /= climate%applied%T2m( vi,m)) THEN
-  !       WRITE(0,*) ' ERROR - run_climate_model_matrix_PI_LGM: NaN temperatures  detected!'
-  !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !     ELSEIF (climate%applied%Precip( vi,m) <= 0._dp) THEN
-  !       WRITE(0,*) ' ERROR - run_climate_model_matrix_PI_LGM: zero/negative precipitation detected!'
-  !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !     ELSEIF (climate%applied%Precip( vi,m) /= climate%applied%Precip( vi,m)) THEN
-  !       WRITE(0,*) ' ERROR - run_climate_model_matrix_PI_LGM: NaN precipitation  detected!'
-  !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !     END IF
-  !   END DO
-  !   END DO
-  !   CALL sync
-
-  ! END SUBROUTINE run_climate_model_matrix_PI_LGM
-!   SUBROUTINE run_climate_model_matrix_PI_LGM_temperature( mesh, ice, SMB, climate, region_name, grid_smooth)
-!     ! The (CO2 + absorbed insolation)-based matrix interpolation for temperature, from Berends et al. (2018)
-
-!     IMPLICIT NONE
-
-!     ! In/output variables:
-!     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-!     TYPE(type_ice_model),                INTENT(IN)    :: ice
-!     TYPE(type_SMB_model),                INTENT(IN)    :: SMB
-!     TYPE(type_climate_model),            INTENT(INOUT) :: climate
-!     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-!     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
-
-!     ! Local variables:
-!     INTEGER                                            :: vi,m
-!     REAL(dp)                                           :: CO2, w_CO2
-!     REAL(dp), DIMENSION(:    ), POINTER                ::  w_ins,  w_ins_smooth,  w_ice,  w_tot
-!     INTEGER                                            :: ww_ins, ww_ins_smooth, ww_ice, ww_tot
-!     REAL(dp)                                           :: w_ins_av
-!     REAL(dp), DIMENSION(:,:  ), POINTER                :: T_ref_GCM
-!     REAL(dp), DIMENSION(:    ), POINTER                :: Hs_ref_GCM, lambda_ref_GCM
-!     INTEGER                                            :: wT_ref_GCM, wHs_ref_GCM, wlambda_ref_GCM
-
-!     REAL(dp), PARAMETER                                :: w_cutoff = 0.25_dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
-!     REAL(dp), PARAMETER                                :: P_offset = 0.008_dp       ! Normalisation term in precipitation anomaly to avoid divide-by-nearly-zero
-
-!     ! Allocate shared memory
-!     CALL allocate_shared_dp_1D( mesh%nV    , w_ins,          ww_ins         )
-!     CALL allocate_shared_dp_1D( mesh%nV    , w_ins_smooth,   ww_ins_smooth  )
-!     CALL allocate_shared_dp_1D( mesh%nV    , w_ice,          ww_ice         )
-!     CALL allocate_shared_dp_1D( mesh%nV    , w_tot,          ww_tot         )
-!     CALL allocate_shared_dp_2D( mesh%nV, 12, T_ref_GCM,      wT_ref_GCM     )
-!     CALL allocate_shared_dp_1D( mesh%nV    , Hs_ref_GCM,     wHs_ref_GCM    )
-!     CALL allocate_shared_dp_1D( mesh%nV    , lambda_ref_GCM, wlambda_ref_GCM)
-
-!     ! Find CO2 interpolation weight (use either prescribed or modelled CO2)
-!     ! =====================================================================
-
-!     IF (C%choice_forcing_method == 'CO2_direct') THEN
-!       CO2 = forcing%CO2_obs
-!     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
-!       CO2 = forcing%CO2_mod
-!     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
-!       CO2 = 0._dp
-!       WRITE(0,*) '  ERROR - run_climate_model_matrix_PI_LGM must only be called with the correct forcing method, check your code!'
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     ELSE
-!       CO2 = 0._dp
-!       WRITE(0,*) '  ERROR - choice_forcing_method "', C%choice_forcing_method, '" not implemented in run_climate_model_matrix_PI_LGM!'
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     END IF
-
-!     w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - 190._dp) / (280._dp - 190._dp) ))   ! Berends et al., 2018 - Eq. 1
-
-!     ! Find the interpolation weights based on absorbed insolation
-!     ! ===========================================================
-
-!     ! Calculate modelled absorbed insolation
-!     climate%applied%I_abs( mesh%vi1:mesh%vi2) = 0._dp
-!     DO vi = mesh%vi1, mesh%vi2
-!     DO m = 1, 12
-!       climate%applied%I_abs( vi) = climate%applied%I_abs( vi) + climate%applied%Q_TOA( vi,m) * (1._dp - SMB%Albedo( vi,m))  ! Berends et al., 2018 - Eq. 2
-!     END DO
-!     END DO
-!     CALL sync
-
-!     ! Calculate weighting field
-!     DO vi = mesh%vi1, mesh%vi2
-!       w_ins( vi) = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (    climate%applied%I_abs( vi) -     climate%GCM_LGM%I_abs( vi)) / &  ! Berends et al., 2018 - Eq. 3
-!                                                           (    climate%GCM_PI%I_abs(  vi) -     climate%GCM_LGM%I_abs( vi)) ))
-!     END DO
-!     CALL sync
-!     w_ins_av     = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (SUM(climate%applied%I_abs)     - SUM(climate%GCM_LGM%I_abs)    ) / &
-!                                                           (SUM(climate%GCM_PI%I_abs )     - SUM(climate%GCM_LGM%I_abs)    ) ))
-
-!     ! Smooth the weighting field
-!     w_ins_smooth( mesh%vi1:mesh%vi2) = w_ins( mesh%vi1:mesh%vi2)
-!     CALL smooth_Gaussian_2D( mesh, grid_smooth, w_ins_smooth, 200000._dp)
-!     !CALL smooth_Shepard_2D( grid, w_ins_smooth, 200000._dp)
-
-!     ! Combine unsmoothed, smoothed, and regional average weighting fields (Berends et al., 2018, Eq. 4)
-!     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-!       w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins(        mesh%vi1:mesh%vi2) + &
-!                                  3._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + &
-!                                  3._dp * w_ins_av) / 7._dp
-!     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
-!       w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + &
-!                                  6._dp * w_ins_av) / 7._dp
-!     END IF
-
-!     ! Combine interpolation weights from absorbed insolation and CO2 into the final weights fields
-!     IF     (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-!       w_tot( mesh%vi1:mesh%vi2) = (        w_CO2 + w_ice( mesh%vi1:mesh%vi2)) / 2._dp  ! Berends et al., 2018 - Eq. 5
-!     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
-!       w_tot( mesh%vi1:mesh%vi2) = (3._dp * w_CO2 + w_ice( mesh%vi1:mesh%vi2)) / 4._dp  ! Berends et al., 2018 - Eq. 9
-!     END IF
-
-!     ! Interpolate between the GCM snapshots
-!     ! =====================================
-
-!     DO vi = mesh%vi1, mesh%vi2
-
-!       ! Find matrix-interpolated orography, lapse rate, and temperature
-!       Hs_ref_GCM(     vi  ) = (w_tot( vi) *  climate%GCM_PI%Hs_ref( vi  )                               ) + ((1._dp - w_tot( vi)) * climate%GCM_LGM%Hs_ref( vi  ))  ! Berends et al., 2018 - Eq. 8
-!       lambda_ref_GCM( vi  ) = (w_tot( vi) *  climate%GCM_PI%lambda( vi  )                               ) + ((1._dp - w_tot( vi)) * climate%GCM_LGM%lambda( vi  ))  ! Not listed in the article, shame on me!
-!       T_ref_GCM(      vi,:) = (w_tot( vi) * (climate%GCM_PI%T2m(    vi,:) - climate%GCM_bias_T2m( vi,:))) + ((1._dp - w_tot( vi)) * climate%GCM_LGM%T2m(    vi,:))  ! Berends et al., 2018 - Eq. 6
-!      !T_ref_GCM(      vi,:) = (w_tot( vi) *  climate%GCM_PI%T2m(    vi,:)                               ) + ((1._dp - w_tot( vi)) * climate%GCM_LGM%T2m(    vi,:))  ! Berends et al., 2018 - Eq. 6
-
-!       ! Adapt temperature to model orography using matrix-derived lapse-rate
-!       DO m = 1, 12
-!         climate%applied%T2m( vi,m) = T_ref_GCM( vi,m) - lambda_ref_GCM( vi) * (ice%Hs_a( vi) - Hs_ref_GCM( vi))  ! Berends et al., 2018 - Eq. 11
-!       END DO
-
-! !      ! Correct for GCM bias
-! !      climate%applied%T2m( vi,:) = climate%applied%T2m( vi,:) - climate%GCM_bias_T2m( vi,:)
-
-!     END DO
-!     CALL sync
-
-!     ! Clean up after yourself
-!     CALL deallocate_shared( ww_ins)
-!     CALL deallocate_shared( ww_ins_smooth)
-!     CALL deallocate_shared( ww_ice)
-!     CALL deallocate_shared( ww_tot)
-!     CALL deallocate_shared( wT_ref_GCM)
-!     CALL deallocate_shared( wHs_ref_GCM)
-!     CALL deallocate_shared( wlambda_ref_GCM)
-
-!   END SUBROUTINE run_climate_model_matrix_PI_LGM_temperature
-!   SUBROUTINE run_climate_model_matrix_PI_LGM_precipitation( mesh, ice, climate, region_name, grid_smooth)
-!     ! The (CO2 + ice geometry)-based matrix interpolation for precipitation, from Berends et al. (2018)
-!     ! For NAM and EAS, this is based on local ice geometry and uses the Roe&Lindzen precipitation model for downscaling.
-!     ! For GRL and ANT, this is based on total ice volume,  and uses the simple CC   precipitation model for downscaling.
-!     ! The rationale for this difference is that glacial-interglacial differences in ice geometry are much more
-!     ! dramatic in NAM and EAS than they are in GRL and ANT.
-
-!     IMPLICIT NONE
-
-!     ! In/output variables:
-!     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-!     TYPE(type_ice_model),                INTENT(IN)    :: ice
-!     TYPE(type_climate_model),            INTENT(INOUT) :: climate
-!     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-!     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
-
-!     ! Local variables:
-!     INTEGER                                            :: vi
-!     REAL(dp), DIMENSION(:    ), POINTER                ::  w_PD,  w_LGM
-!     INTEGER                                            :: ww_PD, ww_LGM
-!     REAL(dp)                                           :: w_tot
-!     REAL(dp), DIMENSION(:,:  ), POINTER                :: T_ref_GCM, P_ref_GCM
-!     REAL(dp), DIMENSION(:    ), POINTER                :: lambda_GCM, Hs_GCM, Hs_ref_GCM
-!     INTEGER                                            :: wT_ref_GCM, wP_ref_GCM, wlambda_GCM, wHs_GCM, wHs_ref_GCM
-
-!     REAL(dp), PARAMETER                                :: w_cutoff = 0.25_dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
-
-!     ! Allocate shared memory
-!     CALL allocate_shared_dp_1D( mesh%nV    , w_PD,           ww_PD          )
-!     CALL allocate_shared_dp_1D( mesh%nV    , w_LGM,          ww_LGM         )
-!     CALL allocate_shared_dp_2D( mesh%nV, 12, T_ref_GCM,      wT_ref_GCM     )
-!     CALL allocate_shared_dp_2D( mesh%nV, 12, P_ref_GCM,      wP_ref_GCM     )
-!     CALL allocate_shared_dp_1D( mesh%nV    , lambda_GCM,     wlambda_GCM    )
-!     CALL allocate_shared_dp_1D( mesh%nV    , Hs_GCM,         wHs_GCM        )
-!     CALL allocate_shared_dp_1D( mesh%nV    , Hs_ref_GCM,     wHs_ref_GCM    )
-
-!     ! Calculate interpolation weights based on ice geometry
-!     ! =====================================================
-
-!     ! First calculate the total ice volume term (second term in the equation)
-!     w_tot = MAX(-w_cutoff, MIN(1._dp + w_cutoff, (SUM(ice%Hi_a) - SUM(climate%GCM_PI%Hi)) / (SUM(climate%GCM_LGM%Hi) - SUM(climate%GCM_PI%Hi)) ))
-
-!     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-!       ! Combine total + local ice thicness; Berends et al., 2018, Eq. 12
-
-!       ! Then the local ice thickness term
-!       DO vi = mesh%vi1, mesh%vi2
-
-!         IF (climate%GCM_PI%Hi( vi) == 0.1_dp) THEN
-!           IF (climate%GCM_LGM%Hi( vi) == 0.1_dp) THEN
-!             ! No ice in any GCM state. Use only total ice volume.
-!             w_LGM( vi) = MAX(-0.25_dp, MIN(1.25_dp, w_tot ))
-!             w_PD(  vi) = 1._dp - w_LGM( vi)
-!           ELSE
-!             ! No ice at PD, ice at LGM. Linear inter- / extrapolation.
-!             w_LGM( vi) = MAX(-0.25_dp, MIN(1.25_dp, ((ice%Hi_a( vi) - 0.1_dp) / (climate%GCM_LGM%Hi( vi) - 0.1_dp)) * w_tot ))
-!             w_PD(  vi) = 1._dp - w_LGM( vi)
-!           END IF
-!         ELSE
-!           ! Ice in both GCM states.  Linear inter- / extrapolation
-!           w_LGM( vi) = MAX(-0.25_dp, MIN(1.25_dp, ((ice%Hi_a( vi) - 0.1_dp) / (climate%GCM_LGM%Hi( vi) - 0.1_dp)) * w_tot ))
-!           w_PD(  vi) = 1._dp - w_LGM( vi)
-!         END IF
-
-!       END DO
-!       CALL sync
-
-!       w_LGM( mesh%vi1:mesh%vi2) = w_LGM( mesh%vi1:mesh%vi2) * w_tot
-
-!       ! Smooth the weighting field
-!       CALL smooth_Gaussian_2D( mesh, grid_smooth, w_LGM, 200000._dp)
-!       !CALL smooth_Shepard_2D( grid, w_LGM, 200000._dp)
-
-!       w_PD( mesh%vi1:mesh%vi2) = 1._dp - w_LGM( mesh%vi1:mesh%vi2)
-
-!     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
-!       ! Use only total ice volume and CO2; Berends et al., 2018, Eq. 13
-
-!       w_LGM( mesh%vi1:mesh%vi2) = w_tot
-!       w_PD(  mesh%vi1:mesh%vi2) = 1._dp - w_LGM( mesh%vi1:mesh%vi2)
-
-!     END IF
-
-!     ! Interpolate the GCM snapshots
-!     ! =============================
-
-!     DO vi = mesh%vi1, mesh%vi2
-
-!       T_ref_GCM(  vi,:) =      (w_PD( vi) *     (climate%GCM_PI%T2m(    vi,:) - climate%GCM_bias_T2m(   vi,:)))  + (w_LGM( vi) *     climate%GCM_LGM%T2m(    vi,:))   ! Berends et al., 2018 - Eq. 6
-!       lambda_GCM( vi  ) =      (w_PD( vi) *      climate%GCM_PI%lambda( vi  )                                 )  + (w_LGM( vi) *     climate%GCM_LGM%lambda( vi  ))
-!       Hs_GCM(     vi  ) =      (w_PD( vi) *      climate%GCM_PI%Hs(     vi  )                                 )  + (w_LGM( vi) *     climate%GCM_LGM%Hs(     vi  ))   ! Berends et al., 2018 - Eq. 8
-!       Hs_ref_GCM( vi  ) =      (w_PD( vi) *      climate%GCM_PI%Hs_ref( vi  )                                 )  + (w_LGM( vi) *     climate%GCM_LGM%Hs_ref( vi  ))
-!      !P_ref_GCM(  vi,:) = EXP( (w_PD( vi) *  LOG(climate%GCM_PI%Precip( vi,:) / climate%GCM_bias_Precip( vi,:))) + (w_LGM( vi) * LOG(climate%GCM_LGM%Precip( vi,:)))) ! Berends et al., 2018 - Eq. 7
-
-!       P_ref_GCM(  vi,:) = EXP( (w_PD( vi) *  LOG(climate%GCM_PI%Precip( vi,:)                                  )) + (w_LGM( vi) * LOG(climate%GCM_LGM%Precip( vi,:)))) ! Berends et al., 2018 - Eq. 7
-!       P_ref_GCM(  vi,:) = P_ref_GCM( vi,:) / (1._dp + (w_PD( vi) * (climate%GCM_bias_Precip( vi,:) - 1._dp)))
-
-!       P_ref_GCM(  vi,:) = EXP( (w_PD( vi) *  LOG(climate%GCM_PI%Precip( vi,:)                                  )) + (w_LGM( vi) * LOG(climate%GCM_LGM%Precip( vi,:)))) ! Berends et al., 2018 - Eq. 7
-
-! !      ! Correct for GCM bias
-! !      P_ref_GCM( vi,:) = P_ref_GCM( vi,:) / climate%GCM_bias_Precip( vi,:)
-
-!     END DO
-!     CALL sync
-
-!     ! Downscale precipitation from the coarse-resolution reference
-!     ! GCM orography to the fine-resolution ice-model orography
-!     ! ========================================================
-
-!     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-!       ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
-!       CALL adapt_precip_Roe( mesh, ice%Hs_a, Hs_GCM, Hs_ref_GCM, lambda_GCM, T_ref_GCM, P_ref_GCM, climate%PD_obs%Wind_LR, climate%PD_obs%Wind_DU, climate%applied%Precip)
-!     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
-!       ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
-!       CALL adapt_precip_CC( mesh, ice%Hs_a, Hs_ref_GCM, T_ref_GCM, P_ref_GCM, climate%applied%Precip, region_name)
-!     END IF
-
-!     ! Clean up after yourself
-!     CALL deallocate_shared( ww_PD)
-!     CALL deallocate_shared( ww_LGM)
-!     CALL deallocate_shared( wT_ref_GCM)
-!     CALL deallocate_shared( wP_ref_GCM)
-!     CALL deallocate_shared( wlambda_GCM)
-!     CALL deallocate_shared( wHs_GCM)
-!     CALL deallocate_shared( wHs_ref_GCM)
-
-!   END SUBROUTINE run_climate_model_matrix_PI_LGM_precipitation
-
-  ! ! Two different parameterised precipitation models:
-  ! ! - a simply Clausius-Clapeyron-based method, used for GRL and ANT
-  ! ! - the Roe & Lindzen temperature/orography-based model, used for NAM and EAS
-  ! SUBROUTINE adapt_precip_CC(  mesh, Hs, Hs_ref_GCM, T_ref_GCM, P_ref_GCM, Precip_GCM, region_name)
-
-  !   USE parameters_module, ONLY: T0
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: Hs              ! Model orography (m)
-  !   REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: Hs_ref_GCM      ! Reference orography (m)           - total ice-weighted
-  !   REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: T_ref_GCM       ! Reference temperature (K)         - total ice-weighted
-  !   REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: P_ref_GCM       ! Reference precipitation (m/month) - total ice-weighted
-  !   CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-
-  !   ! Output variables:
-  !   REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: Precip_GCM      ! Climate matrix precipitation
-
-  !   ! Local variables
-  !   INTEGER                                            :: vi,m
-  !   REAL(dp), DIMENSION(:,:  ), POINTER                ::  T_inv,  T_inv_ref
-  !   INTEGER                                            :: wT_inv, wT_inv_ref
-
-  !   ! Allocate shared memory
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, T_inv,     wT_inv    )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, T_inv_ref, wT_inv_ref)
-
-  !   ! Calculate inversion layer temperatures
-  !   DO vi = mesh%vi1, mesh%vi2
-  !   DO m = 1, 12
-  !     T_inv_ref( vi,m) = 88.9_dp + 0.67_dp *  T_ref_GCM( vi,m)
-  !     T_inv(     vi,m) = 88.9_dp + 0.67_dp * (T_ref_GCM( vi,m) - 0.008_dp * (Hs( vi) - Hs_ref_GCM( vi)))
-  !   END DO
-  !   END DO
-  !   CALL sync
-
-  !   IF     (region_name == 'GRL') THEN
-  !     ! Method of Jouzel and Merlivat (1984), see equation (4.82) in Huybrechts (1992)
-
-  !     DO vi = mesh%vi1, mesh%vi2
-  !     DO m = 1, 12
-  !       Precip_GCM( vi,m) = P_ref_GCM( vi,m) * 1.04**(T_inv( vi,m) - T_inv_ref( vi,m))
-  !     END DO
-  !     END DO
-  !     CALL sync
-
-  !   ELSEIF (region_name == 'ANT') THEN
-  !     ! As with Lorius/Jouzel method (also Huybrechts, 2002
-
-  !     DO vi = mesh%vi1, mesh%vi2
-  !     DO m = 1, 12
-  !       Precip_GCM( vi,m) = P_ref_GCM( vi,m) * (T_inv_ref( vi,m) / T_inv( vi,m))**2 * EXP(22.47_dp * (T0 / T_inv_ref( vi,m) - T0 / T_inv( vi,m)))
-  !     END DO
-  !     END DO
-  !     CALL sync
-
-  !   ELSE
-  !     IF (par%master) WRITE(0,*) '  ERROR - adapt_precip_CC should only be used for Greenland and Antarctica!'
-  !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !   END IF
-
-  !   ! Clean up after yourself
-  !   CALL deallocate_shared( wT_inv)
-  !   CALL deallocate_shared( wT_inv_ref)
-
-  ! END SUBROUTINE adapt_precip_CC
-  ! SUBROUTINE adapt_precip_Roe( mesh, Hs, Hs_GCM, Hs_ref_GCM, lambda_GCM, T_ref_GCM, P_ref_GCM, Wind_LR, Wind_DU, Precip_GCM)
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: Hs
-  !   REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: Hs_GCM
-  !   REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: Hs_ref_GCM
-  !   REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: lambda_GCM
-  !   REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: T_ref_GCM
-  !   REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: P_ref_GCM
-  !   REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Wind_LR
-  !   REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Wind_DU
-  !   REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: Precip_GCM
-
-  !   ! Local variables:
-  !   INTEGER                                            :: vi,m
-  !   REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx,  dHs_dy,  dHs_dx_GCM,  dHs_dy_GCM
-  !   INTEGER                                            :: wdHs_dx, wdHs_dy, wdHs_dx_GCM, wdHs_dy_GCM
-  !   REAL(dp), DIMENSION(:,:  ), POINTER                ::  T_mod,  P_RL_ref_GCM,  P_RL_mod,  dP_RL
-  !   INTEGER                                            :: wT_mod, wP_RL_ref_GCM, wP_RL_mod, wdP_RL
-
-  !   ! Allocate shared memory
-  !   CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx    ,     wdHs_dx        )
-  !   CALL allocate_shared_dp_1D( mesh%nV    , dHs_dy    ,     wdHs_dy        )
-  !   CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx_GCM,     wdHs_dx_GCM    )
-  !   CALL allocate_shared_dp_1D( mesh%nV    , dHs_dy_GCM,     wdHs_dy_GCM    )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, T_mod,          wT_mod         )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, P_RL_ref_GCM,   wP_RL_ref_GCM  )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, P_RL_mod,       wP_RL_mod      )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, dP_RL,          wdP_RL         )
-
-  !   ! Calculate surface slopes for both geometries
-  !   CALL ddx_a_to_a_2D( mesh, Hs    , dHs_dx    )
-  !   CALL ddy_a_to_a_2D( mesh, Hs    , dHs_dy    )
-  !   CALL ddx_a_to_a_2D( mesh, Hs_GCM, dHs_dx_GCM)
-  !   CALL ddy_a_to_a_2D( mesh, Hs_GCM, dHs_dy_GCM)
-
-  !   DO vi = mesh%vi1, mesh%vi2
-  !   DO m = 1, 12
-
-  !     T_mod( vi,m) = T_ref_GCM( vi,m) - lambda_GCM( vi) * (Hs( vi) - Hs_ref_GCM( vi))
-
-  !     ! Calculate RL precipitation for the matrix-interpolated GCM reference state
-  !     CALL precipitation_model_Roe( T_ref_GCM( vi,m), dHs_dx_GCM( vi), dHs_dy_GCM( vi), Wind_LR( vi,m), Wind_DU( vi,m), P_RL_ref_GCM( vi,m))
-
-  !     ! Calculate RL precipitation for the actual ice model state
-  !     CALL precipitation_model_Roe( T_mod(     vi,m), dHs_dx(     vi), dHs_dy(     vi), Wind_LR( vi,m), Wind_DU( vi,m), P_RL_mod(     vi,m))
-
-  !     ! Ratio between those two
-  !     dP_RL( vi,m) = MIN( 2._dp, P_RL_mod( vi,m) / P_RL_ref_GCM( vi,m))
-
-  !     ! Applied model precipitation = (matrix-interpolated GCM reference precipitation) * RL ratio
-  !     Precip_GCM( vi,m) = P_ref_GCM( vi,m) * dP_RL( vi,m)
-
-  !   END DO
-  !   END DO
-  !   CALL sync
-
-  !   ! Clean up after yourself
-  !   CALL deallocate_shared( wdHs_dx)
-  !   CALL deallocate_shared( wdHs_dy)
-  !   CALL deallocate_shared( wdHs_dx_GCM)
-  !   CALL deallocate_shared( wdHs_dy_GCM)
-  !   CALL deallocate_shared( wT_mod)
-  !   CALL deallocate_shared( wP_RL_ref_GCM)
-  !   CALL deallocate_shared( wP_RL_mod)
-  !   CALL deallocate_shared( wdP_RL)
-
-  ! END SUBROUTINE adapt_precip_Roe
-  ! SUBROUTINE precipitation_model_Roe( T2m, dHs_dx, dHs_dy, Wind_LR, Wind_DU, Precip)
-  !   ! Precipitation model of Roe (J. Glac, 2002), integration from Roe and Lindzen (J. Clim. 2001)
-
-  !   USE parameters_module, ONLY: T0, pi, sec_per_year
-
-  !   ! In/output variables:
-  !   REAL(dp),                            INTENT(IN)    :: T2m                  ! 2-m air temperature [K]
-  !   REAL(dp),                            INTENT(IN)    :: dHs_dx               ! Surface slope in the x-direction [m/m]
-  !   REAL(dp),                            INTENT(IN)    :: dHs_dy               ! Surface slope in the y-direction [m/m]
-  !   REAL(dp),                            INTENT(IN)    :: Wind_LR              ! Wind speed    in the x-direction [m/s]
-  !   REAL(dp),                            INTENT(IN)    :: Wind_DU              ! Wind speed    in the y-direction [m/s]
-  !   REAL(dp),                            INTENT(OUT)   :: Precip               ! Modelled precipitation
-
-  !   ! Local variables:
-  !   REAL(dp)                                           :: upwind_slope         ! Upwind slope
-  !   REAL(dp)                                           :: E_sat                ! Saturation vapour pressure as function of temperature [Pa]
-  !   REAL(dp)                                           :: x0                   ! Integration parameter x0 [m s-1]
-  !   REAL(dp)                                           :: err_in,err_out
-
-  !   REAL(dp), PARAMETER                                :: e_sat0  = 611.2_dp   ! Saturation vapour pressure at 273.15 K [Pa]
-  !   REAL(dp), PARAMETER                                :: c_one   = 17.67_dp   ! Constant c1 []
-  !   REAL(dp), PARAMETER                                :: c_two   = 243.5_dp   ! Constant c2 [Celcius]
-
-  !   REAL(dp), PARAMETER                                :: a_par   = 2.5E-11_dp ! Constant a [m2 s  kg-1] (from Roe et al., J. Clim. 2001)
-  !   REAL(dp), PARAMETER                                :: b_par   = 5.9E-09_dp ! Constant b [m  s2 kg-1] (from Roe et al., J. Clim. 2001)
-  !   REAL(dp), PARAMETER                                :: alpha   = 100.0_dp   ! Constant alpha [s m-1]
-
-  !   ! Calculate the upwind slope
-  !   upwind_slope = MAX(0._dp, Wind_LR * dHs_dx + Wind_DU * dHs_dy)
-
-  !   ! Calculate the saturation vapour pressure E_sat:
-  !   E_sat = e_sat0 * EXP( c_one * (T2m - T0) / (c_two + T2m - T0) )
-
-  !   ! Calculate integration parameter x0 = a/b + w (with w = wind times slope)
-  !   x0 = a_par / b_par + upwind_slope
-
-  !   ! Calculate the error function (2nd term on the r.h.s.)
-  !   err_in = alpha * ABS(x0)
-  !   CALL error_function(err_in,err_out)
-
-  !   ! Calculate precipitation rate as in Appendix of Roe et al. (J. Clim, 2001)
-  !   Precip = ( b_par * E_sat ) * ( x0 / 2._dp + x0**2 * err_out / (2._dp * ABS(x0)) + &
-  !                                        EXP (-alpha**2 * x0**2) / (2._dp * SQRT(pi) * alpha) ) * sec_per_year
-
-  ! END SUBROUTINE precipitation_model_Roe
-
-  ! Temperature parameterisation for the EISMINT experiments
-  ! SUBROUTINE EISMINT_climate( mesh, ice, climate, time)
-  !   ! Simple lapse-rate temperature parameterisation
-
-  !   USe parameters_module,           ONLY: pi
-
-  !   IMPLICIT NONE
-
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                INTENT(IN)    :: ice
-  !   TYPE(type_climate_model),            INTENT(INOUT) :: climate
-  !   REAL(dp),                            INTENT(IN)    :: time
-
-  !   REAL(dp), PARAMETER                                :: lambda = -0.010_dp
-
-  !   INTEGER                                            :: vi, m
-  !   REAL(dp)                                           :: dT_lapse, d, dT
-
-  !   ! Set precipitation to zero - SMB is parameterised anyway...
-  !   climate%applied%Precip(mesh%vi1:mesh%vi2,:) = 0._dp
-
-  !   ! Surface temperature for fixed or moving margin experiments
-  !   IF     (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-  !           C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-  !           C%choice_benchmark_experiment == 'EISMINT_3') THEN
-  !     ! Moving margin
-
-  !     DO vi = mesh%vi1, mesh%vi2
-
-  !       dT_lapse = ice%Hs_a(vi) * lambda
-
-  !       DO m = 1, 12
-  !         climate%applied%T2m(vi,m) = 270._dp + dT_lapse
-  !       END DO
-  !     END DO
-
-  !   ELSEIF (C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-  !           C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-  !           C%choice_benchmark_experiment == 'EISMINT_6') THEN
-  !     ! Fixed margin
-
-  !     DO vi = mesh%vi1, mesh%vi2
-  !       d = MAX( ABS(mesh%V(vi,1)/1000._dp), ABS(mesh%V(vi,2)/1000._dp))
-
-  !       DO m = 1, 12
-  !         climate%applied%T2m(vi,m) = 239._dp + (8.0E-08_dp * d**3)
-  !       END DO
-  !     END DO
-
-  !   END IF
-  !   CALL sync
-
-  !   ! Glacial cycles
-  !   IF     (C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-  !           C%choice_benchmark_experiment == 'EISMINT_5') THEN
-  !     IF (time > 0._dp) THEN
-  !       dT = 10._dp * SIN(2 * pi * time / 20000._dp)
-  !       DO vi = mesh%vi1, mesh%vi2
-  !         climate%applied%T2m(vi,:) = climate%applied%T2m(vi,:) + dT
-  !       END DO
-  !     END IF
-  !   ELSEIF (C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-  !           C%choice_benchmark_experiment == 'EISMINT_6') THEN
-  !     IF (time > 0._dp) THEN
-  !       dT = 10._dp * SIN(2 * pi * time / 40000._dp)
-  !       DO vi = mesh%vi1, mesh%vi2
-  !         climate%applied%T2m(vi,:) = climate%applied%T2m(vi,:) + dT
-  !       END DO
-  !     END IF
-  !   END IF
-  !   CALL sync
-
-  ! END SUBROUTINE EISMINT_climate
-
-  ! SUBROUTINE allocate_subclimate( mesh, subclimate, name)
-  !   ! Allocate shared memory for a "subclimate" (PD observed, GCM snapshot or applied climate) on the mesh
-
-  !   IMPLICIT NONE
-
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_subclimate_region),        INTENT(INOUT) :: subclimate
-  !   CHARACTER(LEN=*),                    INTENT(IN)    :: name
-
-  !   subclimate%name = name
-
-  !   ! If this snapshot is not used, don't allocate any memory
-  !   IF (name == 'none') RETURN
-
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%T2m,            subclimate%wT2m           )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%Precip,         subclimate%wPrecip        )
-  !   CALL allocate_shared_dp_1D( mesh%nV,     subclimate%Hs_ref,         subclimate%wHs_ref        )
-  !   CALL allocate_shared_dp_1D( mesh%nV,     subclimate%Hi,             subclimate%wHi            )
-  !   CALL allocate_shared_dp_1D( mesh%nV,     subclimate%Hb,             subclimate%wHb            )
-  !   CALL allocate_shared_dp_1D( mesh%nV,     subclimate%Hs,             subclimate%wHs            )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%Wind_WE,        subclimate%wWind_WE       )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%Wind_SN,        subclimate%wWind_SN       )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%Wind_LR,        subclimate%wWind_LR       )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%Wind_DU,        subclimate%wWind_DU       )
-
-  !   CALL allocate_shared_dp_0D(              subclimate%CO2,            subclimate%wCO2           )
-  !   CALL allocate_shared_dp_0D(              subclimate%orbit_time,     subclimate%worbit_time    )
-  !   CALL allocate_shared_dp_0D(              subclimate%orbit_ecc,      subclimate%worbit_ecc     )
-  !   CALL allocate_shared_dp_0D(              subclimate%orbit_obl,      subclimate%worbit_obl     )
-  !   CALL allocate_shared_dp_0D(              subclimate%orbit_pre,      subclimate%worbit_pre     )
-  !   CALL allocate_shared_dp_0D(              subclimate%sealevel,       subclimate%wsealevel      )
-
-  !   CALL allocate_shared_dp_1D( mesh%nV,     subclimate%lambda,         subclimate%wlambda        )
-
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%Q_TOA,          subclimate%wQ_TOA         )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%Albedo,         subclimate%wAlbedo        )
-  !   CALL allocate_shared_dp_1D( mesh%nV,     subclimate%I_abs,          subclimate%wI_abs         )
-  !   CALL allocate_shared_dp_0D(              subclimate%Q_TOA_jun_65N,  subclimate%wQ_TOA_jun_65N )
-  !   CALL allocate_shared_dp_0D(              subclimate%Q_TOA_jan_80S,  subclimate%wQ_TOA_jan_80S )
-
-  !   CALL allocate_shared_dp_0D(              subclimate%T_ocean_mean,   subclimate%wT_ocean_mean  )
-
-  ! END SUBROUTINE allocate_subclimate
-  ! SUBROUTINE initialise_climate_model_GCM_bias( mesh, climate)
-  !   ! Calculate the GCM climate bias
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_climate_model),            INTENT(INOUT) :: climate
-
-  !   ! Local variables:
-  !   INTEGER                                            :: vi
-  !   REAL(dp), PARAMETER                                :: P_offset = 0.008_dp       ! Normalisation term in precipitation anomaly to avoid divide-by-nearly-zero
-
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, climate%GCM_bias_T2m,    climate%wGCM_bias_T2m   )
-  !   CALL allocate_shared_dp_2D( mesh%nV, 12, climate%GCM_bias_Precip, climate%wGCM_bias_Precip)
-
-  !   DO vi = mesh%vi1, mesh%vi2
-
-  !     climate%GCM_bias_T2m(    vi,:) =  climate%GCM_PI%T2m(    vi,:)             -  climate%PD_obs%T2m(    vi,:)
-  !     climate%GCM_bias_Precip( vi,:) = (climate%GCM_PI%Precip( vi,:) + P_offset) / (climate%PD_obs%Precip( vi,:) + P_offset)
-
-  !   END DO
-  !   CALL sync
-
-  ! END SUBROUTINE initialise_climate_model_GCM_bias
-  ! SUBROUTINE initialise_subclimate_ICE5G_geometry( mesh, snapshot, refgeo_PD, ICE5G, ICE5G_PD, mask_noice)
-  !   ! Initialise the GCM snapshot's corresponding ICE5G geometry (which is available at higher resolution than from the GCM itself)
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_subclimate_region),        INTENT(INOUT) :: snapshot
-  !   TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
-  !   TYPE(type_ICE5G_timeframe),          INTENT(IN)    :: ICE5G
-  !   TYPE(type_ICE5G_timeframe),          INTENT(IN)    :: ICE5G_PD
-  !   INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
-
-  !   ! Local variables:
-  !   INTEGER                                            :: vi
-  !   REAL(dp), DIMENSION(:    ), POINTER                ::  Hi_ICE5G,  Hb_ICE5G,  Hb_ICE5G_PD,  mask_ice_ICE5G,  dHb_ICE5G
-  !   INTEGER                                            :: wHi_ICE5G, wHb_ICE5G, wHb_ICE5G_PD, wmask_ice_ICE5G, wdHb_ICE5G
-  !   TYPE(type_remapping_lonlat2mesh)                   :: map
-
-  !   ! Downscale the GCM snapshot from the (coarse) GCM geometry to the (fine) ISM geometry
-  !   ! Store the downscaled climate in temporary memory.
-  !   ! ====================================================================================
-
-  !   ! Allocate temporary shared memory
-  !   CALL allocate_shared_dp_1D(     mesh%nV, Hi_ICE5G,       wHi_ICE5G      )
-  !   CALL allocate_shared_dp_1D(     mesh%nV, Hb_ICE5G,       wHb_ICE5G      )
-  !   CALL allocate_shared_dp_1D(     mesh%nV, Hb_ICE5G_PD,    wHb_ICE5G_PD   )
-  !   CALL allocate_shared_dp_1D(     mesh%nV, mask_ice_ICE5G, wmask_ice_ICE5G)
-  !   CALL allocate_shared_dp_1D(     mesh%nV, dHb_ICE5G,      wdHb_ICE5G     )
-
-  !   ! Get mapping arrays
-  !   CALL create_remapping_arrays_lonlat_mesh( mesh, ICE5G%grid, map)
-
-  !   ! First, map the two ICE5G timeframes to the model grid
-  !   CALL map_lonlat2mesh_2D( mesh, map, ICE5G%Hi,       Hi_ICE5G)
-  !   CALL map_lonlat2mesh_2D( mesh, map, ICE5G%Hb,       Hb_ICE5G)
-  !   CALL map_lonlat2mesh_2D( mesh, map, ICE5G_PD%Hb,    Hb_ICE5G_PD)
-  !   CALL map_lonlat2mesh_2D( mesh, map, ICE5G%mask_ice, mask_ice_ICE5G)
-
-  !   ! Deallocate mapping arrays
-  !   CALL deallocate_remapping_arrays_lonlat_mesh( map)
-
-  !   ! Define sea level (no clear way to do this automatically)
-  !   snapshot%sealevel = 0._dp
-  !   IF      (ICE5G%time == 0._dp) THEN
-  !     snapshot%sealevel = 0._dp
-  !   ELSEIF (ICE5G%time == -120000._dp) THEN
-  !     snapshot%sealevel = -120._dp
-  !   ELSE
-  !     IF (par%master) WRITE(0,*) '   ERROR - need to define a sea level for ICE5G timeframe at t = ', ICE5G%time
-  !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !   END IF
-
-  !   ! Find the GCM and ISM geometry
-  !   DO vi = mesh%vi1, mesh%vi2
-
-  !     ! Calculate the ICE5G GIA bedrock deformation for this timeframe
-  !     dHb_ICE5G( vi) = Hb_ICE5G( vi) - Hb_ICE5G_PD( vi)
-
-  !     ! Define the ISM geometry as: PD bedrock + ICE5G GIA signal, ice surface equal to GCM ice surface, ice mask equal to ICE5G ice mask
-  !     ! (seems a little convoluted, but this is how it was done in ANICE2.1 and it works)
-
-  !     ! First, apply ICE5G GIA to high-resolution PD bedrock
-  !     snapshot%Hb( vi) = refgeo_PD%Hb( vi) + dHb_ICE5G( vi)
-
-  !     ! Where ICE5G says there's ice, set the surface equal to the (smooth) GCM surface
-  !     ! (this sort of solves the weird "block" structure of the ICE5G ice sheets)
-  !     IF (mask_ice_ICE5G( vi) > 0.5_dp) THEN
-  !       ! According to ICE5G, there's ice here.
-  !       snapshot%Hs( vi) = MAX( snapshot%Hs_ref( vi), snapshot%Hb( vi))
-  !       snapshot%Hi( vi) = MAX( 0._dp, snapshot%Hs( vi) - snapshot%Hb( vi))
-  !     ELSE
-  !       snapshot%Hs( vi) = MAX( snapshot%Hb( vi), snapshot%sealevel)
-  !       snapshot%Hi( vi) = 0._dp
-  !     END IF
-
-  !   END DO
-
-  !   ! Exception: remove unallowed ice
-  !   DO vi = mesh%vi1, mesh%vi2
-  !     IF (mask_noice( vi) == 1) THEN
-  !       snapshot%Hs( vi) = MAX( snapshot%Hb( vi), snapshot%sealevel)
-  !       snapshot%Hi( vi) = 0._dp
-  !     END IF
-  !   END DO
-
-  !   ! Clean up after yourself
-  !   CALL deallocate_shared( wHi_ICE5G)
-  !   CALL deallocate_shared( wHb_ICE5G)
-  !   CALL deallocate_shared( wHb_ICE5G_PD)
-  !   CALL deallocate_shared( wmask_ice_ICE5G)
-  !   CALL deallocate_shared( wdHb_ICE5G)
-
-  ! END SUBROUTINE initialise_subclimate_ICE5G_geometry
-  ! SUBROUTINE initialise_subclimate_spatially_variable_lapserate( mesh, grid_smooth, snapshot, snapshot_PI)
-  !   ! Calculate the spatially variable lapse-rate (for non-PI GCM snapshots; see Berends et al., 2018)
-  !   ! Only meaningful for snapshots where there is ice (LGM, M2_Medium, M2_Large),
-  !   ! and only intended for North America and Eurasia
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
-  !   TYPE(type_subclimate_region),        INTENT(INOUT) :: snapshot
-  !   TYPE(type_subclimate_region),        INTENT(IN)    :: snapshot_PI
-
-  !   ! Local variables:
-  !   INTEGER                                            :: vi,m
-  !   REAL(dp)                                           :: dT_mean_nonice
-  !   INTEGER                                            :: n_nonice, n_ice
-  !   REAL(dp)                                           :: lambda_mean_ice
-
-  !   REAL(dp), PARAMETER                                :: lambda_min = 0.002_dp
-  !   REAL(dp), PARAMETER                                :: lambda_max = 0.05_dp
-
-  !   ! Calculate the regional average temperature change outside of the ice sheet.
-  !   ! ===========================================================================
-
-  !   dT_mean_nonice = 0._dp
-  !   n_nonice       = 0
-  !   DO vi = mesh%vi1, mesh%vi2
-  !   DO m = 1, 12
-  !     IF (snapshot%Hi( vi) <= 0.1_dp) THEN
-  !       dT_mean_nonice = dT_mean_nonice + snapshot%T2m( vi,m) - snapshot_PI%T2m( vi,m)
-  !       n_nonice = n_nonice + 1
-  !     END IF
-  !   END DO
-  !   END DO
-
-  !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, dT_mean_nonice, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-  !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, n_nonice,       1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-
-  !   dT_mean_nonice = dT_mean_nonice / REAL(n_nonice,dp)
-
-  !   ! Calculate the lapse rate over the ice itself
-  !   ! ============================================
-
-  !   lambda_mean_ice = 0._dp
-  !   n_ice           = 0
-
-  !   DO vi = mesh%vi1, mesh%vi2
-
-  !     snapshot%lambda( vi) = 0._dp
-
-  !     IF (snapshot%Hi( vi) > 100._dp .AND. snapshot%Hs_ref( vi) > snapshot_PI%Hs_ref( vi)) THEN
-
-  !       DO m = 1, 12
-  !         snapshot%lambda( vi) = snapshot%lambda( vi) + 1/12._dp * MAX(lambda_min, MIN(lambda_max, &                        ! Berends et al., 2018 - Eq. 10
-  !           -(snapshot%T2m( vi,m) - (snapshot_PI%T2m( vi,m) + dT_mean_nonice)) / (snapshot%Hs_ref( vi) - snapshot_PI%Hs_ref( vi))))
-  !       END DO
-
-  !       lambda_mean_ice = lambda_mean_ice + snapshot%lambda( vi)
-  !       n_ice = n_ice + 1
-
-  !     END IF
-
-  !   END DO
-
-  !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, lambda_mean_ice, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-  !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, n_ice,           1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-
-  !   lambda_mean_ice = lambda_mean_ice / n_ice
-
-  !   ! Apply mean lapse-rate over ice to the rest of the region
-  !   ! ========================================================
-
-  !   DO vi = mesh%vi1, mesh%vi2
-  !     IF (.NOT. (snapshot%Hi( vi) > 100._dp .AND. snapshot%Hs_ref( vi) > snapshot_PI%Hs_ref( vi))) THEN
-  !       snapshot%lambda( vi) = lambda_mean_ice
-  !     END IF
-  !   END DO
-  !   CALL sync
-
-  !   ! Smooth the lapse rate field with a 160 km Gaussian filter
-  !   CALL smooth_Gaussian_2D( mesh, grid_smooth, snapshot%lambda, 160000._dp)
-  !   !CALL smooth_Shepard_2D( mesh, snapshot%lambda, 160000._dp)
-
-  !   ! Normalise the entire region to a mean lapse rate of 8 K /km
-  !   snapshot%lambda( mesh%vi1:mesh%vi2) = snapshot%lambda( mesh%vi1:mesh%vi2) * (0.008_dp / lambda_mean_ice)
-
-  ! END SUBROUTINE initialise_subclimate_spatially_variable_lapserate
-
-  ! Initialising the climate matrix, containing all the global subclimates
-  ! (PD observations and GCM snapshots)
-  ! SUBROUTINE initialise_climate_matrix( matrix)
-  !   ! Allocate shared memory for the global climate matrix
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_climate_matrix),      INTENT(INOUT) :: matrix
-
-  !   ! Local variables
-  !   CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_climate_matrix'
-  !   INTEGER                                       :: n1, n2
-
-  !   n1 = par%mem%n
-
-  !   IF (C%do_benchmark_experiment) THEN
-  !     IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-  !         C%choice_benchmark_experiment == 'Halfar' .OR. &
-  !         C%choice_benchmark_experiment == 'Bueler' .OR. &
-  !         C%choice_benchmark_experiment == 'MISMIP_mod'.OR. &
-  !         C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-  !       ! Entirely parameterised climate, no need to read anything here
-  !       RETURN
-  !     ELSE
-  !       WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_PD_obs_data_fields!'
-  !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !     END IF
-  !   END IF
-
-  !   IF (par%master) WRITE(0,*) ''
-  !   IF (par%master) WRITE(0,*) ' Initialising the climate matrix...'
-
-  !   ! The global ERA40 climate
-  !   CALL initialise_PD_obs_data_fields( matrix%PD_obs, 'ERA40')
-
-  !   ! The differenct GCM snapshots
-  !   IF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
-  !     ! This choice of forcing doesn't use any GCM data
-  !     RETURN
-  !   ELSEIF (C%choice_forcing_method == 'CO2_direct' .OR. C%choice_forcing_method == 'd18O_inverse_CO2') THEN
-  !     ! These two choices use the climate matrix
-
-  !     IF (C%choice_climate_matrix == 'PI_LGM') THEN
-
-  !       ! Initialise the GCM snapshots
-  !       CALL initialise_snapshot( matrix%GCM_PI,  name = 'HadCM3_PI',  nc_filename = C%filename_GCM_snapshot_PI,  CO2 = 280._dp, orbit_time =       0._dp)
-  !       CALL initialise_snapshot( matrix%GCM_LGM, name = 'HadCM3_LGM', nc_filename = C%filename_GCM_snapshot_LGM, CO2 = 190._dp, orbit_time = -120000._dp)
-
-  !       ! Initialise the two ICE5G timeframes
-  !       CALL initialise_ICE5G_timeframe( matrix%ICE5G_PD,  nc_filename = C%filename_ICE5G_PD,  time =       0._dp)
-  !       CALL initialise_ICE5G_timeframe( matrix%ICE5G_LGM, nc_filename = C%filename_ICE5G_LGM, time = -120000._dp)
-
-  !       ! ICE5G defines bedrock w.r.t. sea level at that time, rather than sea level at PD. Correct for this.
-  !       IF (par%master) matrix%ICE5G_LGM%Hb = matrix%ICE5G_LGM%Hb - 119._dp
-  !       CALL sync
-
-  !     ELSE
-  !       IF (par%master) WRITE(0,*) '  ERROR: choice_climate_matrix "', TRIM(C%choice_climate_matrix), '" not implemented in initialise_climate_matrix!'
-  !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !     END IF
-
-  !   ELSE
-  !     IF (par%master) WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in initialise_climate_matrix!'
-  !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !   END IF
-
-  !   n2 = par%mem%n
-  !   CALL write_to_memory_log( routine_name, n1, n2)
-
-  ! END SUBROUTINE initialise_climate_matrix
-  ! SUBROUTINE initialise_PD_obs_data_fields( PD_obs, name)
-  !   ! Allocate shared memory for the global PD observed climate data fields (stored in the climate matrix),
-  !   ! read them from the specified NetCDF file (latter only done by master process).
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_subclimate_global),   INTENT(INOUT) :: PD_obs
-  !   CHARACTER(LEN=*),               INTENT(IN)    :: name
-
-  !   PD_obs%name = name
-  !   PD_obs%netcdf%filename   = C%filename_PD_obs_climate
-
-  !   ! General forcing info (not relevant for PD_obs, but needed so that the same mapping routines as for GCM snapshots can be used)
-  !   CALL allocate_shared_dp_0D(                PD_obs%CO2,        PD_obs%wCO2       )
-  !   CALL allocate_shared_dp_0D(                PD_obs%orbit_time, PD_obs%worbit_time)
-  !   CALL allocate_shared_dp_0D(                PD_obs%orbit_ecc,  PD_obs%worbit_ecc )
-  !   CALL allocate_shared_dp_0D(                PD_obs%orbit_obl,  PD_obs%worbit_obl )
-  !   CALL allocate_shared_dp_0D(                PD_obs%orbit_pre,  PD_obs%worbit_pre )
-
-  !   ! Inquire if all required variables are present in the NetCDF file, and read the grid size.
-  !   CALL allocate_shared_int_0D(       PD_obs%grid%nlon, PD_obs%grid%wnlon     )
-  !   CALL allocate_shared_int_0D(       PD_obs%grid%nlat, PD_obs%grid%wnlat     )
-  !   IF (par%master) CALL inquire_PD_obs_data_file( PD_obs)
-  !   CALL sync
-
-  !   ! Allocate memory
-  !   CALL allocate_shared_dp_1D( PD_obs%grid%nlon,                       PD_obs%grid%lon, PD_obs%grid%wlon)
-  !   CALL allocate_shared_dp_1D(                   PD_obs%grid%nlat,     PD_obs%grid%lat, PD_obs%grid%wlat)
-  !   CALL allocate_shared_dp_2D( PD_obs%grid%nlon, PD_obs%grid%nlat,     PD_obs%Hs_ref,   PD_obs%wHs_ref  )
-  !   CALL allocate_shared_dp_3D( PD_obs%grid%nlon, PD_obs%grid%nlat, 12, PD_obs%T2m,      PD_obs%wT2m     )
-  !   CALL allocate_shared_dp_3D( PD_obs%grid%nlon, PD_obs%grid%nlat, 12, PD_obs%Precip,   PD_obs%wPrecip  )
-  !   CALL allocate_shared_dp_3D( PD_obs%grid%nlon, PD_obs%grid%nlat, 12, PD_obs%Wind_WE,  PD_obs%wWind_WE )
-  !   CALL allocate_shared_dp_3D( PD_obs%grid%nlon, PD_obs%grid%nlat, 12, PD_obs%Wind_SN,  PD_obs%wWind_SN )
-
-  !   ! Read data from the NetCDF file
-  !   IF (par%master) WRITE(0,*) '   Reading PD observed climate data from file ', TRIM(PD_obs%netcdf%filename), '...'
-  !   IF (par%master) CALL read_PD_obs_data_file( PD_obs)
-  !   CALL sync
-
-  !   ! Determine process domains
-  !   CALL partition_list( PD_obs%grid%nlon, par%i, par%n, PD_obs%grid%i1, PD_obs%grid%i2)
-
-  ! END SUBROUTINE initialise_PD_obs_data_fields
-  ! SUBROUTINE initialise_snapshot( snapshot, name, nc_filename, CO2, orbit_time)
-  !   ! Allocate shared memory for the data fields of a GCM snapshot (stored in the climate matrix),
-  !   ! read them from the specified NetCDF file (latter only done by master process).
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_subclimate_global),   INTENT(INOUT) :: snapshot
-  !   CHARACTER(LEN=*),               INTENT(IN)    :: name
-  !   CHARACTER(LEN=*),               INTENT(IN)    :: nc_filename
-  !   REAL(dp),                       INTENT(IN)    :: CO2
-  !   REAL(dp),                       INTENT(IN)    :: orbit_time
-
-  !   ! Local variables:
-  !   INTEGER                                       :: i,j,m
-  !   REAL(dp), PARAMETER                           :: Precip_minval = 1E-5_dp
-
-  !   ! Metadata
-  !   snapshot%name            = name
-  !   snapshot%netcdf%filename = nc_filename
-
-  !   ! General forcing info
-  !   CALL allocate_shared_dp_0D( snapshot%CO2,        snapshot%wCO2       )
-  !   CALL allocate_shared_dp_0D( snapshot%orbit_time, snapshot%worbit_time)
-  !   CALL allocate_shared_dp_0D( snapshot%orbit_ecc,  snapshot%worbit_ecc )
-  !   CALL allocate_shared_dp_0D( snapshot%orbit_obl,  snapshot%worbit_obl )
-  !   CALL allocate_shared_dp_0D( snapshot%orbit_pre,  snapshot%worbit_pre )
-
-  !   snapshot%CO2        = CO2
-  !   snapshot%orbit_time = orbit_time
-
-  !   ! Inquire if all required variables are present in the NetCDF file, and read the grid size.
-  !   CALL allocate_shared_int_0D( snapshot%grid%nlon, snapshot%grid%wnlon)
-  !   CALL allocate_shared_int_0D( snapshot%grid%nlat, snapshot%grid%wnlat)
-  !   IF (par%master) CALL inquire_GCM_snapshot( snapshot)
-  !   CALL sync
-
-  !   ! Allocate memory
-  !   CALL allocate_shared_dp_1D( snapshot%grid%nlon,                         snapshot%grid%lon, snapshot%grid%wlon)
-  !   CALL allocate_shared_dp_1D(                     snapshot%grid%nlat,     snapshot%grid%lat, snapshot%grid%wlat)
-  !   CALL allocate_shared_dp_2D( snapshot%grid%nlon, snapshot%grid%nlat,     snapshot%Hs_ref,   snapshot%wHs_ref  )
-  !   CALL allocate_shared_dp_3D( snapshot%grid%nlon, snapshot%grid%nlat, 12, snapshot%T2m,      snapshot%wT2m     )
-  !   CALL allocate_shared_dp_3D( snapshot%grid%nlon, snapshot%grid%nlat, 12, snapshot%Precip,   snapshot%wPrecip  )
-  !   CALL allocate_shared_dp_3D( snapshot%grid%nlon, snapshot%grid%nlat, 12, snapshot%Wind_WE,  snapshot%wWind_WE )
-  !   CALL allocate_shared_dp_3D( snapshot%grid%nlon, snapshot%grid%nlat, 12, snapshot%Wind_SN,  snapshot%wWind_SN )
-
-  !   ! Read data from the NetCDF file
-  !   IF (par%master) WRITE(0,*) '   Reading GCM snapshot ', TRIM(snapshot%name), ' from file ', TRIM(snapshot%netcdf%filename), '...'
-  !   IF (par%master) CALL read_GCM_snapshot( snapshot)
-  !   CALL sync
-
-  !   ! Determine process domains
-  !   CALL partition_list( snapshot%grid%nlon, par%i, par%n, snapshot%grid%i1, snapshot%grid%i2)
-
-  !   ! Very rarely zero precipitation can occur in GCM snapshots, which gives problems with the matrix interpolation. Fix this.
-  !   DO i = snapshot%grid%i1, snapshot%grid%i2
-  !   DO j = 1, snapshot%grid%nlat
-  !   DO m = 1, 12
-  !     snapshot%Precip( i,j,m) = MAX( Precip_minval, snapshot%Precip( i,j,m))
-  !   END DO
-  !   END DO
-  !   END DO
-  !   CALL sync
-
-  ! END SUBROUTINE initialise_snapshot
-  ! SUBROUTINE initialise_ICE5G_timeframe( ICE5G, nc_filename, time)
-  !   ! Initialise and read a global ICE5G timeframe from a NetCDF file
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_ICE5G_timeframe),     INTENT(INOUT) :: ICE5G
-  !   CHARACTER(LEN=*),               INTENT(IN)    :: nc_filename
-  !   REAL(dp),                       INTENT(IN)    :: time
-
-  !   ICE5G%time            = time
-  !   ICE5G%netcdf%filename = nc_filename
-
-  !   ! Inquire if all required variables are present in the NetCDF file, and read the grid size.
-  !   CALL allocate_shared_int_0D( ICE5G%grid%nlon, ICE5G%grid%wnlon)
-  !   CALL allocate_shared_int_0D( ICE5G%grid%nlat, ICE5G%grid%wnlat)
-  !   IF (par%master) CALL inquire_ICE5G_data( ICE5G)
-  !   CALL sync
-
-  !   ! Allocate memory
-  !   CALL allocate_shared_dp_1D( ICE5G%grid%nlon,                  ICE5G%grid%lon, ICE5G%grid%wlon)
-  !   CALL allocate_shared_dp_1D(                  ICE5G%grid%nlat, ICE5G%grid%lat, ICE5G%grid%wlat)
-  !   CALL allocate_shared_dp_2D( ICE5G%grid%nlon, ICE5G%grid%nlat, ICE5G%Hi,       ICE5G%wHi      )
-  !   CALL allocate_shared_dp_2D( ICE5G%grid%nlon, ICE5G%grid%nlat, ICE5G%Hb,       ICE5G%wHb      )
-  !   CALL allocate_shared_dp_2D( ICE5G%grid%nlon, ICE5G%grid%nlat, ICE5G%mask_ice, ICE5G%wmask_ice)
-
-  !   ! Read data from the NetCDF file
-  !   IF (par%master) WRITE(0,'(A,F9.1,A,A,A)') '    Reading ICE5G timeframe for t = ', time, ' yr from file ', TRIM(ICE5G%netcdf%filename), '...'
-  !   IF (par%master) CALL read_ICE5G_data( ICE5G)
-  !   CALL sync
-
-  !   ! Determine process domains
-  !   CALL partition_list( ICE5G%grid%nlon, par%i, par%n, ICE5G%grid%i1, ICE5G%grid%i2)
-
-  ! END SUBROUTINE initialise_ICE5G_timeframe
-
-  ! Remap the regional climate model after a mesh update
 
 END MODULE climate_module

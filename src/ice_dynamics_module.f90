@@ -1253,7 +1253,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_init
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
@@ -1479,31 +1479,25 @@ CONTAINS
 
   SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
 
-    USE data_types_module,          ONLY: type_remapping_lonlat2mesh
-    USE forcing_module,             ONLY: forcing
-    USE mesh_mapping_module,        ONLY: create_remapping_arrays_lonlat_mesh, map_lonlat2mesh_2D, deallocate_remapping_arrays_lonlat_mesh
+    USE netcdf_input_module, ONLY: read_field_from_file_2D
 
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_geothermal_heat_flux_to_mesh'
-    TYPE(type_remapping_lonlat2mesh)                   :: map
+    CHARACTER(LEN=256)                                 :: filename
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Calculate mapping arrays
-    CALL create_remapping_arrays_lonlat_mesh( mesh, forcing%grid_ghf, map)
-
-    ! Map global climate data to the mesh
-    CALL map_lonlat2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)
-
-    ! Deallocate mapping arrays
-    CALL deallocate_remapping_arrays_lonlat_mesh( map)
+    ! Read geothermal heat flux from external file
+    filename = C%filename_geothermal_heat_flux
+    IF (par%master) WRITE(0,*) '  Initialising geothermal heat flux from file "', TRIM( filename), '"...'
+    CALL read_field_from_file_2D( filename, 'hflux', mesh, ice%GHF_a, 'ANT')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1665,7 +1659,7 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD

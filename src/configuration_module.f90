@@ -675,6 +675,11 @@ MODULE configuration_module
 
     CHARACTER(LEN=256)  :: ISMIP_ocean_filename_baseline_config        = ''                              ! NetCDF file containing the baseline ocean
 
+    CHARACTER(LEN=256)  :: ISMIP_future_ocean_temperature_filename_config   = ''
+    CHARACTER(LEN=256)  :: ISMIP_future_ocean_salinity_filename_config      = ''
+    CHARACTER(LEN=256)  :: ISMIP_future_atmosphere_baseline_filename_config = ''
+    CHARACTER(LEN=256)  :: ISMIP_future_atmosphere_anomaly_filename_config  = ''
+
   ! == Basal mass balance
   ! =====================
 
@@ -1468,6 +1473,11 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_dSTdz
 
     CHARACTER(LEN=256)                  :: ISMIP_ocean_filename_baseline
+
+    CHARACTER(LEN=256)                  :: ISMIP_future_ocean_temperature_filename
+    CHARACTER(LEN=256)                  :: ISMIP_future_ocean_salinity_filename
+    CHARACTER(LEN=256)                  :: ISMIP_future_atmosphere_baseline_filename
+    CHARACTER(LEN=256)                  :: ISMIP_future_atmosphere_anomaly_filename
 
     ! Basal mass balance - sub-shelf melt
     ! ===================================
@@ -2354,6 +2364,10 @@ CONTAINS
                      ISMIP_forcing_foldername_dSTdz_config,           &
                      ISMIP_forcing_basefilename_dSTdz_config,         &
                      ISMIP_ocean_filename_baseline_config,            &
+                     ISMIP_future_ocean_temperature_filename_config,  &
+                     ISMIP_future_ocean_salinity_filename_config,     &
+                     ISMIP_future_atmosphere_baseline_filename_config,&
+                     ISMIP_future_atmosphere_anomaly_filename_config, &
                      choice_BMB_shelf_model_config,                   &
                      choice_idealised_BMB_shelf_config,               &
                      choice_BMB_sheet_model_config,                   &
@@ -3267,6 +3281,11 @@ CONTAINS
     C%ISMIP_forcing_basefilename_dSTdz         = ISMIP_forcing_basefilename_dSTdz_config
 
     C%ISMIP_ocean_filename_baseline            = ISMIP_ocean_filename_baseline_config
+
+    C%ISMIP_future_ocean_temperature_filename  = ISMIP_future_ocean_temperature_filename_config
+    C%ISMIP_future_ocean_salinity_filename     = ISMIP_future_ocean_salinity_filename_config
+    C%ISMIP_future_atmosphere_baseline_filename= ISMIP_future_atmosphere_baseline_filename_config
+    C%ISMIP_future_atmosphere_anomaly_filename = ISMIP_future_atmosphere_anomaly_filename_config
 
     ! Basal mass balance - sub-shelf melt
     ! ===================================

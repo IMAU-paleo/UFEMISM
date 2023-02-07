@@ -76,7 +76,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_restart_data),             INTENT(IN)    :: restart
 
@@ -311,7 +311,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_restart_data),             INTENT(IN)    :: restart
 
@@ -595,7 +595,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -706,66 +706,35 @@ CONTAINS
     !
     ! Coulomb-type sliding law: bed roughness described by phi_fric
 
+    USE netcdf_input_module, ONLY: read_field_from_file_2D
+
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness_from_file_Coulomb'
+    CHARACTER(LEN=256)                                 :: filename
 
     REAL(dp) :: dummy_dp
     dummy_dp = mesh%V( 1,1)
     dummy_dp = ice%Hi_a( 1)
 
-    CALL crash('FIXME!')
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
-   ! ! Local variables:
-   ! TYPE(type_BIV_bed_roughness)                       :: BIV
+    ! Determine filename
+    filename = C%basal_roughness_filename
 
-   ! ! Add routine to path
-   ! CALL init_routine( routine_name)
+    IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( filename), '...'
 
-   ! ! Determine filename
-   ! BIV%netcdf%filename = C%basal_roughness_filename
+    ! Read bed roughness from file
+    CALL read_field_from_file_2D( filename, 'phi_fric', mesh, ice%phi_fric_a, 'ANT')
 
-   ! IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
-
-   ! ! Inquire mesh data from the NetCDF file
-   ! CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
-   ! CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
-
-   ! IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
-   ! CALL sync
-
-   ! ! Allocate memory - mesh
-   ! CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
-   ! CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
-   ! CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%phi_fric, BIV%wphi_fric)
-
-   ! ! Read mesh & bed roughness data from file
-   ! IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
-   ! CALL sync
-
-   ! ! Safety
-   ! CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric')
-
-   ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
-   ! CALL transpose_dp_2D( BIV%phi_fric, BIV%wphi_fric)
-
-   ! ! Map (transposed) raw data to the model mesh
-   ! CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%phi_fric, ice%phi_fric_a)
-
-   ! ! Deallocate raw data
-   ! CALL deallocate_shared( BIV%wnx      )
-   ! CALL deallocate_shared( BIV%wny      )
-   ! CALL deallocate_shared( BIV%wx       )
-   ! CALL deallocate_shared( BIV%wy       )
-   ! CALL deallocate_shared( BIV%wphi_fric)
-
-   ! ! Finalise routine path
-   ! CALL finalise_routine( routine_name)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_bed_roughness_from_file_Coulomb
 
@@ -1471,7 +1440,7 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
@@ -1540,7 +1509,7 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 

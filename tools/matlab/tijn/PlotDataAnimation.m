@@ -2,7 +2,7 @@ clc
 clear all
 close all
 
-foldername = '../results_20210316_001';
+foldername = '/Users/berends/Documents/Models/UFEMISM/results_ANT_30km_ismip_1950-2014';
 regionname = 'ANT';
 
 dataname = 'Hi';
@@ -11,14 +11,14 @@ cmap = parula(256);
 % clim = [0 1e6];
 edgecolor = 'w';
 
-tstart = -60000;
-tstop  = 60000;
-dt     = 5000;  % Time between output frames (years)
+tstart = 1950;
+tstop  = 2014;
+dt     = 1;  % Time between output frames (years)
 
 %% Create graphics objects
 
-V   = ncread([foldername '/results_' regionname '_00001.nc'],'V');
-Tri = ncread([foldername '/results_' regionname '_00001.nc'],'Tri');
+V   = ncread([foldername '/restart_' regionname '_00001.nc'],'V');
+Tri = ncread([foldername '/restart_' regionname '_00001.nc'],'Tri');
 
 xr = max(V(:,1)) - min(V(:,1));
 yr = max(V(:,2)) - min(V(:,2));
@@ -44,7 +44,7 @@ set(H.Ax,'units','normalized');
 
 %% Plot all output files for this region
 nfile = 1;
-filename = [foldername '/results_' regionname '_00001.nc'];
+filename = [foldername '/restart_' regionname '_00001.nc'];
 while exist(filename,'file')
   
   % Update mesh data
@@ -101,5 +101,5 @@ while exist(filename,'file')
   else
     nfilestr = num2str(nfile);
   end
-filename = [foldername '/results_' regionname '_' nfilestr '.nc'];
+filename = [foldername '/restart_' regionname '_' nfilestr '.nc'];
 end

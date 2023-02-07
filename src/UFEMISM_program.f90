@@ -220,8 +220,8 @@ PROGRAM UFEMISM_program
     ! == Global sea level update
     ! ==========================
 
-    ! Determine ice sheets GMSL contributions and new global sea level
-    CALL determine_GMSL_contributions( NAM, EAS, GRL, ANT, global_data, t_coupling)
+!    ! Determine ice sheets GMSL contributions and new global sea level
+!    CALL determine_GMSL_contributions( NAM, EAS, GRL, ANT, global_data, t_coupling)
 
     ! == Global output
     ! ================

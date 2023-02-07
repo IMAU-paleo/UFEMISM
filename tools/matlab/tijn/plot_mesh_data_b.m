@@ -1,4 +1,4 @@
-function H = PlotMeshData_b( mesh, d_b, edgecolor)
+function H = plot_mesh_data_b( mesh, d_b, edgecolor)
 
   xr = max(mesh.V(:,1)) - min(mesh.V(:,1));
   yr = max(mesh.V(:,2)) - min(mesh.V(:,2));

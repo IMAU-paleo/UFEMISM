@@ -623,12 +623,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: ins_Q_TOA0, ins_Q_TOA1
     INTEGER :: wins_nyears, wins_nlat, wins_time, wins_lat, wins_t0, wins_t1, wins_Q_TOA0, wins_Q_TOA1
 
-    ! External forcing: geothermal heat flux
-    TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
-    TYPE(type_grid_lonlat)                  :: grid_ghf
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: ghf_ghf
-    INTEGER :: wghf_ghf
-
     ! External forcing: sea level record
     REAL(dp), DIMENSION(:    ), POINTER     :: sealevel_time
     REAL(dp), DIMENSION(:    ), POINTER     :: sealevel_record
@@ -747,8 +741,8 @@ MODULE data_types_module
 
   END TYPE type_climate_matrix_global
 
-    TYPE type_ocean_snapshot_global
-    ! Global ocean snapshot, either from present-day observations (e.g. WOA18) or from a GCM ocean snapshot.
+  TYPE type_ocean_snapshot_global
+  ! Global ocean snapshot, either from present-day observations (e.g. WOA18) or from a GCM ocean snapshot.
 
     CHARACTER(LEN=256)                      :: name                          ! 'WOA', 'COSMOS_LGM', etc.
 

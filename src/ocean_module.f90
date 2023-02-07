@@ -10,7 +10,7 @@ MODULE ocean_module
                                              allocate_shared_int_1D, allocate_shared_dp_1D, &
                                              allocate_shared_int_2D, allocate_shared_dp_2D, &
                                              allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                             reallocate_shared_dp_2D, deallocate_shared, partition_list
+                                             reallocate_shared_dp_2D, allocate_shared_dp_4D, deallocate_shared, partition_list
   USE data_types_module,               ONLY: type_mesh, type_grid, type_model_region, type_ice_model, &
                                              type_ocean_matrix_global, type_ocean_snapshot_global, &
                                              type_ocean_matrix_regional, type_ocean_snapshot_regional, &
@@ -89,6 +89,11 @@ CONTAINS
 
       CALL run_ocean_model_ISMIP_style_init( mesh, ocean_matrix)
 
+    ELSEIF (C%choice_ocean_model == 'ISMIP_style_future') THEN
+      ! Use the ISMIP-style yearly (temperature + salinity) forcing
+
+      CALL run_ocean_model_ISMIP_style_future( mesh, ocean_matrix, time)
+
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
     END IF
@@ -144,6 +149,11 @@ CONTAINS
 
       CALL initialise_ocean_model_ISMIP_style_init( region%mesh, region%ocean_matrix)
 
+    ELSEIF (C%choice_ocean_model == 'ISMIP_style_future') THEN
+      ! Use the ISMIP-style yearly (temperature + salinity) forcing
+
+      CALL initialise_ocean_model_ISMIP_style_future( region%mesh, region%ocean_matrix)
+
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
     END IF
@@ -190,6 +200,9 @@ CONTAINS
 
     ELSEIF (C%choice_ocean_model == 'ISMIP_style_init') THEN
       ! Use the ISMIP-style (temperature + salinity) forcing. So, do nothing here.
+
+    ELSEIF (C%choice_ocean_model == 'ISMIP_style_future') THEN
+      ! Use the ISMIP-style yearly (temperature + salinity) forcing. So, do nothing here.
 
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
@@ -1352,6 +1365,178 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_ocean_model_ISMIP_style_init
+
+  ! == ISMIP-style future phase forcing
+! =====================================
+
+  SUBROUTINE run_ocean_model_ISMIP_style_future( mesh, ocean_matrix, time)
+    ! Run the regional ocean model
+    !
+    ! Use the ISMIP-style yearly (temperature + salinity) forcing for the future phase
+
+    USE netcdf_basic_module, ONLY: read_var_dp_4D, inquire_var_multiple_options
+    USE netcdf_input_module, ONLY: setup_xy_grid_from_file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                  INTENT(IN)    :: mesh
+    TYPE(type_ocean_matrix_regional), INTENT(INOUT) :: ocean_matrix
+    REAL(dp),                         INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                   :: routine_name = 'run_ocean_model_ISMIP_style_future'
+    CHARACTER(LEN=256)                              :: filename
+    TYPE(type_grid)                                 :: grid
+    INTEGER                                         :: ti
+    REAL(dp), DIMENSION(:,:,:  ), POINTER           :: d_grid
+    REAL(dp), DIMENSION(:,:,:,:), POINTER           :: d_grid_with_time
+    INTEGER                                         :: wd_grid, wd_grid_with_time
+    INTEGER                                         :: id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Read grid from ocean file
+    filename = C%ISMIP_future_ocean_temperature_filename
+    CALL setup_xy_grid_from_file( filename, grid,'ANT')
+    CALL calc_remapping_operator_grid2mesh( grid, mesh)
+
+  ! Temperature
+  ! ===========
+
+    filename = C%ISMIP_future_ocean_temperature_filename
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_3D( grid%nx, grid%ny, C%nz_ocean, d_grid, wd_grid)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_4D( grid%nx, grid%ny, C%nz_ocean, 1, d_grid_with_time, wd_grid_with_time)
+
+    ! Find out which timeframe to read
+    IF     (INDEX( filename,'1994') > 0) THEN
+      ti = 1 + FLOOR( time - 1850._dp)
+    ELSEIF (INDEX( filename,'1995') > 0) THEN
+      ti = 1 + FLOOR( time - 1995._dp)
+    ELSE
+      CALL crash('whaa!')
+    END IF
+
+    ! Look for the specified variable in the file
+    CALL inquire_var_multiple_options( filename, 'temperature', id_var)
+    IF (id_var == -1) CALL crash('couldnt find "temperature" in file "' // TRIM( filename)  // '"!')
+
+    ! Read data
+    CALL read_var_dp_4D( filename, id_var, d_grid_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, C%nz_ocean, 1 /) )
+
+    ! Copy to memory without time dimension
+    d_grid( grid%i1:grid%i2,:,:) = d_grid_with_time( grid%i1:grid%i2,:,:,1)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_with_time)
+
+    ! Map to mesh
+    CALL map_grid2mesh_3D( grid, mesh, d_grid, ocean_matrix%applied%T_ocean_corr_ext)
+
+    ! Clean up ater yourself
+    CALL deallocate_shared( wd_grid)
+    CALL deallocate_shared( wd_grid_with_time)
+
+  ! Salinity
+  ! ===========
+
+    filename = C%ISMIP_future_ocean_salinity_filename
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_3D( grid%nx, grid%ny, C%nz_ocean, d_grid, wd_grid)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_4D( grid%nx, grid%ny, C%nz_ocean, 1, d_grid_with_time, wd_grid_with_time)
+
+    ! Find out which timeframe to read
+    IF     (INDEX( filename,'1994') > 0) THEN
+      ti = 1 + FLOOR( time - 1850._dp)
+    ELSEIF (INDEX( filename,'1995') > 0) THEN
+      ti = 1 + FLOOR( time - 1995._dp)
+    ELSE
+      CALL crash('whaa!')
+    END IF
+
+    ! Look for the specified variable in the file
+    CALL inquire_var_multiple_options( filename, 'salinity', id_var)
+    IF (id_var == -1) CALL crash('couldnt find "salinity" in file "' // TRIM( filename)  // '"!')
+
+    ! Read data
+    CALL read_var_dp_4D( filename, id_var, d_grid_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, C%nz_ocean, 1 /) )
+
+    ! Copy to memory without time dimension
+    d_grid( grid%i1:grid%i2,:,:) = d_grid_with_time( grid%i1:grid%i2,:,:,1)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_grid_with_time)
+
+    ! Map to mesh
+    CALL map_grid2mesh_3D( grid, mesh, d_grid, ocean_matrix%applied%S_ocean_corr_ext)
+
+    ! Clean up ater yourself
+    CALL deallocate_shared( wd_grid)
+    CALL deallocate_shared( wd_grid_with_time)
+
+    ! Clean up after yourself
+    CALL deallocate_shared( grid%wnx)
+    CALL deallocate_shared( grid%wny)
+    CALL deallocate_shared( grid%wn)
+    CALL deallocate_shared( grid%wdx)
+    CALL deallocate_shared( grid%wx)
+    CALL deallocate_shared( grid%wy)
+    CALL deallocate_shared( grid%wxmin)
+    CALL deallocate_shared( grid%wxmax)
+    CALL deallocate_shared( grid%wymin)
+    CALL deallocate_shared( grid%wymax)
+    CALL deallocate_shared( grid%wtol_dist)
+    CALL deallocate_shared( grid%wij2n)
+    CALL deallocate_shared( grid%wn2ij)
+    CALL deallocate_shared( grid%wlambda_m)
+    CALL deallocate_shared( grid%wphi_m)
+    CALL deallocate_shared( grid%wbeta_stereo)
+    CALL deallocate_shared( grid%wlon)
+    CALL deallocate_shared( grid%wlat)
+    CALL deallocate_remapping_operators_grid2mesh( grid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_ocean_model_ISMIP_style_future
+
+  SUBROUTINE initialise_ocean_model_ISMIP_style_future( mesh, ocean_matrix)
+    ! Initialise the regional ocean model
+    !
+    ! Use the ISMIP-style yearly (tempearture + salinity) forcing for the future phase
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                  INTENT(IN)    :: mesh
+    TYPE(type_ocean_matrix_regional), INTENT(INOUT) :: ocean_matrix
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                   :: routine_name = 'initialise_ocean_model_ISMIP_style_future'
+    TYPE(type_netcdf_ISMIP_style_baseline_ocean)    :: netcdf
+    TYPE(type_grid)                                 :: grid_raw
+    REAL(dp), DIMENSION(:,:,:), POINTER             ::  T_raw,  S_raw
+    INTEGER                                         :: wT_raw, wS_raw
+    INTEGER                                         :: vi, k
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate memory
+    CALL allocate_ocean_snapshot_regional( mesh, ocean_matrix%applied, name = 'applied')
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_ocean_model_ISMIP_style_future
 
 ! == Regrid 3-D ocean data fields in the vertical direction
 ! =========================================================

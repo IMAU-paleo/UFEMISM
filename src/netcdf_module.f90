@@ -1065,6 +1065,14 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHb_dt_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'dSL_dt') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dSL_dt_a, start=(/1, netcdf%ti /) ))
+
+    ! Ocean
+    ELSEIF (field_name == 'T_ocean_3D') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ocean_matrix%applied%T_ocean_corr_ext, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'S_ocean_3D') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ocean_matrix%applied%S_ocean_corr_ext, start=(/1, 1, netcdf%ti /) ))
+
+    ! Else
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -1284,7 +1292,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_fields_file_mesh'
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month, z_ocean
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1356,19 +1364,22 @@ CONTAINS
     ! ============
 
     ! Define dimensions
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta,  C%nZ,           netcdf%id_dim_zeta ) ! Scaled vertical coordinate
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_month, 12,             netcdf%id_dim_month) ! Months (for monthly data)
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_time,  nf90_unlimited, netcdf%id_dim_time ) ! Time frames
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta,    C%nZ,           netcdf%id_dim_zeta   ) ! Scaled vertical coordinate
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_month,   12,             netcdf%id_dim_month  ) ! Months (for monthly data)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_z_ocean, C%nz_ocean,     netcdf%id_dim_z_ocean) ! Vertical layers for 3-D ocean data
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_time,    nf90_unlimited, netcdf%id_dim_time   ) ! Time frames
 
     ! Placeholders for the dimension ID's, for shorter code
-    time  = netcdf%id_dim_time
-    zeta  = netcdf%id_dim_zeta
-    month = netcdf%id_dim_month
+    time    = netcdf%id_dim_time
+    zeta    = netcdf%id_dim_zeta
+    month   = netcdf%id_dim_month
+    z_ocean = netcdf%id_dim_z_ocean
 
     ! Define dimension variables
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [time  ], netcdf%id_var_time,  long_name='Time', units='years')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,  [zeta  ], netcdf%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless (0 = ice surface, 1 = bedrock)')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [month ], netcdf%id_var_month, long_name='Month', units='1-12')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,    [time   ], netcdf%id_var_time,    long_name='Time', units='years')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,    [zeta   ], netcdf%id_var_zeta,    long_name='Vertical scaled coordinate', units='unitless (0 = ice surface, 1 = bedrock)')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_month,   [month  ], netcdf%id_var_month,   long_name='Month', units='1-12')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_z_ocean, [z_ocean], netcdf%id_var_z_ocean, long_name='Ocean depth', units='m')
 
     ! Define model data variables
 
@@ -1449,6 +1460,7 @@ CONTAINS
     ! Write zeta and month dimension variables
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_zeta,     C%zeta                                   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_month,    (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_z_ocean,  C%z_ocean                                ))
 
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( netcdf%ncid))
@@ -1473,7 +1485,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_help_field_mesh'
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, ai, tai, t, z, m
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, ai, tai, t, z, m, zo
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1493,6 +1505,7 @@ CONTAINS
     t         = netcdf%id_dim_time
     z         = netcdf%id_dim_zeta
     m         = netcdf%id_dim_month
+    zo        = netcdf%id_dim_z_ocean
 
     IF (field_name == 'none') THEN
       CALL finalise_routine( routine_name)
@@ -1733,6 +1746,14 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'dHb_dt',                 [vi,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
     ELSEIF (field_name == 'dSL_dt') THEN
       CALL create_double_var( netcdf%ncid, 'dSL_dt',                 [vi,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
+
+    ! Ocean
+    ELSEIF (field_name == 'T_ocean_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'T_ocean_3D',                [vi, zo, t], id_var, long_name='3-D ocean temperature', units='Degrees Celsius')
+    ELSEIF (field_name == 'S_ocean_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'S_ocean_3D',                [vi, zo, t], id_var, long_name='3-D ocean salinity', units='PSU')
+
+    ! Else
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -2213,6 +2234,14 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_dt_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'dSL_dt') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dSL_dt_a, id_var, netcdf%ti)
+
+    ! Ocean
+    ELSEIF (field_name == 'T_ocean_3D') THEN
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ocean_matrix%applied%T_ocean_corr_ext, id_var, netcdf%ti, C%nz_ocean)
+    ELSEIF (field_name == 'S_ocean_3D') THEN
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ocean_matrix%applied%S_ocean_corr_ext, id_var, netcdf%ti, C%nz_ocean)
+
+    ! Else
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -2362,7 +2391,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_fields_file_grid'
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: x, y, z, m, t
+    INTEGER                                       :: x, y, z, m, t, zo
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -2392,25 +2421,28 @@ CONTAINS
     netcdf%ti = 1
 
     ! Define dimensions:
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_x,     region%grid_output%nx, netcdf%id_dim_x    )
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_y,     region%grid_output%ny, netcdf%id_dim_y    )
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta,  C%nZ,                  netcdf%id_dim_zeta )
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_month, 12,                    netcdf%id_dim_month)
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_time,  nf90_unlimited,        netcdf%id_dim_time )
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_x      , region%grid_output%nx, netcdf%id_dim_x      )
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_y      , region%grid_output%ny, netcdf%id_dim_y      )
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta   , C%nZ                 , netcdf%id_dim_zeta   )
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_month  , 12                   , netcdf%id_dim_month  )
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_z_ocean, C%nz_ocean           , netcdf%id_dim_z_ocean)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_time   , nf90_unlimited       , netcdf%id_dim_time   )
 
     ! Placeholders for the dimension ID's, for shorter code
-    x = netcdf%id_dim_x
-    y = netcdf%id_dim_y
-    z = netcdf%id_dim_zeta
-    m = netcdf%id_dim_month
-    t = netcdf%id_dim_time
+    x  = netcdf%id_dim_x
+    y  = netcdf%id_dim_y
+    z  = netcdf%id_dim_zeta
+    m  = netcdf%id_dim_month
+    t  = netcdf%id_dim_time
+    zo = netcdf%id_dim_z_ocean
 
     ! Dimension variables: zeta, month, time
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,     [netcdf%id_dim_x    ], netcdf%id_var_x,     long_name='X-coordinate', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,     [netcdf%id_dim_y    ], netcdf%id_var_y,     long_name='Y-coordinate', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,  [netcdf%id_dim_zeta ], netcdf%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [netcdf%id_dim_month], netcdf%id_var_month, long_name='Month', units='1-12'    )
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [netcdf%id_dim_time ], netcdf%id_var_time,  long_name='Time', units='years'   )
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,       [netcdf%id_dim_x      ], netcdf%id_var_x,       long_name='X-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,       [netcdf%id_dim_y      ], netcdf%id_var_y,       long_name='Y-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,    [netcdf%id_dim_zeta   ], netcdf%id_var_zeta,    long_name='Vertical scaled coordinate', units='unitless')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_month,   [netcdf%id_dim_month  ], netcdf%id_var_month,   long_name='Month', units='1-12'    )
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_z_ocean, [netcdf%id_dim_z_ocean], netcdf%id_var_z_ocean, long_name='Depth in ocean', units='m'    )
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,    [netcdf%id_dim_time   ], netcdf%id_var_time,     long_name='Time', units='years'   )
 
     ! Define data variables
     CALL create_help_field_grid( netcdf, netcdf%id_help_field_01, C%help_field_01)
@@ -2472,6 +2504,7 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_y,        region%grid_output%y                     ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_zeta,     C%zeta                                   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_month,    (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_z_ocean,  C%z_ocean                                ))
 
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( netcdf%ncid))
@@ -2496,7 +2529,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_help_field_grid'
-    INTEGER                                       :: x, y, t, z, m
+    INTEGER                                       :: x, y, t, z, m, zo
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -2507,6 +2540,7 @@ CONTAINS
     t         = netcdf%id_dim_time
     z         = netcdf%id_dim_zeta
     m         = netcdf%id_dim_month
+    zo        = netcdf%id_dim_z_ocean
 
     IF (field_name == 'none') THEN
       CALL finalise_routine( routine_name)
@@ -2749,6 +2783,14 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'dHb_dt',                 [x, y,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
     ELSEIF (field_name == 'dSL_dt') THEN
       CALL create_double_var( netcdf%ncid, 'dSL_dt',                 [x, y,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
+
+    ! Ocean
+    ELSEIF (field_name == 'T_ocean_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'T_ocean_3D',                 [x, y, zo, t], id_var, long_name='3D ocean temperature', units='Degrees Celsius')
+    ELSEIF (field_name == 'S_ocean_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'S_ocean_3D',                 [x, y, zo, t], id_var, long_name='3D ocean salinity', units='PSU')
+
+    ! Else
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -3415,72 +3457,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_insolation_data_file_time_lat
-
-  ! Geothermal heat flux
-  SUBROUTINE inquire_geothermal_heat_flux_file( forcing)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_geothermal_heat_flux_file'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_dim_lon, forcing%grid_ghf%nlon, forcing%netcdf_ghf%id_dim_lon)
-    CALL inquire_dim( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_dim_lat, forcing%grid_ghf%nlat, forcing%netcdf_ghf%id_dim_lat)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_lon, (/ forcing%netcdf_ghf%id_dim_lon                                /), forcing%netcdf_ghf%id_var_lon)
-    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_lat, (/ forcing%netcdf_ghf%id_dim_lat                                /), forcing%netcdf_ghf%id_var_lat)
-    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_ghf, (/ forcing%netcdf_ghf%id_dim_lon, forcing%netcdf_ghf%id_dim_lat /), forcing%netcdf_ghf%id_var_ghf)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file(forcing%netcdf_ghf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_geothermal_heat_flux_file
-
-  SUBROUTINE read_geothermal_heat_flux_file( forcing)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_geothermal_heat_flux_file'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lon, forcing%grid_ghf%lon, start=(/1   /) ))
-    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lat, forcing%grid_ghf%lat, start=(/1   /) ))
-    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_ghf, forcing%ghf_ghf,      start=(/1, 1/) ))
-
-    ! Close the NetCDF file
-    CALL close_netcdf_file(forcing%netcdf_ghf%ncid)
-
-    ! Convert from W m-2 (J m-2 s-1) to J m-2 yr-1
-    forcing%ghf_ghf = forcing%ghf_ghf * sec_per_year
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_geothermal_heat_flux_file
 
   ! Write a sparse matrix to a NetCDF file
   SUBROUTINE write_PETSc_matrix_to_NetCDF( A, filename)
@@ -8596,7 +8572,8 @@ CONTAINS
             C%choice_SMB_model == 'direct_global' .OR. &
             C%choice_SMB_model == 'direct_regional' .OR. &
             C%choice_SMB_model == 'ISMIP_style_forcing' .OR. &
-            C%choice_SMB_model == 'ISMIP_style_forcing_init') THEN
+            C%choice_SMB_model == 'ISMIP_style_forcing_init' .OR. &
+            C%choice_SMB_model == 'ISMIP_style_forcing_future') THEN
       ! Do nothing
     ELSEIF (C%choice_SMB_model == 'IMAU-ITM' .OR. &
             C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN
@@ -8669,7 +8646,8 @@ CONTAINS
             C%choice_SMB_model == 'direct_global' .OR. &
             C%choice_SMB_model == 'direct_regional' .OR. &
             C%choice_SMB_model == 'ISMIP_style_forcing' .OR. &
-            C%choice_SMB_model == 'ISMIP_style_forcing_init') THEN
+            C%choice_SMB_model == 'ISMIP_style_forcing_init' .OR. &
+            C%choice_SMB_model == 'ISMIP_style_forcing_future') THEN
       ! Do nothing
     ELSEIF (C%choice_SMB_model == 'IMAU-ITM' .OR. &
             C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN

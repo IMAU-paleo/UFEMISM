@@ -1374,7 +1374,7 @@ CONTAINS
     !
     ! Use the ISMIP-style yearly (temperature + salinity) forcing for the future phase
 
-    USE netcdf_basic_module, ONLY: read_var_dp_4D, inquire_var_multiple_options
+    USE netcdf_basic_module, ONLY: read_var_dp_4D, inquire_var_multiple_options, find_timeframe
     USE netcdf_input_module, ONLY: setup_xy_grid_from_file
 
     IMPLICIT NONE
@@ -1414,13 +1414,7 @@ CONTAINS
     CALL allocate_shared_dp_4D( grid%nx, grid%ny, C%nz_ocean, 1, d_grid_with_time, wd_grid_with_time)
 
     ! Find out which timeframe to read
-    IF     (INDEX( filename,'1994') > 0) THEN
-      ti = 1 + FLOOR( time - 1850._dp)
-    ELSEIF (INDEX( filename,'1995') > 0) THEN
-      ti = 1 + FLOOR( time - 1995._dp)
-    ELSE
-      CALL crash('whaa!')
-    END IF
+    CALL find_timeframe( filename, REAL( NINT( time),dp), ti)
 
     ! Look for the specified variable in the file
     CALL inquire_var_multiple_options( filename, 'temperature', id_var)
@@ -1454,13 +1448,7 @@ CONTAINS
     CALL allocate_shared_dp_4D( grid%nx, grid%ny, C%nz_ocean, 1, d_grid_with_time, wd_grid_with_time)
 
     ! Find out which timeframe to read
-    IF     (INDEX( filename,'1994') > 0) THEN
-      ti = 1 + FLOOR( time - 1850._dp)
-    ELSEIF (INDEX( filename,'1995') > 0) THEN
-      ti = 1 + FLOOR( time - 1995._dp)
-    ELSE
-      CALL crash('whaa!')
-    END IF
+    CALL find_timeframe( filename, REAL( NINT( time),dp), ti)
 
     ! Look for the specified variable in the file
     CALL inquire_var_multiple_options( filename, 'salinity', id_var)

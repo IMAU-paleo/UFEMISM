@@ -680,6 +680,9 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: ISMIP_future_atmosphere_baseline_filename_config = ''
     CHARACTER(LEN=256)  :: ISMIP_future_atmosphere_anomaly_filename_config  = ''
 
+    LOGICAL             :: do_use_ISMIP_future_shelf_collapse_forcing_config = .FALSE.
+    CHARACTER(LEN=256)  :: ISMIP_future_shelf_collapse_forcing_filename_config = ''
+
   ! == Basal mass balance
   ! =====================
 
@@ -1478,6 +1481,10 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: ISMIP_future_ocean_salinity_filename
     CHARACTER(LEN=256)                  :: ISMIP_future_atmosphere_baseline_filename
     CHARACTER(LEN=256)                  :: ISMIP_future_atmosphere_anomaly_filename
+
+    LOGICAL                             :: do_use_ISMIP_future_shelf_collapse_forcing
+    CHARACTER(LEN=256)                  :: ISMIP_future_shelf_collapse_forcing_filename
+
 
     ! Basal mass balance - sub-shelf melt
     ! ===================================
@@ -2368,6 +2375,8 @@ CONTAINS
                      ISMIP_future_ocean_salinity_filename_config,     &
                      ISMIP_future_atmosphere_baseline_filename_config,&
                      ISMIP_future_atmosphere_anomaly_filename_config, &
+                     do_use_ISMIP_future_shelf_collapse_forcing_config, &
+                     ISMIP_future_shelf_collapse_forcing_filename_config, &
                      choice_BMB_shelf_model_config,                   &
                      choice_idealised_BMB_shelf_config,               &
                      choice_BMB_sheet_model_config,                   &
@@ -3286,6 +3295,9 @@ CONTAINS
     C%ISMIP_future_ocean_salinity_filename     = ISMIP_future_ocean_salinity_filename_config
     C%ISMIP_future_atmosphere_baseline_filename= ISMIP_future_atmosphere_baseline_filename_config
     C%ISMIP_future_atmosphere_anomaly_filename = ISMIP_future_atmosphere_anomaly_filename_config
+
+    C%do_use_ISMIP_future_shelf_collapse_forcing   = do_use_ISMIP_future_shelf_collapse_forcing_config
+    C%ISMIP_future_shelf_collapse_forcing_filename = ISMIP_future_shelf_collapse_forcing_filename_config
 
     ! Basal mass balance - sub-shelf melt
     ! ===================================

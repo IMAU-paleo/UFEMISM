@@ -945,6 +945,14 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: ST
     INTEGER :: wSMB, wST
 
+    ! Shelf collapse forcing
+    REAL(dp),                   POINTER     :: shelf_collapse_mask_t0, shelf_collapse_mask_t1
+    INTEGER :: wshelf_collapse_mask_t0, wshelf_collapse_mask_t1
+    REAL(dp), DIMENSION(:    ), POINTER     :: shelf_collapse_mask0
+    REAL(dp), DIMENSION(:    ), POINTER     :: shelf_collapse_mask1
+    REAL(dp), DIMENSION(:    ), POINTER     :: shelf_collapse_mask
+    INTEGER :: wshelf_collapse_mask0, wshelf_collapse_mask1, wshelf_collapse_mask
+
   END TYPE type_ISMIP_style_forcing
 
   TYPE type_ISMIP_style_ocean

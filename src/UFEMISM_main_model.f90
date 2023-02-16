@@ -258,7 +258,7 @@ CONTAINS
       ! ======================
       ! (move it to after the output for debugging imposed ice removal)
 
-      CALL update_ice_thickness( region%mesh, region%ice, region%BMB, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
+      CALL update_ice_thickness( region%mesh, region%ice, region%BMB, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time, region%climate_matrix%ISMIP_style%shelf_collapse_mask)
       CALL sync
 
       ! == Ice sheet scalars

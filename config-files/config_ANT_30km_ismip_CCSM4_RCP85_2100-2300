@@ -164,7 +164,7 @@
   time_to_restart_from_NAM_config             = 0.0                              ! Can be different from C%start_time_of_run, though this will issue a warning
   time_to_restart_from_EAS_config             = 0.0
   time_to_restart_from_GRL_config             = 0.0
-  time_to_restart_from_ANT_config             = 2014.0
+  time_to_restart_from_ANT_config             = 2100.0
 
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'

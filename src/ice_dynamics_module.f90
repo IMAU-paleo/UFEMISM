@@ -654,8 +654,8 @@ CONTAINS
     fixiness = 1._dp
 
     ! Make sure that the start and end times make sense
-    decay_start = MAX( C%fixed_decay_t_start, C%start_time_of_run)
-    decay_end   = MIN( C%fixed_decay_t_end,   C%end_time_of_run)
+    decay_start = C%fixed_decay_t_start !MAX( C%fixed_decay_t_start, C%start_time_of_run)
+    decay_end   = C%fixed_decay_t_end   !MIN( C%fixed_decay_t_end,   C%end_time_of_run)
 
     ! Compute decaying fixiness
     IF (decay_start >= decay_end) THEN

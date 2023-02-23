@@ -53,7 +53,7 @@
   do_write_debug_data_config                  = .TRUE.                           ! Whether or not the debug NetCDF file should be created and written to
   do_write_grid_data_config                   = .TRUE.                           ! Whether or not the grid NetCDF files should be created and written to
   do_check_for_NaN_config                     = .TRUE.                           ! Whether or not fields should be checked for NaN values
-  do_time_display_config                      = .TRUE.                           ! Print current model time to screen
+  do_time_display_config                      = .FALSE.                          ! Print current model time to screen
 
   ! Mesh
   ! ====
@@ -65,7 +65,7 @@
   filename_external_NAM_config                = 'filename_external_mesh_placeholder'
   filename_external_EAS_config                = 'filename_external_mesh_placeholder'
   filename_external_GRL_config                = 'filename_external_mesh_placeholder'
-  filename_external_ANT_config                = 'results_ANT_30km_ismip_init/restart_ANT_00001.nc'
+  filename_external_ANT_config                = 'results_ANT_30km_ismip_invert_ocean_slow_relax/restart_ANT_00001.nc'
 
   ! Parameters
   nconmax_config                              = 16                               ! Maximum number of vertex connections
@@ -133,7 +133,7 @@
   filename_refgeo_init_NAM_config             = '/home/berends/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
   filename_refgeo_init_EAS_config             = '/home/berends/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
   filename_refgeo_init_GRL_config             = '/home/berends/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
-  filename_refgeo_init_ANT_config             = 'results_ANT_30km_ismip_init/restart_ANT_00001.nc'
+  filename_refgeo_init_ANT_config             = 'results_ANT_30km_ismip_invert_ocean_slow_relax/restart_ANT_00001.nc'
 
   ! Present-day geometry
   choice_refgeo_PD_NAM_config                 = 'realistic'                      ! Choice of present-day geometry for North America; can be "idealised", "realistic", or "restart"
@@ -164,13 +164,13 @@
   time_to_restart_from_NAM_config             = 0.0                              ! Can be different from C%start_time_of_run, though this will issue a warning
   time_to_restart_from_EAS_config             = 0.0
   time_to_restart_from_GRL_config             = 0.0
-  time_to_restart_from_ANT_config             = 90000.0
+  time_to_restart_from_ANT_config             = 20000.0
 
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
   filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
-  filename_restart_ANT_config                 = 'results_ANT_30km_ismip_init/restart_ANT_00001.nc'
+  filename_restart_ANT_config                 = 'results_ANT_30km_ismip_invert_ocean_slow_relax/restart_ANT_00001.nc'
 
   ! == Global forcing (insolation, CO2, d18O, geothermal heat flux)
   ! ===============================================================
@@ -325,7 +325,7 @@
   Martin2011till_phi_Hb_max_config            = 0.0                              ! Martin et al. (2011) bed roughness model: high-end Hb  value of bedrock-dependent till friction angle
   Martin2011till_phi_min_config               = 5.0                              ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
   Martin2011till_phi_max_config               = 20.0                             ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
-  basal_roughness_filename_config             = 'results_ANT_30km_ismip_init/bed_roughness_inv.nc'                               ! NetCDF file containing a basal roughness field for the chosen sliding law
+  basal_roughness_filename_config             = 'results_ANT_30km_ismip_invert_ocean_slow_relax/bed_roughness_inv.nc'                               ! NetCDF file containing a basal roughness field for the chosen sliding law
   do_basal_roughness_remap_adjustment_config  = .TRUE.                           ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
 
   ! Bed roughness inversion
@@ -401,8 +401,8 @@
 
   ISMIP_forcing_filename_baseline_config      = '/home/berends/Datasets/ISMIP6/ISMIP6_clim_1950_1979_mean.nc' ! NetCDF file containing the baseline climate
 
-  ISMIP_future_ocean_temperature_filename_config   = '/Users/berends/Documents/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/GCM_ensemble_mean_1950-2014_yearly_temperature.nc'
-  ISMIP_future_ocean_salinity_filename_config      = '/Users/berends/Documents/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/GCM_ensemble_mean_1950-2014_yearly_salinity.nc'
+  ISMIP_future_ocean_temperature_filename_config   = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/GCM_ensemble_mean_1950-2014_yearly_temperature.nc'
+  ISMIP_future_ocean_salinity_filename_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/GCM_ensemble_mean_1950-2014_yearly_salinity.nc'
 
   ! Basal mass balance
   ! ==================

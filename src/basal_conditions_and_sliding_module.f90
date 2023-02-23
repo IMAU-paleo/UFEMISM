@@ -731,7 +731,9 @@ CONTAINS
     IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( filename), '...'
 
     ! Read bed roughness from file
+    CALL warning('beep A')
     CALL read_field_from_file_2D( filename, 'phi_fric', mesh, ice%phi_fric_a, 'ANT')
+    CALL warning('beep B')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1682,7 +1684,7 @@ CONTAINS
     implicit none
 
     ! In/output variables
-    type(type_mesh),               intent(in)    :: mesh
+    type(type_mesh),               intent(inout)    :: mesh
     type(type_grid),               intent(in)    :: grid
     type(type_ice_model),          intent(inout) :: ice
     type(type_reference_geometry), intent(in)    :: refgeo
@@ -1809,6 +1811,483 @@ CONTAINS
   END SUBROUTINE basal_sliding_inversion_Bernales2017
 
   SUBROUTINE determine_inverted_bed_roughness_rate_of_change( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
+    ! Iteratively invert for basal friction conditions under the grounded ice sheet,
+    ! and carefully extrapolate the resulting field over the rest of the domain
+
+    ! Compute bed roughness rate of change (in degrees/yr) as the product of:
+    ! - The adjustment dphi (in degrees)
+    ! - The inversion time step dt_slid_inv (in yr)
+    ! - A [0 1] weight based on the subgrid grounded fraction and the local slope (unitless)
+
+    implicit none
+
+    ! In/output variables
+    type(type_mesh),               intent(inout)    :: mesh
+    type(type_grid),               intent(in)    :: grid
+    type(type_ice_model),          intent(inout) :: ice
+    type(type_reference_geometry), intent(in)    :: refgeo
+    real(dp),                      intent(in)    :: dt_slid_inv
+    real(dp), dimension(2),        intent(in)    :: amp_slid_inv
+
+    ! Local variables
+    character(len=256), parameter                :: routine_name = 'determine_inverted_bed_roughness_rate_of_change'
+    integer                                      :: vi, vc, ci
+    real(dp)                                     :: h_delta, h_estim, h_delta_perc
+    real(dp)                                     :: fg_exp_mod, w_smooth, w_tot, dphi
+    integer,  dimension(:), pointer              ::  mask,  mask_filled
+    integer                                      :: wmask, wmask_filled
+    real(dp), dimension(:), pointer              ::  dphi_dt_smooth
+    integer                                      :: wdphi_dt_smooth
+    logical                                      :: has_interior_neighbour
+
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: trace_up, trace_down
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: w_up, w_down
+    INTEGER                                            :: ti,n_up,n_down,k
+    REAL(dp), DIMENSION(2)                             :: p,pt
+    REAL(dp)                                           :: Hs_mod, Hs_target, dh_dt_mod
+    REAL(dp)                                           :: deltaH_av_up, dH_dt_av_up, dh_dt_av_down
+    REAL(dp)                                           :: R
+    REAL(dp)                                           :: h_dfrac
+    REAL(dp)                                           :: sigma
+
+    ! Initialisation
+    ! ==============
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Initialise adjustment (in degrees/yr)
+    ice%dphi_dt_a = 0._dp
+    call sync
+
+    ! Allocation
+    ! ==========
+
+    ! Allocate masks for extrapolation
+    call allocate_shared_int_1D( mesh%nV, mask,        wmask       )
+    call allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
+
+    ! Allocate auxiliary bed roughness field
+    call allocate_shared_dp_1D( mesh%nV, dphi_dt_smooth, wdphi_dt_smooth)
+
+    ! Allocate memory for the up- and downstream traces
+    ALLOCATE( trace_up(   mesh%nV, 2))
+    ALLOCATE( trace_down( mesh%nV, 2))
+
+    ! Allocate memory for the linear scaling functions
+    ALLOCATE( w_up(   mesh%nV))
+    ALLOCATE( w_down( mesh%nV))
+
+    ! Do the inversion
+    ! ================
+
+    ! Set default extrapolation mask to zero (i.e. no extrapolation)
+    ! Later we will first extrapolate to margins and grounding lines,
+    ! after that into ice shelf cavities, and finally to open ocean.
+    mask = 0
+    call sync
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Valid inversion vertices
+      ! ========================
+
+      ! Partially floating grounded vertices
+      if (ice%mask_sheet_a( vi) == 1 .and. ice%f_grnd_a( vi) < 1._dp) then
+
+        ! Can't trust the extrapolation here, so let this vertex be inverted,
+        ! but prevent receiving from or contributing to the extrapolation
+        mask( vi) = 0
+
+      ! Some considerations for margin, calving front, and GL vertices
+      elseif (ice%mask_sheet_a( vi) == 1 .and. &
+              (ice%mask_gl_a( vi) == 1 .or. &
+               ice%mask_margin_a( vi) == 1 .or. &
+               ice%mask_cf_a( vi) == 1) ) then
+
+        ! Initialise marker
+        has_interior_neighbour = .false.
+
+        ! Check for non-marginal, fully grounded ice-sheet neighbours
+        do ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          ! Check neighbour
+          if (ice%mask_sheet_a( vc) == 1 .and. &
+              ice%mask_gl_a( vc) == 0 .and. &
+              ice%mask_margin_a( vc) == 0 .and. &
+              ice%f_grnd_a( vc) == 1._dp) then
+            ! Found neighbour
+            has_interior_neighbour = .true.
+            ! Finish search
+            exit
+          end if
+        end do
+
+        ! If search was successful, let the neighbours
+        ! dictate the value for this point
+        if (has_interior_neighbour) then
+          ! Mark for first extrapolation
+          mask( vi) = 1
+          ! Skip inversion and go to next vertex
+          cycle
+
+        ! No valid neighbours, so we can't expect
+        ! reasonable values from the extrapolation
+        else
+          ! Can't trust the extrapolation here, so let this vertex be inverted,
+          ! but prevent receiving from or contributing to the extrapolation
+          mask( vi) = 0
+        end if
+
+      ! Ice-free land
+      elseif (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+        ! Prevent extrapolation over ice-free land
+        mask( vi) = 0
+        ! Skip inversion and go to next vertex
+        cycle
+
+      ! Ocean and ice shelf cavities
+      elseif (ice%mask_ocean_a( vi) == 1) then
+        ! Prevent extrapolation over ocean vertices
+        mask( vi) = 0
+        ! Skip inversion and go to next vertex
+        cycle
+
+      ! Interior, flat, non-boundary ice sheet vertex,
+      ! thus ideal inversion point
+      else
+
+        ! Mark this vertex as valid inversion point
+        mask( vi) = 2
+
+      end if
+
+      ! Bed roughness adjustment
+      ! ========================
+
+!      ! Ice thickness difference w.r.t. reference thickness (in m)
+!      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+
+
+
+
+
+
+
+
+
+      ! The point p
+      p = [mesh%V( vi,1), mesh%V( vi,2)]
+
+      ! Trace the flowline upstream and downstream (Berends et al., 2022, Eqs. 2)
+      ti = mesh%iTri( vi,1)
+      CALL trace_flowline_upstream(   mesh, ice, p, trace_up  , n_up          , ti)
+      CALL trace_flowline_downstream( mesh, ice, p, trace_down, n_down, refgeo, ti)
+
+      ! Calculate linear scaling functions (Berends et al., Eqs. 5)
+      w_up = 0._dp
+      DO k = 1, n_up
+        w_up( k) = REAL( n_up + 1 - k, dp)
+      END DO
+      w_up = w_up / SUM( w_up)
+
+      w_down = 0._dp
+      DO k = 1, n_down
+        w_down( k) = REAL( n_down + 1 - k, dp)
+      END DO
+      w_down = w_down / SUM( w_down)
+
+      ! Calculate upstream line integrals
+      deltaH_av_up = 0._dp
+      dh_dt_av_up  = 0._dp
+      DO k = 1, n_up
+
+        pt = trace_up( k,:)
+        CALL mesh_bilinear_dp(  mesh, ice%dHi_dt_a            , pt, ti, dh_dt_mod)
+        CALL mesh_bilinear_dp(  mesh, ice%Hs_a                , pt, ti, Hs_mod)
+        CALL mesh_bilinear_dp(  mesh, refgeo%Hs               , pt, ti, Hs_target)
+
+        dh_dt_av_up  = dh_dt_av_up  + (dh_dt_mod         ) * w_up( k) !/ C%slid_inv_Berends2022_u0    ! Berends et al., (2022), Eq. 4a
+        deltaH_av_up = deltaH_av_up + (Hs_mod - Hs_target) * w_up( k) !/ C%slid_inv_Berends2022_H0    ! Berends et al., (2022), Eq. 4c
+
+      END DO
+
+      ! Calculate downstream line integral
+      dh_dt_av_down = 0._dp
+      DO k = 1, n_down
+
+        pt = trace_down( k,:)
+        CALL mesh_bilinear_dp(  mesh, ice%dHi_dt_a            , pt, ti, dh_dt_mod)
+
+        dh_dt_av_down = dh_dt_av_down + ( dh_dt_mod) * w_down( k) !/ C%slid_inv_Berends2022_u0  ! Berends et al., (2022), Eq. 4b
+
+      END DO
+
+      ! Scale weights with local ice thickness * velocity
+      ! (thinner and/or ice experiences less basal friction, so the solution is less sensitive to changes in bed roughness there)
+
+      ! Berends et al. (2022), Eq. 7
+      R = MAX( 0._dp, MIN( 1._dp, ((ice%uabs_surf_a( vi) * ice%Hi_a( vi)) / (C%slid_inv_Berends2022_u_scale * C%slid_inv_Berends2022_Hi_scale)) ))
+      ! Berends et al. (2022), Eq. 6
+!      I_tot = (I1 + I2 + I3) * R
+
+
+
+      ! DENK DROM
+      h_delta = deltaH_av_up + 100._dp * (dh_dt_av_up + dh_dt_av_down)
+
+
+
+
+
+
+
+
+
+
+      ! Estimated time of perfect match (never if negative) (in yr)
+      h_estim = -h_delta / (ice%dHi_dt_a(vi) + 1E-6)
+
+      ! Percentage of misfit change relative to previous inversion time-step (in %)
+      h_delta_perc = abs( (h_delta - ice%h_delta_prev( vi)) / ice%h_delta_prev( vi)) * 100._dp
+
+      ! Initialise adjustment (in degrees)
+      dphi = 0._dp
+
+      if (abs(h_delta) <= C%slid_inv_Bernales2017_tol_diff) then
+        ! Match is good enough, focus on keeping it
+
+        ! Check if thickening or thinning
+        if ( ice%dHi_dt_a( vi) >= .0_dp ) then
+          ! Thickening, so reduce friction a bit
+          dphi = -amp_slid_inv(1) * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+        else
+          ! Thinning, so increase friction a bit
+          dphi = +amp_slid_inv(2)/2._dp * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+        end if
+
+      else
+        ! Match is not good enough, check if we need to do something
+
+        ! Overestimation of ice
+        if ( h_delta > .0_dp .and. (h_estim < 0._dp .or. h_estim > 1000._dp)) then
+          ! Not improving, or not improving fast enough
+          dphi = -amp_slid_inv(1) * (1._dp - exp( -abs( h_delta / 100._dp)))
+
+        elseif ( h_delta > .0_dp .and. (h_estim > 0._dp .and. h_estim < dt_slid_inv)) then
+          ! Improving too fast, prevent overshooting
+          dphi = +amp_slid_inv(1)/2._dp * exp( -h_estim / (2._dp * dt_slid_inv))
+
+        ! Underestimation of ice
+        elseif ( h_delta < .0_dp .and. (h_estim < 0._dp .or. h_estim > 1000._dp) ) then
+          ! Not improving, or not improving fast enough
+          dphi = +amp_slid_inv(2)/2._dp * (1._dp - exp( -abs( h_delta / 100._dp)))
+
+        elseif ( h_delta < .0_dp .and. (h_estim > 0._dp .and. h_estim < dt_slid_inv)) then
+          ! Improving too fast, prevent overshooting
+          dphi = -amp_slid_inv(2)/4._dp * exp( -h_estim / (2._dp * dt_slid_inv))
+
+        end if
+
+      end if
+
+      ! Compute bed roughness rate of change (in degrees/yr)
+      ice%dphi_dt_a( vi) = dphi / dt_slid_inv
+
+      ! Save current thickness misfit
+      ice%h_delta_prev( vi) = h_delta
+
+    end do
+    call sync
+
+    ! First extrapolation: margins and GL
+    ! ===================================
+
+    if (par%master) then
+      ! Perform the extrapolation - mask: 2 -> use as seed; 1 -> extrapolate; 0 -> ignore
+      call extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%dphi_dt_a, 40000._dp, mask_filled)
+    end if
+    call sync
+
+    ! Regularise tricky extrapolated areas
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Ice margin and grounding lines
+      if (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 1) then
+        ! Strengthen the effect of grounded fractions for steep slopes
+        fg_exp_mod = MIN( 1.0_dp, MAX( 0._dp, MAX( 0._dp, ice%surf_slop(vi)-.02_dp) / (.06_dp-.02_dp)))
+        ! Scale based on grounded fraction
+        ice%dphi_dt_a( vi) = ice%dphi_dt_a( vi) * ice%f_grnd_a( vi) ** (1._dp + fg_exp_mod)
+
+      ! Ice-free land
+      elseif (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+        ! Reset adjustment over ice-free land
+        ice%dphi_dt_a( vi) = 0._dp
+
+      ! Ocean and ice shelf cavities
+      elseif (ice%mask_ocean_a( vi) == 1) then
+        ! Reset adjustment over ocean points
+        ice%dphi_dt_a( vi) = 0._dp
+      end if
+
+    end do
+    call sync
+
+    ! Second extrapolation: floating side of grounding lines
+    ! ======================================================
+
+    ! Reinitialise mask
+    mask = 0
+    call sync
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Land ice: interior, calving front, margin and (grounded) grodunding line
+      if (ice%mask_sheet_a( vi) == 1) then
+        ! Mark this vertex as ready (already extrapolated or inverted)
+        mask( vi) = 2
+
+      ! Partially grounded (floating) grounding line
+      elseif (ice%mask_glf_a( vi) == 1 .and. &
+              ice%f_grnd_a( vi) > 0._dp) then
+
+        ! Can't use the default value here since the grounded area likely
+        ! contains high surface slopes, and thus it will create very high
+        ! velocities, so allow it to get overwritten during extrapolation
+        mask( vi) = 1
+
+      ! Ice shelf, open ocean, or ice-free land
+      else
+        ! Prevent extrapolation: use existing value
+        mask( vi) = 0
+
+      end if
+
+    end do
+    call sync
+
+    if (par%master) then
+      ! Perform the extrapolation - mask: 2 -> use as seed; 1 -> extrapolate; 0 -> ignore
+      call extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%dphi_dt_a, 40000._dp, mask_filled)
+    end if
+    call sync
+
+    ! Third extrapolation: ice shelves
+    ! ================================
+
+    ! Reinitialise mask
+    mask = 0
+    call sync
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Land ice: interior, calving front, margin and (grounded) grodunding line
+      if (ice%mask_sheet_a( vi) == 1) then
+        ! Mark this vertex as ready (already extrapolated or inverted)
+        mask( vi) = 2
+
+      ! Floating side of grounding line
+      elseif (ice%mask_glf_a( vi) == 1) then
+        ! Mark this vertex as ready (already extrapolated)
+        mask( vi) = 2
+
+      ! Open ocean
+      elseif (ice%mask_ocean_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+        ! Mark this vertex as ready (default value)
+        mask( vi) = 2
+
+      ! Ice shelf
+      elseif (ice%mask_ocean_a( vi) == 1 .and. ice%mask_ice_a( vi) == 1) then
+        ! Mark this vertex for extrapolation
+        mask( vi) = 1
+
+      ! Ice-free land
+      else
+        ! Prevent extrapolation
+        mask( vi) = 0
+
+      end if
+
+    end do
+    call sync
+
+    if (par%master) then
+      ! Perform the extrapolation - mask: 2 -> use as seed; 1 -> extrapolate; 0 -> ignore
+      call extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%dphi_dt_a, 40000._dp, mask_filled)
+    end if
+    call sync
+
+    ! Smoothing
+    ! =========
+
+    ! Store the inverted adjustment in a local variable
+    dphi_dt_smooth( mesh%vi1:mesh%vi2) = ice%dphi_dt_a( mesh%vi1:mesh%vi2)
+    call sync
+
+    ! Smooth the local variable
+    if (C%slid_inv_Bernales2017_smooth_w > 0._dp) THEN
+      call smooth_Gaussian_2D( mesh, grid, dphi_dt_smooth, C%slid_inv_Bernales2017_smooth_r)
+    end if
+    call sync
+
+    ! Final bed roughness field
+    ! =========================
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Partially floating grounded ice
+      if (ice%mask_sheet_a( vi) == 1 .and. ice%f_grnd_a( vi) < 1._dp) then
+
+        ! Prevent neighbour leakage from the smoothing
+        w_tot = 0._dp
+
+      ! Partially grounded floating ice
+      elseif (ice%mask_shelf_a( vi) == 1 .and. ice%f_grnd_a( vi) > 0._dp) then
+
+        ! Prevent neighbour leakage from the smoothing
+        w_tot = 0._dp
+
+      ! Ice-free land
+      elseif (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+
+        ! Prevent neighbour leakage from the smoothing
+        w_tot = 0._dp
+
+      else
+
+        ! Apply full smoothing for the rest
+        w_tot = C%slid_inv_Bernales2017_smooth_w
+
+      end if
+
+      ! Combine the smoothed and raw inverted parameter through a weighed average
+      ice%dphi_dt_a( vi) = (1._dp - w_tot) * ice%dphi_dt_a( vi) + &
+                                    w_tot  * dphi_dt_smooth( vi)
+
+    end do
+    call sync
+
+    ! Finalisation
+    ! ============
+
+    ! Safety
+    call check_for_NaN_dp_1D( ice%dphi_dt_a, 'ice%dphi_dt_a')
+
+    ! Clean up after yourself
+    call deallocate_shared( wmask_filled)
+    call deallocate_shared( wmask)
+    call deallocate_shared( wdphi_dt_smooth)
+    DEALLOCATE( trace_up  )
+    DEALLOCATE( trace_down)
+    DEALLOCATE( w_up      )
+    DEALLOCATE( w_down    )
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  END SUBROUTINE determine_inverted_bed_roughness_rate_of_change
+
+  SUBROUTINE determine_inverted_bed_roughness_rate_of_change_old( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
     ! and carefully extrapolate the resulting field over the rest of the domain
 
@@ -2184,7 +2663,7 @@ CONTAINS
     ! Finalise routine path
     call finalise_routine( routine_name)
 
-  END SUBROUTINE determine_inverted_bed_roughness_rate_of_change
+  END SUBROUTINE determine_inverted_bed_roughness_rate_of_change_old
 
   SUBROUTINE basal_sliding_inversion_Berends2022( mesh, grid, ice, refgeo, time, do_adjustment)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
@@ -2393,8 +2872,6 @@ CONTAINS
 
     nmax = SIZE( T,1)
 
-    dx_trace = mesh%resolution_min
-
     ! Initialise
     T  = 0._dp
     n  = 0
@@ -2406,6 +2883,7 @@ CONTAINS
       ! Interpolate surface velocity to the tracer location
       CALL mesh_bilinear_dp(  mesh, ice%u_surf_a, pt, ti, u( 1))
       CALL mesh_bilinear_dp(  mesh, ice%v_surf_a, pt, ti, u( 2))
+      CALL mesh_bilinear_dp(  mesh, mesh%R      , pt, ti, dx_trace)
 
       ! If we've reached the ice divide, end the trace
       IF (NORM2( u) < 1._dp) EXIT
@@ -2462,8 +2940,6 @@ CONTAINS
 
     nmax = SIZE( T,1)
 
-    dx_trace = mesh%resolution_min
-
     ! Initialise
     T  = 0._dp
     n  = 0
@@ -2477,12 +2953,15 @@ CONTAINS
       CALL find_containing_vertex( mesh, pt, vi)
 
       ! If we've reached the ice margin, end the trace
+!      IF (ice%mask_ice_a( vi) == 0 .OR. ice%mask_margin_a( vi) == 1 .OR. ice%Hi_a( vi) < 1._dp .OR. &
+!          refgeo%Hi( vi) < 1._dp .OR. ice%BIV_uabs_surf_target( vi) == 0._dp) EXIT
       IF (ice%mask_ice_a( vi) == 0 .OR. ice%mask_margin_a( vi) == 1 .OR. ice%Hi_a( vi) < 1._dp .OR. &
-          refgeo%Hi( vi) < 1._dp .OR. ice%BIV_uabs_surf_target( vi) == 0._dp) EXIT
+          refgeo%Hi( vi) < 1._dp) EXIT
 
       ! Interpolate surface velocity to the tracer location
       CALL mesh_bilinear_dp(  mesh, ice%u_surf_a, pt, ti, u( 1))
       CALL mesh_bilinear_dp(  mesh, ice%v_surf_a, pt, ti, u( 2))
+      CALL mesh_bilinear_dp(  mesh, mesh%R      , pt, ti, dx_trace)
 
       ! Safety
       IF (u( 1) == 0._dp .AND. u( 2) == 0._dp) EXIT

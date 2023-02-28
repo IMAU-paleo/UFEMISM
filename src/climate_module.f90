@@ -4813,8 +4813,6 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     ELSEIF (time > C%clim_inv_t_end) THEN
-      ! Inversion is done. Use running average of cliamte fields.
-      ! climate%PD_obs%Precip( mesh%vi1:mesh%vi2) = climate%PD_obs%Precip_ave( mesh%vi1:mesh%vi2)
       CALL finalise_routine( routine_name)
       RETURN
     END IF
@@ -4859,18 +4857,6 @@ CONTAINS
       END DO
     END DO
     CALL sync
-
-    ! Running climate field averages
-    ! ==============================
-
-    ! ! Update the running window: drop oldest record and push the rest to the back
-    ! climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,2:C%clim_inv_window_size) = climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,1:C%clim_inv_window_size-1)
-
-    ! ! Update the running window: add new record to beginning of window
-    ! climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,1) = climate%PD_obs%Precip( mesh%vi1:mesh%vi2)
-
-    ! ! Compute running average
-    ! climate%PD_obs%Precip_ave( mesh%vi1:mesh%vi2) = SUM(climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,:),2) / REAL(C%clim_inv_window_size,dp)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

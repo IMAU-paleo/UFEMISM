@@ -317,7 +317,6 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness'
-    INTEGER                                            :: k
 
     ! === Initialisation ===
     ! ======================
@@ -1776,7 +1775,7 @@ CONTAINS
     ! Modify positive-misfit adjustment as time goes on: from scale_start to scale_end
     amp_slid_inv(1) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start + t_scale * C%slid_inv_Bernales2017_scale_end
     ! Modify negative-misfit adjustment as time goes on: from scale_start to zero
-    amp_slid_inv(2) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start ! - t_scale * C%slid_inv_Bernales2017_scale_start
+    amp_slid_inv(2) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start
 
     ! Safety net
     amp_slid_inv(1) = max( amp_slid_inv(1), 0._dp)
@@ -1801,8 +1800,13 @@ CONTAINS
     t_scale = (time - evo_start) / (evo_end - evo_start)
     ! Limit t_scale to [0 1]
     t_scale = max( 0._dp, min( t_scale, 1._dp))
+
     ! Compute time-variable bed roughness minimum value
-    phi_min = t_scale * C%slid_inv_phi_min + (1._dp-t_scale) * max(2._dp, C%slid_inv_phi_min)
+    IF (C%is_restart) THEN
+      phi_min = C%slid_inv_phi_min
+    ELSE
+      phi_min = t_scale * C%slid_inv_phi_min + (1._dp-t_scale) * max(2._dp, C%slid_inv_phi_min)
+    END IF
 
     ! Apply rate of change
     ! ====================
@@ -2082,8 +2086,7 @@ CONTAINS
         mask( vi) = 2
 
       ! Partially grounded (floating) grounding line
-      elseif (ice%mask_glf_a( vi) == 1 .and. &
-              ice%f_grnd_a( vi) > 0._dp) then
+      elseif (ice%mask_glf_a( vi) == 1) then! .and. ice%f_grnd_a( vi) > 0._dp) then
 
         ! Can't use the default value here since the grounded area likely
         ! contains high surface slopes, and thus it will create very high
@@ -2600,17 +2603,17 @@ CONTAINS
       ice%dphi_dt_a = 0._dp
       ice%h_delta_prev = 0._dp
 
-      IF (C%choice_basal_roughness /= 'restart') THEN
-        ! Set initial till friction angle values based on inversion limits
-        DO vi = mesh%vi1, mesh%vi2
-          IF (ice%mask_land_a( vi) == 1) THEN
-            ice%phi_fric_a( vi) = ice%phi_fric_a( vi)
-          ELSE
-            ice%phi_fric_a( vi) = C%slid_inv_phi_min
-          END IF
-        END DO
-        CALL sync
-      END IF
+      ! IF (C%choice_basal_roughness /= 'restart') THEN
+      !   ! Set initial till friction angle values based on inversion limits
+      !   DO vi = mesh%vi1, mesh%vi2
+      !     IF (ice%mask_land_a( vi) == 1) THEN
+      !       ice%phi_fric_a( vi) = ice%phi_fric_a( vi)
+      !     ELSE
+      !       ice%phi_fric_a( vi) = C%slid_inv_phi_min
+      !     END IF
+      !   END DO
+      !   CALL sync
+      ! END IF
 
       ! ! Target velocity fields
       ! CALL initialise_basal_inversion_target_velocity( mesh, ice)

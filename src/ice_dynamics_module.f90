@@ -316,6 +316,7 @@ CONTAINS
       region%ice%dHi_dt_a(     vi1:vi2) = 0._dp
       region%ice%Hi_corr(      vi1:vi2) = region%ice%Hi_a( vi1:vi2)
       region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_a( vi1:vi2)
+      CALL sync
     ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
       IF (region%time == region%t_next_SIA ) do_update_ice_velocity = .TRUE.
     ELSEIF (C%choice_ice_dynamics == 'SSA') THEN

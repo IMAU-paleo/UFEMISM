@@ -361,10 +361,8 @@
   calving_threshold_thickness_shelf_config    = 100.0                            ! Threshold ice thickness for ice shelf calving front in the "threshold_thickness" calving law
   calving_threshold_thickness_sheet_config    = 0.0                              ! Threshold ice thickness for ice sheet calving front in the "threshold_thickness" calving law
   max_calving_rounds_config                   = 10                               ! Maximum number of calving loops during chain reaction
-  do_remove_shelves_config                    = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
-  remove_shelves_larger_than_PD_config        = .TRUE.                           ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
-  continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
-  continental_shelf_min_height_config         = -2000.0                          ! Maximum depth of the continental shelf
+  choice_imposed_shelf_removal_config         = 'beyond_PD'                      ! Choice of imposed shelf removal: "none", "total", "beyond_PD", "beyond_PD_keep_gl", "beyond_continental"
+  continental_shelf_min_height_config         = -2000.0                          ! For "beyond_continental": threshold depth of seabed; ice shelf removal deeper than that.
   minimum_ice_thickness_config                = 0.1                              ! If ice anywhere is thinner than this, remove it
 
   ! Thermodynamics and rheology
@@ -556,30 +554,21 @@
   help_field_05_config                        = 'dHs'
   help_field_06_config                        = 'Hb'
   help_field_07_config                        = 'dHb'
-  help_field_08_config                        = 'BMB'
-  help_field_09_config                        = 'phi_fric'
-  help_field_10_config                        = 'uabs_surf'
-  help_field_11_config                        = 'uabs_base'
-  help_field_12_config                        = 'T2m_year'
-  help_field_13_config                        = 'Precip_year'
-  help_field_14_config                        = 'Rainfall_year'
-  help_field_15_config                        = 'Snowfall_year'
-  help_field_16_config                        = 'Albedo_year'
-  help_field_17_config                        = 'Melt_year'
-  help_field_18_config                        = 'Refreezing_year'
-  help_field_19_config                        = 'Runoff_year'
-  help_field_20_config                        = 'SMB_year'
-  help_field_21_config                        = 'Ti_hom_basal'
-  help_field_22_config                        = 'f_grnd'
-  help_field_25_config                        = 'dHi_dt'
-  help_field_26_config                        = 'surf_curv'
-  help_field_27_config                        = 'surf_peak'
-  help_field_28_config                        = 'surf_sink'
-  help_field_29_config                        = 'surf_slop'
-  help_field_30_config                        = 'bed_curv'
-  help_field_31_config                        = 'beta_eff'
-  help_field_32_config                        = 'T_ocean_base'
-  !help_field_33_config                        = 'uabs_surf_target'
-  help_field_34_config                        = 'none'
+  help_field_08_config                        = 'SMB_year'
+  help_field_09_config                        = 'BMB'
+  help_field_10_config                        = 'phi_fric'
+  help_field_11_config                        = 'uabs_surf'
+  help_field_12_config                        = 'Ti_hom_basal'
+  help_field_13_config                        = 'T_ocean_base'
+  help_field_14_config                        = 'dHi_dt'
+  help_field_15_config                        = 'dHb_dt'
+  help_field_16_config                        = 'surf_curv'
+  help_field_17_config                        = 'surf_peak'
+  help_field_18_config                        = 'surf_sink'
+  help_field_19_config                        = 'surf_slop'
+  help_field_20_config                        = 'beta_eff'
+  help_field_21_config                        = 'lat'
+  help_field_22_config                        = 'lon'
+  help_field_23_config                        = 'none'
 
 /

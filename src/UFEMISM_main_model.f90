@@ -21,9 +21,8 @@ MODULE UFEMISM_main_model
                                                  reallocate_shared_int_2D, reallocate_shared_dp_2D, &
                                                  reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                                  deallocate_shared
-  USE netcdf_module,                       ONLY: create_regional_scalar_output_file
   USE netcdf_debug_module,                 ONLY: debug, write_to_debug_file, create_debug_file, initialise_debug_fields, reallocate_debug_fields, associate_debug_fields
-  USE netcdf_module,                       ONLY: create_output_files, write_to_output_files
+  USE netcdf_module,                       ONLY: create_output_files, write_to_output_files, create_regional_scalar_output_file, create_GIA_eq_geometry_file_grid
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
                                                  type_climate_matrix_global, type_ocean_matrix_global, &
                                                  type_reference_geometry, type_ice_model
@@ -314,6 +313,20 @@ CONTAINS
       IF (par%master) dt_ave = dt_ave + region%dt
       CALL sync
 
+      ! == Turn off future GIA
+      ! ======================
+
+      ! IF (region%time >= 0._dp) THEN
+      !   IF (region%time < C%dt_max) THEN
+      !     print*, ''
+      !     print*, 'TURNING OFF GIA! <==='
+      !     print*, ''
+      !   END IF
+
+      !   C%choice_GIA_model = 'none'
+      ! END IF
+      ! CALL sync
+
     END DO
 
     ! ===========================================
@@ -340,6 +353,9 @@ CONTAINS
         ! Write inverted bed roughness to a file
         CALL write_inverted_bed_roughness_to_file( region%mesh, region%grid_output, region%ice)
       END IF
+
+      ! Write final equilibrium GIA geometry to a file
+      CALL create_GIA_eq_geometry_file_grid( region%mesh, region%grid_output, region%ice, region%refgeo_PD)
 
     END IF
 

@@ -95,7 +95,7 @@ CONTAINS
       IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
         ice%surface_load_mesh( vi) = (ice%SL_a( vi) - ice%Hb_a( vi)) * grid%dx**2 * seawater_density
       ELSEIF (ice%Hi_a( vi) > 0._dp) THEN
-        ice%surface_load_mesh( vi) =  ice%Hi_a( vi)                * grid%dx**2 * ice_density
+        ice%surface_load_mesh( vi) =  ice%Hi_a( vi) * grid%dx**2 * ice_density
       ELSE
         ice%surface_load_mesh( vi) = 0._dp
       END IF
@@ -260,6 +260,8 @@ CONTAINS
         ice%surface_load_PD_mesh( vi) = -refgeo_GIAeq%Hb( vi) * grid%dx**2 * seawater_density
       ELSEIF (refgeo_GIAeq%Hi( vi) > 0._dp) THEN
         ice%surface_load_PD_mesh( vi) =  refgeo_GIAeq%Hi( vi) * grid%dx**2 * ice_density
+      ELSE
+        ice%surface_load_PD_mesh( vi) = 0._dp
       END IF
     END DO
     CALL sync

@@ -24,7 +24,8 @@ MODULE netcdf_module
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
+                                             map_square_to_square_cons_2nd_order_2D
   USE data_types_netcdf_module
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
                                              type_debug_fields, type_ice_model, &
@@ -3293,11 +3294,11 @@ CONTAINS
     CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
 
     ! Read the data
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,      refgeo%grid%x,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_y,      refgeo%grid%y,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hi,     refgeo%Hi_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hb,     refgeo%Hb_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hs,     refgeo%Hs_grid, start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,  refgeo%grid%x,  start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_y,  refgeo%grid%y,  start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hi, refgeo%Hi_grid, start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hb, refgeo%Hb_grid, start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hs, refgeo%Hs_grid, start = (/ 1, 1 /) ))
 
     ! Close the netcdf file
     CALL close_netcdf_file( refgeo%netcdf%ncid)
@@ -4999,6 +5000,149 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_SELEN_output_file
+
+! ===== GIA =====
+! ===============
+
+  SUBROUTINE create_GIA_eq_geometry_file_grid( mesh, grid_low, ice, refgeo_PD)
+    ! Create a new GIA eq file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),               INTENT(IN) :: mesh
+    TYPE(type_grid),               INTENT(IN) :: grid_low
+    TYPE(type_ice_model),          INTENT(IN) :: ice
+    TYPE(type_reference_geometry), INTENT(IN) :: refgeo_PD
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'create_GIA_eq_geometry_file_grid'
+    TYPE(type_netcdf_reference_geometry)      :: netcdf
+    INTEGER                                   :: i
+    LOGICAL                                   :: file_exists
+    INTEGER                                   :: x, y
+    REAL(dp), DIMENSION(:,:  ), POINTER       ::  d_grid_low,  d_grid_high
+    INTEGER                                   :: wd_grid_low, wd_grid_high
+
+    ! Initialisation
+    ! ==============
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate shared memory on the low-res and high-res grids
+    CALL allocate_shared_dp_2D( grid_low%nx, grid_low%ny, d_grid_low, wd_grid_low)
+    CALL allocate_shared_dp_2D( refgeo_PD%grid%nx, refgeo_PD%grid%ny, d_grid_high, wd_grid_high)
+
+    ! Create file
+    ! ===========
+
+    IF (par%master) THEN
+
+      ! Get file name and check for presence
+      netcdf%filename = TRIM(C%output_dir) // TRIM(C%GIA_eq_filename_output)
+      i = INDEX( netcdf%filename, '.nc')
+      netcdf%filename = netcdf%filename( 1:i-1) // '_grid.nc'
+      INQUIRE(EXIST=file_exists, FILE = TRIM( netcdf%filename))
+      IF (file_exists) THEN
+        CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
+      END IF
+
+      ! Create netcdf file
+      IF (par%master) WRITE(0,*) ''
+      IF (par%master) WRITE(0,*) ' Writing new GIA equilibrium geometry to file "', TRIM( netcdf%filename), '"...'
+      CALL handle_error(nf90_create( netcdf%filename, IOR(nf90_clobber,nf90_share), netcdf%ncid))
+
+      ! Define dimensions:
+      CALL create_dim( netcdf%ncid, netcdf%name_dim_x, refgeo_PD%grid%nx, netcdf%id_dim_x)
+      CALL create_dim( netcdf%ncid, netcdf%name_dim_y, refgeo_PD%grid%ny, netcdf%id_dim_y)
+
+      ! Placeholders for the dimension ID's, for shorter code
+      x = netcdf%id_dim_x
+      y = netcdf%id_dim_y
+
+      ! Define variables:
+      ! The order of the CALL statements for the different variables determines their
+      ! order of appearence in the netcdf file.
+
+      ! Dimension variables
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_x,  [x   ], netcdf%id_var_x,  long_name='X-coordinate', units='m')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_y,  [   y], netcdf%id_var_y,  long_name='Y-coordinate', units='m')
+
+      ! Geometry
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb, [x, y], netcdf%id_var_Hb, long_name='Bedrock elevation', units='metres')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi, [x, y], netcdf%id_var_Hi, long_name='Ice thickness',     units='metres')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs, [x, y], netcdf%id_var_Hs, long_name='Surface elevation', units='metres')
+
+      ! Leave definition mode:
+      CALL handle_error(nf90_enddef( netcdf%ncid))
+
+      ! Write the data
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_x, refgeo_PD%grid%x))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_y, refgeo_PD%grid%y))
+
+    END IF ! IF (par%master) THEN
+
+    ! Bedrock elevation
+    ! =================
+
+    ! Map data from the model mesh to the low-res square grid
+    CALL map_mesh2grid_2D( mesh, grid_low, ice%dHb_a, d_grid_low)
+
+    ! Map data from the low-res grid to the high-res grid
+    CALL map_square_to_square_cons_2nd_order_2D( grid_low%nx, grid_low%ny, grid_low%x, grid_low%y, &
+                                                 refgeo_PD%grid%nx, refgeo_PD%grid%ny, refgeo_PD%grid%x, refgeo_PD%grid%y, &
+                                                 d_grid_low, d_grid_high)
+
+    ! Write data into file
+    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb, d_grid_high+refgeo_PD%Hb_grid))
+
+    ! Ice thickness
+    ! =============
+
+    ! Map data from the model mesh to the low-res square grid
+    CALL map_mesh2grid_2D( mesh, grid_low, ice%dHi_a, d_grid_low)
+
+    ! Map data from the low-res grid to the high-res grid
+    CALL map_square_to_square_cons_2nd_order_2D( grid_low%nx, grid_low%ny, grid_low%x, grid_low%y, &
+                                                 refgeo_PD%grid%nx, refgeo_PD%grid%ny, refgeo_PD%grid%x, refgeo_PD%grid%y, &
+                                                 d_grid_low, d_grid_high)
+
+    ! Write data into file
+    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi, d_grid_high+refgeo_PD%Hi_grid))
+
+
+    ! Surface elevation
+    ! =================
+
+    ! Map data from the model mesh to the low-res square grid
+    CALL map_mesh2grid_2D( mesh, grid_low, ice%dHs_a, d_grid_low)
+
+    ! Map data from the low-res grid to the high-res grid
+    CALL map_square_to_square_cons_2nd_order_2D( grid_low%nx, grid_low%ny, grid_low%x, grid_low%y, &
+                                                 refgeo_PD%grid%nx, refgeo_PD%grid%ny, refgeo_PD%grid%x, refgeo_PD%grid%y, &
+                                                 d_grid_low, d_grid_high)
+
+    ! Write data into file
+    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs, d_grid_high+refgeo_PD%Hs_grid))
+
+    ! Finalisation
+    ! ============
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    IF (par%master) CALL handle_error(nf90_sync( netcdf%ncid))
+
+    ! Close the file
+    IF (par%master) CALL close_netcdf_file( netcdf%ncid)
+
+    ! Clean up after yoself
+    CALL deallocate_shared( wd_grid_low )
+    CALL deallocate_shared( wd_grid_high)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE create_GIA_eq_geometry_file_grid
 
 ! ===== Basal inversion =====
 ! ===========================

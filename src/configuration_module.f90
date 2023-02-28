@@ -805,6 +805,7 @@ MODULE configuration_module
     REAL(dp)            :: ELRA_lithosphere_flex_rigidity_config       = 1.0E+25_dp                       ! Lithospheric flexural rigidity [kg m^2 s^-2]
     REAL(dp)            :: ELRA_bedrock_relaxation_time_config         = 3000.0_dp                        ! Relaxation time for bedrock adjustment [yr]
     REAL(dp)            :: ELRA_mantle_density_config                  = 3300.0_dp                        ! Mantle density [kg m^-3]
+    CHARACTER(LEN=256)  :: GIA_eq_filename_output_config               = 'GIA_eq_final_geometry.nc'       ! NetCDF file where the final geometry will be saved
 
   ! == SELEN
   ! ========
@@ -1596,6 +1597,7 @@ MODULE configuration_module
     REAL(dp)                            :: ELRA_lithosphere_flex_rigidity
     REAL(dp)                            :: ELRA_bedrock_relaxation_time
     REAL(dp)                            :: ELRA_mantle_density
+    CHARACTER(LEN=256)                  :: GIA_eq_filename_output
 
     ! SELEN
     ! =====
@@ -2453,6 +2455,7 @@ CONTAINS
                      ELRA_lithosphere_flex_rigidity_config,           &
                      ELRA_bedrock_relaxation_time_config,             &
                      ELRA_mantle_density_config,                      &
+                     GIA_eq_filename_output_config,                   &
                      SELEN_run_at_t_start_config,                     &
                      SELEN_n_TDOF_iterations_config,                  &
                      SELEN_n_recursion_iterations_config,             &
@@ -3397,6 +3400,7 @@ CONTAINS
     C%ELRA_lithosphere_flex_rigidity           = ELRA_lithosphere_flex_rigidity_config
     C%ELRA_bedrock_relaxation_time             = ELRA_bedrock_relaxation_time_config
     C%ELRA_mantle_density                      = ELRA_mantle_density_config
+    C%GIA_eq_filename_output                   = GIA_eq_filename_output_config
 
     ! SELEN
     ! =====

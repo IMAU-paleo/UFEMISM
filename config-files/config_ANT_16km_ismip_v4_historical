@@ -4,34 +4,34 @@
   ! ====================
 
   ! General
-  start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 10000.0                         ! End   time (in years) of the simulations
+  start_time_of_run_config                    = 1950.0                           ! Start time (in years) of the simulations
+  end_time_of_run_config                      = 2014.0                           ! End   time (in years) of the simulations
   dt_mesh_min_config                          = 1e20                             ! Minimum amount of time (in years) between mesh updates
   dt_coupling_config                          = 1e20                             ! Interval of coupling (in years) between the four ice-sheets
 
   ! Ice dynamics
-  dt_max_config                               = 5.0                              ! Maximum time step (in years) of the ice model
+  dt_max_config                               = 1.0                              ! Maximum time step (in years) of the ice model
   dt_min_config                               = 0.01                             ! Smallest allowed time step [yr]
   dt_startup_phase_config                     = 1.0                              ! Length of time window (in years) after start_time when dt = dt_min, to ensure smooth restarts
-  dt_cooldown_phase_config                    = 0.0                              ! Length of time window (in years) before end_time when dt = dt_min, to ensure smooth restarts
+  dt_cooldown_phase_config                    = 1.0                              ! Length of time window (in years) before end_time when dt = dt_min, to ensure smooth restarts
 
   ! Sub-models
-  dt_thermo_config                            = 2.0                              ! Time step (in years) for updating thermodynamics
-  dt_climate_config                           = 10.0                             ! Time step (in years) for updating the climate
-  dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
-  dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB [not used; computed every time step now]
-  dt_BMB_config                               = 10.0                             ! Time step (in years) for updating the BMB [not used; computed every time step now]
-  dt_bedrock_ELRA_config                      = 100.0                            ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
+  dt_thermo_config                            = 1.0                              ! Time step (in years) for updating thermodynamics
+  dt_climate_config                           = 1.0                              ! Time step (in years) for updating the climate
+  dt_ocean_config                             = 1.0                              ! Time step (in years) for updating the ocean
+  dt_SMB_config                               = 1.0                              ! Time step (in years) for updating the SMB [not used; computed every time step now]
+  dt_BMB_config                               = 1.0                              ! Time step (in years) for updating the BMB [not used; computed every time step now]
+  dt_bedrock_ELRA_config                      = 1.0                              ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
   dt_SELEN_config                             = 1000.0                           ! Time step (in years) for calling SELEN
 
   ! Inversions
-  dt_slid_inv_guess_config                    = 10.0                              ! Time step (in years) for calling the iterative inversion of basal roughness - first guess stage
+  dt_slid_inv_guess_config                    = 4.0                              ! Time step (in years) for calling the iterative inversion of basal roughness - first guess stage
   dt_slid_inv_equil_config                    = 5000.0                           ! Time step (in years) for calling the iterative inversion of basal roughness - equilibrium stage
   dt_ocean_inv_guess_config                   = 2.0                              ! Time step (in years) for calling the iterative inversion of ocean temperatures - first guess stage
   dt_ocean_inv_equil_config                   = 50.0                             ! Time step (in years) for calling the iterative inversion of ocean temperatures - equilibrium stage
 
   ! Output
-  dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
+  dt_output_config                            = 1.0                              ! Time step (in years) for writing output
 
   ! Which ice sheets do we simulate?
   ! ================================
@@ -45,15 +45,15 @@
   ! ======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_ANT_30km_ismip_invert_sliding_fixed_shelves'    ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'results_ANT_16km_ismip_v4_historical'    ! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
 
-  do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
+  do_write_debug_data_config                  = .TRUE.                           ! Whether or not the debug NetCDF file should be created and written to
   do_write_grid_data_config                   = .TRUE.                           ! Whether or not the grid NetCDF files should be created and written to
   do_check_for_NaN_config                     = .TRUE.                           ! Whether or not fields should be checked for NaN values
-  do_time_display_config                      = .FALSE.                           ! Print current model time to screen
+  do_time_display_config                      = .FALSE.                          ! Print current model time to screen
 
   ! Antarctica
   lambda_M_ANT_config                         = 0.0                              ! Longitude of the pole of the stereographic projection for the Antarctica domain [degrees east]
@@ -69,12 +69,12 @@
 
   ! Generation
   use_submesh_config                          = .FALSE.                          ! Generate mesh in parallel using multi-process method
-  use_external_mesh_config                    = .FALSE.                          ! Use a mesh from an external file
+  use_external_mesh_config                    = .TRUE.                           ! Use a mesh from an external file
 
   filename_external_NAM_config                = 'filename_external_mesh_placeholder'
   filename_external_EAS_config                = 'filename_external_mesh_placeholder'
   filename_external_GRL_config                = 'filename_external_mesh_placeholder'
-  filename_external_ANT_config                = 'filename_external_mesh_placeholder'
+  filename_external_ANT_config                = 'results_ANT_16km_ismip_invert_sliding_and_ocean/restart_ANT_00001.nc'
 
   ! Parameters
   nconmax_config                              = 16                               ! Maximum number of vertex connections
@@ -83,7 +83,7 @@
   res_max_config                              = 200.0                            ! Maximum allowed resolution                            [km]
   res_max_ice_config                          = 100.0                            ! Maximum allowed resolution over ice                   [km]
   res_max_margin_config                       = 30.0                             ! Maximum allowed resolution over land-based ice margin [km]
-  res_max_gl_config                           = 30.0                             !                                 grounding line        [km]
+  res_max_gl_config                           = 16.0                             !                                 grounding line        [km]
   res_max_cf_config                           = 30.0                             !                                 calving front         [km]
   res_max_mountain_config                     = 200.0                            !                                 mountains             [km]
   res_max_coast_config                        = 200.0                            !                                 coastline             [km]
@@ -112,18 +112,18 @@
   ! Resolutions of the different square grids
   ! =========================================
 
-  dx_grid_output_config                       = 32000.0                          ! Resolution of the square grid used for writing output                [m]
-  dx_grid_GIA_config                          = 32000.0                          ! Resolution of the square grid used for GIA modelling (ELRA or SELEN) [m]
-  dx_grid_smooth_config                       = 32000.0                          ! Resolution of the square grid used for data smoothing                [m]
+  dx_grid_output_config                       = 16000.0                          ! Resolution of the square grid used for writing output                [m]
+  dx_grid_GIA_config                          = 16000.0                          ! Resolution of the square grid used for GIA modelling (ELRA or SELEN) [m]
+  dx_grid_smooth_config                       = 16000.0                          ! Resolution of the square grid used for data smoothing                [m]
 
   ! ISMIP-style output
   ! ==================
 
-  do_write_ISMIP_output_config                = .FALSE.                          ! Whether or not to create a set of ISMIP output files
+  do_write_ISMIP_output_config                = .TRUE.                           ! Whether or not to create a set of ISMIP output files
   ISMIP_output_group_code_config              = 'IMAU'                           ! Code for the group      name in the ISMIP output file names
-  ISMIP_output_model_code_config              = 'UFEMISM'                        ! Code for the model      name in the ISMIP output file names
-  ISMIP_output_experiment_code_config         = 'test'                           ! Code for the experiment name in the ISMIP output file names
-  ISMIP_output_basetime_config                = 'YYYY-MM-DD'                     ! Basetime for the ISMIP output files (e.g. '1900-01-01')
+  ISMIP_output_model_code_config              = 'UFEMISM4'                       ! Code for the model      name in the ISMIP output file names
+  ISMIP_output_experiment_code_config         = 'historical'                     ! Code for the experiment name in the ISMIP output file names
+  ISMIP_output_basetime_config                = '0000-01-01'                     ! Basetime for the ISMIP output files (e.g. '1900-01-01')
 
   ! Reference geometries (initial, present-day, and GIA equilibrium)
   ! ================================================================
@@ -138,11 +138,11 @@
   choice_refgeo_init_NAM_config               = 'realistic'                      ! Choice of initial geometry for North America; can be "idealised", "realistic", or "restart"
   choice_refgeo_init_EAS_config               = 'realistic'                      ! Choice of initial geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
   choice_refgeo_init_GRL_config               = 'realistic'                      ! Choice of initial geometry for Greenland    ; can be "idealised", "realistic", or "restart"
-  choice_refgeo_init_ANT_config               = 'realistic'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  choice_refgeo_init_ANT_config               = 'restart'                        ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
   filename_refgeo_init_NAM_config             = '/home/berends/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
   filename_refgeo_init_EAS_config             = '/home/berends/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
   filename_refgeo_init_GRL_config             = '/home/berends/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
-  filename_refgeo_init_ANT_config             = '/home/berends/Datasets/BedMachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  filename_refgeo_init_ANT_config             = 'results_ANT_16km_ismip_invert_sliding_and_ocean/restart_ANT_00001.nc'
 
   ! Present-day geometry
   choice_refgeo_PD_NAM_config                 = 'realistic'                      ! Choice of present-day geometry for North America; can be "idealised", "realistic", or "restart"
@@ -167,19 +167,19 @@
   ! Whether or not the simulation is a restart of a previous simulation
   ! ===================================================================
 
-  is_restart_config                           = .FALSE.
+  is_restart_config                           = .TRUE.
 
   ! Time in the restart file from which the data will be extracted
   time_to_restart_from_NAM_config             = 0.0                              ! Can be different from C%start_time_of_run, though this will issue a warning
   time_to_restart_from_EAS_config             = 0.0
   time_to_restart_from_GRL_config             = 0.0
-  time_to_restart_from_ANT_config             = 0.0
+  time_to_restart_from_ANT_config             = 90000.0
 
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
   filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
-  filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
+  filename_restart_ANT_config                 = 'results_ANT_16km_ismip_invert_sliding_and_ocean/restart_ANT_00001.nc'
 
   ! == Global forcing (insolation, CO2, d18O, geothermal heat flux)
   ! ===============================================================
@@ -199,11 +199,11 @@
 
   ! CO2 record (ASCII text file, so the number of rows needs to be specified)
   filename_CO2_record_config                  = ''
-  CO2_record_length_config                    = 0
+  CO2_record_length_config                    = 1901
 
   ! d18O record (ASCII text file, so the number of rows needs to be specified)
   filename_d18O_record_config                 = ''
-  d18O_record_length_config                   = 0
+  d18O_record_length_config                   = 2051
 
   ! Geothermal heat flux
   choice_geothermal_heat_flux_config          = 'spatial'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
@@ -289,11 +289,11 @@
 
   ! Fixed/delayed ice thickness evolution
   fixed_sheet_geometry_config                 = 0.0                              ! Fix (1), release (0), or delay grounded ice geometry evolution
-  fixed_shelf_geometry_config                 = 1.0                              ! Fix (1), release (0), or delay floating ice geometry evolution
+  fixed_shelf_geometry_config                 = 0.0                              ! Fix (1), release (0), or delay floating ice geometry evolution
   fixed_grounding_line_g_config               = 0.0                              ! Fix (1), release (0), or delay GL geometry evolution (grounded side)
-  fixed_grounding_line_f_config               = 1.0                              ! Fix (1), release (0), or delay GL geometry evolution (floating side)
-  fixed_decay_t_start_config                  = 0.0                              ! Start time of linear transition between fixed/delayed and free evolution
-  fixed_decay_t_end_config                    = 1E20                             ! End   time of linear transition between fixed/delayed and free evolution
+  fixed_grounding_line_f_config               = 0.0                              ! Fix (1), release (0), or delay GL geometry evolution (floating side)
+  fixed_decay_t_start_config                  = 00000.0                          ! Start time of linear transition between fixed/delayed and free evolution
+  fixed_decay_t_end_config                    = 00000.0                          ! End   time of linear transition between fixed/delayed and free evolution
 
   ! Fix mask by limiting min/max allowed sheet/shelf ice thickness
   fixed_mask_t_start_config                   = 0.0                              ! Start time of model mask fixing
@@ -321,9 +321,9 @@
   Martin2011_hydro_Hb_max_config              = 1000.0                           ! Martin et al. (2011) basal hydrology model: high-end Hb  value of bedrock-dependent pore-water pressure
 
   ! Basal roughness / friction
-  choice_basal_roughness_config               = 'uniform'                        ! "uniform", "parameterised", "prescribed", or "restart"
+  choice_basal_roughness_config               = 'prescribed'                     ! "uniform", "parameterised", "prescribed", or "restart"
   slid_Weertman_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in Weertman sliding law
-  slid_Coulomb_phi_fric_uniform_config        = 10.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
+  slid_Coulomb_phi_fric_uniform_config        = 30.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
   slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law
   slid_Tsai2015_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in the Tsai2015 sliding law
   slid_Schoof2005_alpha_sq_uniform_config     = 0.5                              ! Uniform value for alpha_sq in the Schoof2005 sliding law
@@ -334,12 +334,12 @@
   Martin2011till_phi_Hb_max_config            = 0.0                              ! Martin et al. (2011) bed roughness model: high-end Hb  value of bedrock-dependent till friction angle
   Martin2011till_phi_min_config               = 5.0                              ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
   Martin2011till_phi_max_config               = 20.0                             ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
-  basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
+  basal_roughness_filename_config             = 'results_ANT_16km_ismip_invert_sliding_and_ocean/bed_roughness_inv.nc'                               ! NetCDF file containing a basal roughness field for the chosen sliding law
   do_basal_roughness_remap_adjustment_config  = .TRUE.                           ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
 
   ! Bed roughness inversion
-  do_slid_inv_config                          = .TRUE.                           ! Whether or not to perform an iterative inversion of bed roughness
-  choice_slid_inv_method_config               = 'TijnJorjohybrid'                ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
+  do_slid_inv_config                          = .FALSE.                          ! Whether or not to perform an iterative inversion of bed roughness
+  choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
   slid_inv_t_start_config                     = 0.0                              ! Minimum model time when the inversion is allowed
   slid_inv_t_end_config                       = 80000.0                          ! Maximum model time when the inversion is allowed
   slid_inv_t_change_config                    = 00000.0                          ! Model time at which the inversion changes from the first-guess to the equilibrium stage
@@ -360,7 +360,7 @@
   slid_inv_Berends2022_u0_config              = 250.0                            ! First  velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
   slid_inv_Berends2022_Hi_scale_config        = 300.0                            ! Second thickness scale in the Berends2022 geometry/velocity-based basal inversion method [m]
   slid_inv_Berends2022_u_scale_config         = 3000.0                           ! Second velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
-  slid_inv_target_velocity_filename_config    = '' ! NetCDF file where the target velocities are read in the Berends2022 geometry/velocity-based basal inversion methods
+  slid_inv_target_velocity_filename_config    = ''                               ! NetCDF file where the target velocities are read in the Berends2022 geometry/velocity-based basal inversion methods
 
   ! Ice dynamics - calving
   ! =========================
@@ -376,7 +376,7 @@
   ! Thermodynamics and rheology
   ! ===========================
 
-  choice_initial_ice_temperature_config       = 'Robin'                          ! Choice of initial ice temperature profile: "uniform", "linear", "Robin", "restart"
+  choice_initial_ice_temperature_config       = 'restart'                        ! Choice of initial ice temperature profile: "uniform", "linear", "Robin", "restart"
   uniform_ice_temperature_config              = 270.0                            ! Uniform ice temperature (applied when choice_initial_ice_temperature_config = "uniform")
   choice_thermo_model_config                  = '3D_heat_equation'               ! Choice of thermodynamical model: "none", "3D_heat_equation"
   choice_ice_rheology_config                  = 'Huybrechts1992'                 ! Choice of ice rheology model: "uniform", "Huybrechts1992", "MISMIP_mod"
@@ -394,7 +394,7 @@
   ! Ocean
   ! =====
 
-  choice_ocean_model_config                   = 'ISMIP_style_init'               ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
+  choice_ocean_model_config                   = 'ISMIP_style_future'               ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
 
   choice_ocean_vertical_grid_config           = 'regular'                        ! Choice of vertical grid to be used for ocean data
   ocean_vertical_grid_max_depth_config        = 1770.0                           ! Maximum depth           to be used for ocean data
@@ -410,7 +410,8 @@
 
   ISMIP_forcing_filename_baseline_config      = '/home/berends/Datasets/ISMIP6/ISMIP6_clim_1950_1979_mean.nc' ! NetCDF file containing the baseline climate
 
-  ISMIP_ocean_filename_baseline_config        = '/home/berends/Datasets/ISMIP6/ISMIP6_ocean_1950_1979_mean.nc' ! NetCDF file containing the baseline ocean
+  ISMIP_future_ocean_temperature_filename_config   = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/GCM_ensemble_mean_1950-2014_yearly_temperature.nc'
+  ISMIP_future_ocean_salinity_filename_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/GCM_ensemble_mean_1950-2014_yearly_salinity.nc'
 
   ! Basal mass balance
   ! ==================
@@ -486,6 +487,5 @@
   help_field_22_config                        = 'f_grnd'
   help_field_25_config                        = 'dHi_dt'
   help_field_32_config                        = 'T_ocean_base'
-  help_field_34_config                        = 'none'
 
 /

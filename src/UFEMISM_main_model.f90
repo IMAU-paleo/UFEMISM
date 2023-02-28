@@ -282,14 +282,14 @@ CONTAINS
           CALL sync
           region%output_file_exists = .TRUE.
         END IF
-        ! ! Write to regional scalar output
-        ! CALL write_regional_scalar_data( region, region%time)
+        ! Write to regional scalar output
+        CALL write_regional_scalar_data( region, region%time)
         ! Write to regional 2-/3-D output
         CALL write_to_output_files( region)
       END IF
 
-      ! Write to regional scalar output
-      CALL write_regional_scalar_data( region, region%time)
+!      ! Write to regional scalar output
+!      CALL write_regional_scalar_data( region, region%time)
 
       ! == Basal sliding inversion
       ! ==========================
@@ -1077,6 +1077,28 @@ CONTAINS
       grid%nx = (2*nsx + 1) + 1
       grid%ny = (2*nsy + 1) + 1
 
+
+
+      ! DENK DROM - hardcoded hack for ISMIP6 to get the grid exactly right
+      xmid = 0._dp
+      ymid = 0._dp
+      IF     (grid%dx == 32000._dp) THEN
+        nsx     = 95
+        nsy     = 95
+        grid%nx = 191
+        grid%ny = 191
+      ELSEIF (grid%dx == 16000._dp) THEN
+        nsx     = 190
+        nsy     = 190
+        grid%nx = 381
+        grid%ny = 381
+      ELSE
+        CALL crash('square grid for ISMIP6 only defined at 32 and 16 km right now!')
+      END IF
+
+
+
+
       ! Determine total number of grid points
       grid%n  = grid%nx * grid%ny
 
@@ -1096,12 +1118,6 @@ CONTAINS
 
     ! Let master do this
     IF (par%master) THEN
-
-      ! Compute corners of grid
-      grid%xmin = grid%x(1      )
-      grid%xmax = grid%x(grid%nx)
-      grid%ymin = grid%y(1      )
-      grid%ymax = grid%y(grid%ny)
 
       ! Compute x coordinates
       grid%xmin = xmid - nsx * grid%dx

@@ -31,7 +31,7 @@
   dt_ocean_inv_equil_config                   = 50.0                             ! Time step (in years) for calling the iterative inversion of ocean temperatures - equilibrium stage
 
   ! Output
-  dt_output_config                            = 100.0                           ! Time step (in years) for writing output
+  dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
 
   ! Which ice sheets do we simulate?
   ! ================================
@@ -54,6 +54,15 @@
   do_write_grid_data_config                   = .TRUE.                           ! Whether or not the grid NetCDF files should be created and written to
   do_check_for_NaN_config                     = .TRUE.                           ! Whether or not fields should be checked for NaN values
   do_time_display_config                      = .FALSE.                           ! Print current model time to screen
+
+  ! Antarctica
+  lambda_M_ANT_config                         = 0.0                              ! Longitude of the pole of the stereographic projection for the Antarctica domain [degrees east]
+  phi_M_ANT_config                            = -90.0                            ! Latitude  of the pole of the stereographic projection for the Antarctica domain [degrees north]
+  beta_stereo_ANT_config                      = 71.0                             ! Standard parallel     of the stereographic projection for the Antarctica domain [degrees]
+  xmin_ANT_config                             = -3040000.0                       ! Western  boundary     of the Antarctica domain [m]
+  xmax_ANT_config                             =  3040000.0                       ! Eastern  boundary     of the Antarctica domain [m]
+  ymin_ANT_config                             = -3040000.0                       ! Southern boundary     of the Antarctica domain [m]
+  ymax_ANT_config                             =  3040000.0                       ! Northern boundary     of the Antarctica domain [m]
 
   ! Mesh
   ! ====
@@ -103,9 +112,9 @@
   ! Resolutions of the different square grids
   ! =========================================
 
-  dx_grid_output_config                       = 40000.0                          ! Resolution of the square grid used for writing output                [m]
-  dx_grid_GIA_config                          = 40000.0                          ! Resolution of the square grid used for GIA modelling (ELRA or SELEN) [m]
-  dx_grid_smooth_config                       = 40000.0                          ! Resolution of the square grid used for data smoothing                [m]
+  dx_grid_output_config                       = 16000.0                          ! Resolution of the square grid used for writing output                [m]
+  dx_grid_GIA_config                          = 16000.0                          ! Resolution of the square grid used for GIA modelling (ELRA or SELEN) [m]
+  dx_grid_smooth_config                       = 16000.0                          ! Resolution of the square grid used for data smoothing                [m]
 
   ! ISMIP-style output
   ! ==================
@@ -330,7 +339,7 @@
 
   ! Bed roughness inversion
   do_slid_inv_config                          = .TRUE.                           ! Whether or not to perform an iterative inversion of bed roughness
-  choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
+  choice_slid_inv_method_config               = 'TijnJorjohybrid'                ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
   slid_inv_t_start_config                     = 0.0                              ! Minimum model time when the inversion is allowed
   slid_inv_t_end_config                       = 80000.0                          ! Maximum model time when the inversion is allowed
   slid_inv_t_change_config                    = 00000.0                          ! Model time at which the inversion changes from the first-guess to the equilibrium stage

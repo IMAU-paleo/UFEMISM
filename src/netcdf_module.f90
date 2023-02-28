@@ -5869,73 +5869,77 @@ CONTAINS
     floating_ice_shelf_area_fraction( region%mesh%vi1:region%mesh%vi2) = missing_value
 
     ! Scalars (integrated values)
-    land_ice_mass                     = 0._dp
-    mass_above_floatation             = 0._dp
-    grounded_ice_sheet_area           = 0._dp
-    floating_ice_sheet_area           = 0._dp
-    total_SMB                         = 0._dp
-    total_BMB                         = 0._dp
-    total_BMB_shelf                   = 0._dp
-    total_calving_flux                = 0._dp
-    total_calving_and_front_melt_flux = 0._dp
+    IF (par%master) THEN
 
-    DO vi = 1, region%mesh%vi1, region%mesh%vi2
+      land_ice_mass                     = 0._dp
+      mass_above_floatation             = 0._dp
+      grounded_ice_sheet_area           = 0._dp
+      floating_ice_sheet_area           = 0._dp
+      total_SMB                         = 0._dp
+      total_BMB                         = 0._dp
+      total_BMB_shelf                   = 0._dp
+      total_calving_flux                = 0._dp
+      total_calving_and_front_melt_flux = 0._dp
 
-      ! Ice base temperature separate for sheet and shelf
-      ! =================================================
+      DO vi = 1, region%mesh%nV
 
-      IF (region%ice%mask_sheet_a( vi) == 1) THEN
-        Ti_base_gr( vi) = region%ice%Ti_a( vi,C%nz)
-      END IF
+        ! Ice base temperature separate for sheet and shelf
+        ! =================================================
 
-      IF (region%ice%mask_shelf_a( vi) == 1) THEN
-        Ti_base_fl( vi) = region%ice%Ti_a( vi,C%nz)
-      END IF
+        IF (region%ice%mask_sheet_a( vi) == 1) THEN
+          Ti_base_gr( vi) = region%ice%Ti_a( vi,C%nz)
+        END IF
 
-      ! Basal drag
-      ! ==========
+        IF (region%ice%mask_shelf_a( vi) == 1) THEN
+          Ti_base_fl( vi) = region%ice%Ti_a( vi,C%nz)
+        END IF
 
-      IF (region%ice%mask_ice_a( vi) == 1 .AND. region%ice%f_grnd_a( vi) > 0._dp) THEN
-        basal_drag( vi) = region%ice%uabs_base_a( vi) * region%ice%beta_a( vi) * region%ice%f_grnd_a( vi)**.5_dp
-      END IF
+        ! Basal drag
+        ! ==========
 
-      ! Calving and front melting fluxes
-      ! ================================
+        IF (region%ice%mask_ice_a( vi) == 1 .AND. region%ice%f_grnd_a( vi) > 0._dp) THEN
+          basal_drag( vi) = region%ice%uabs_base_a( vi) * region%ice%beta_a( vi) * region%ice%f_grnd_a( vi)**.5_dp
+        END IF
 
-      calving_flux(                vi) = 0._dp ! FIXME
-      calving_and_front_melt_flux( vi) = 0._dp ! FIXME
+        ! Calving and front melting fluxes
+        ! ================================
 
-      ! Ice fractions
-      ! =============
+        calving_flux(                vi) = 0._dp ! FIXME
+        calving_and_front_melt_flux( vi) = 0._dp ! FIXME
 
-      IF (region%ice%mask_cf_a( vi) == 0) THEN
-        land_ice_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp)
-      ELSE
-        land_ice_area_fraction( vi) = region%ice%float_margin_frac_a( vi)
-      END IF
+        ! Ice fractions
+        ! =============
 
-      IF (region%ice%mask_ice_a( vi) == 1) THEN
-        grounded_ice_sheet_area_fraction( vi) = region%ice%f_grnd_a( vi)
-      ELSE
-        grounded_ice_sheet_area_fraction( vi) = 0._dp
-      END IF
+        IF (region%ice%mask_cf_a( vi) == 0) THEN
+          land_ice_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp)
+        ELSE
+          land_ice_area_fraction( vi) = region%ice%float_margin_frac_a( vi)
+        END IF
 
-      floating_ice_shelf_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp) * MAX( (1._dp - region%ice%f_grnd_a( vi)), region%ice%float_margin_frac_a( vi))
+        IF (region%ice%mask_ice_a( vi) == 1) THEN
+          grounded_ice_sheet_area_fraction( vi) = region%ice%f_grnd_a( vi)
+        ELSE
+          grounded_ice_sheet_area_fraction( vi) = 0._dp
+        END IF
 
-      ! Integrated values
-      ! =================
+        floating_ice_shelf_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp) * MAX( (1._dp - region%ice%f_grnd_a( vi)), region%ice%float_margin_frac_a( vi))
 
-      land_ice_mass                     = land_ice_mass                     + (region%ice%Hi_a(                  vi) * region%mesh%A( vi) * ice_density)    ! kg
-      mass_above_floatation             = mass_above_floatation             + (region%ice%TAF_a(                 vi) * region%mesh%A( vi) * ice_density)    ! kg
-      grounded_ice_sheet_area           = grounded_ice_sheet_area           + (grounded_ice_sheet_area_fraction( vi) * region%mesh%A( vi))                  ! m2
-      floating_ice_sheet_area           = floating_ice_sheet_area           + (floating_ice_shelf_area_fraction( vi) * region%mesh%A( vi))                  ! m2
-      total_SMB                         = total_SMB                         + (land_ice_area_fraction( vi) * region%SMB%SMB_year(  vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
-      total_BMB                         = total_BMB                         + (land_ice_area_fraction( vi) * region%BMB%BMB(       vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
-      total_BMB_shelf                   = total_BMB_shelf                   + (land_ice_area_fraction( vi) * region%BMB%BMB_shelf( vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
-      total_calving_flux                = total_calving_flux                + (calving_flux( vi)                                       * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
-      total_calving_and_front_melt_flux = total_calving_and_front_melt_flux + (calving_and_front_melt_flux( vi)                        * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+        ! Integrated values
+        ! =================
 
-    END DO
+        land_ice_mass                     = land_ice_mass                     + (region%ice%Hi_a(                  vi) * region%mesh%A( vi) * ice_density)    ! kg
+        mass_above_floatation             = mass_above_floatation             + (region%ice%TAF_a(                 vi) * region%mesh%A( vi) * ice_density)    ! kg
+        grounded_ice_sheet_area           = grounded_ice_sheet_area           + (grounded_ice_sheet_area_fraction( vi) * region%mesh%A( vi))                  ! m2
+        floating_ice_sheet_area           = floating_ice_sheet_area           + (floating_ice_shelf_area_fraction( vi) * region%mesh%A( vi))                  ! m2
+        total_SMB                         = total_SMB                         + (land_ice_area_fraction( vi) * region%SMB%SMB_year(  vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+        total_BMB                         = total_BMB                         + (land_ice_area_fraction( vi) * region%BMB%BMB(       vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+        total_BMB_shelf                   = total_BMB_shelf                   + (land_ice_area_fraction( vi) * region%BMB%BMB_shelf( vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+        total_calving_flux                = total_calving_flux                + (calving_flux( vi)                                       * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+        total_calving_and_front_melt_flux = total_calving_and_front_melt_flux + (calving_and_front_melt_flux( vi)                        * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+
+      END DO
+
+    END IF ! IF (par%master) THEN
     CALL sync
 
     ! Write to all the ISMIP output files

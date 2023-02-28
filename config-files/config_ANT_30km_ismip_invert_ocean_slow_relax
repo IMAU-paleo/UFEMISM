@@ -31,7 +31,7 @@
   dt_ocean_inv_equil_config                   = 50.0                             ! Time step (in years) for calling the iterative inversion of ocean temperatures - equilibrium stage
 
   ! Output
-  dt_output_config                            = 100.0                           ! Time step (in years) for writing output
+  dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
 
   ! Which ice sheets do we simulate?
   ! ================================
@@ -54,6 +54,15 @@
   do_write_grid_data_config                   = .TRUE.                           ! Whether or not the grid NetCDF files should be created and written to
   do_check_for_NaN_config                     = .TRUE.                           ! Whether or not fields should be checked for NaN values
   do_time_display_config                      = .FALSE.                           ! Print current model time to screen
+
+  ! Antarctica
+  lambda_M_ANT_config                         = 0.0                              ! Longitude of the pole of the stereographic projection for the Antarctica domain [degrees east]
+  phi_M_ANT_config                            = -90.0                            ! Latitude  of the pole of the stereographic projection for the Antarctica domain [degrees north]
+  beta_stereo_ANT_config                      = 71.0                             ! Standard parallel     of the stereographic projection for the Antarctica domain [degrees]
+  xmin_ANT_config                             = -3040000.0                       ! Western  boundary     of the Antarctica domain [m]
+  xmax_ANT_config                             =  3040000.0                       ! Eastern  boundary     of the Antarctica domain [m]
+  ymin_ANT_config                             = -3040000.0                       ! Southern boundary     of the Antarctica domain [m]
+  ymax_ANT_config                             =  3040000.0                       ! Northern boundary     of the Antarctica domain [m]
 
   ! Mesh
   ! ====
@@ -103,9 +112,9 @@
   ! Resolutions of the different square grids
   ! =========================================
 
-  dx_grid_output_config                       = 40000.0                          ! Resolution of the square grid used for writing output                [m]
-  dx_grid_GIA_config                          = 40000.0                          ! Resolution of the square grid used for GIA modelling (ELRA or SELEN) [m]
-  dx_grid_smooth_config                       = 40000.0                          ! Resolution of the square grid used for data smoothing                [m]
+  dx_grid_output_config                       = 32000.0                          ! Resolution of the square grid used for writing output                [m]
+  dx_grid_GIA_config                          = 32000.0                          ! Resolution of the square grid used for GIA modelling (ELRA or SELEN) [m]
+  dx_grid_smooth_config                       = 32000.0                          ! Resolution of the square grid used for data smoothing                [m]
 
   ! ISMIP-style output
   ! ==================
@@ -129,11 +138,11 @@
   choice_refgeo_init_NAM_config               = 'realistic'                      ! Choice of initial geometry for North America; can be "idealised", "realistic", or "restart"
   choice_refgeo_init_EAS_config               = 'realistic'                      ! Choice of initial geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
   choice_refgeo_init_GRL_config               = 'realistic'                      ! Choice of initial geometry for Greenland    ; can be "idealised", "realistic", or "restart"
-  choice_refgeo_init_ANT_config               = 'realistic'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  choice_refgeo_init_ANT_config               = 'restart'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
   filename_refgeo_init_NAM_config             = '/home/berends/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
   filename_refgeo_init_EAS_config             = '/home/berends/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
   filename_refgeo_init_GRL_config             = '/home/berends/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
-  filename_refgeo_init_ANT_config             = '/home/berends/Datasets/BedMachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  filename_refgeo_init_ANT_config             = 'results_ANT_30km_ismip_invert_sliding_fixed_shelves/restart_ANT_00001.nc'
 
   ! Present-day geometry
   choice_refgeo_PD_NAM_config                 = 'realistic'                      ! Choice of present-day geometry for North America; can be "idealised", "realistic", or "restart"
@@ -158,19 +167,19 @@
   ! Whether or not the simulation is a restart of a previous simulation
   ! ===================================================================
 
-  is_restart_config                           = .FALSE.
+  is_restart_config                           = .TRUE.
 
   ! Time in the restart file from which the data will be extracted
   time_to_restart_from_NAM_config             = 0.0                              ! Can be different from C%start_time_of_run, though this will issue a warning
   time_to_restart_from_EAS_config             = 0.0
   time_to_restart_from_GRL_config             = 0.0
-  time_to_restart_from_ANT_config             = 0.0
+  time_to_restart_from_ANT_config             = 10000.0
 
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
   filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
-  filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
+  filename_restart_ANT_config                 = 'results_ANT_30km_ismip_invert_sliding_fixed_shelves/restart_ANT_00001.nc'
 
   ! == Global forcing (insolation, CO2, d18O, geothermal heat flux)
   ! ===============================================================
@@ -330,7 +339,7 @@
 
   ! Bed roughness inversion
   do_slid_inv_config                          = .TRUE.                           ! Whether or not to perform an iterative inversion of bed roughness
-  choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
+  choice_slid_inv_method_config               = 'TijnJorjohybrid'                ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
   slid_inv_t_start_config                     = 0.0                              ! Minimum model time when the inversion is allowed
   slid_inv_t_end_config                       = 80000.0                          ! Maximum model time when the inversion is allowed
   slid_inv_t_change_config                    = 00000.0                          ! Model time at which the inversion changes from the first-guess to the equilibrium stage
@@ -367,7 +376,7 @@
   ! Thermodynamics and rheology
   ! ===========================
 
-  choice_initial_ice_temperature_config       = 'Robin'                          ! Choice of initial ice temperature profile: "uniform", "linear", "Robin", "restart"
+  choice_initial_ice_temperature_config       = 'restart'                        ! Choice of initial ice temperature profile: "uniform", "linear", "Robin", "restart"
   uniform_ice_temperature_config              = 270.0                            ! Uniform ice temperature (applied when choice_initial_ice_temperature_config = "uniform")
   choice_thermo_model_config                  = '3D_heat_equation'               ! Choice of thermodynamical model: "none", "3D_heat_equation"
   choice_ice_rheology_config                  = 'Huybrechts1992'                 ! Choice of ice rheology model: "uniform", "Huybrechts1992", "MISMIP_mod"

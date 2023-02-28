@@ -1668,6 +1668,8 @@ CONTAINS
       CALL basal_sliding_inversion_Bernales2017( mesh, grid, ice, refgeo, time, dt, do_adjustment)
     ELSEIF (C%choice_slid_inv_method == 'Berends2022') THEN
       CALL basal_sliding_inversion_Berends2022( mesh, grid, ice, refgeo, time, do_adjustment)
+    ELSEIF (C%choice_slid_inv_method == 'TijnJorjohybrid') THEN
+      CALL basal_sliding_inversion_TijnJorjohybrid( mesh, grid, ice, refgeo, time, dt, do_adjustment)
     ELSE
       CALL crash('unknown choice_slid_inv_method "' // TRIM( C%choice_slid_inv_method) // '"!')
     END IF
@@ -1676,6 +1678,139 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE basal_sliding_inversion
+
+  SUBROUTINE basal_sliding_inversion_TijnJorjohybrid( mesh, grid, ice, refgeo, time, dt, do_adjustment)
+    ! Iteratively invert for basal friction conditions under the grounded ice sheet,
+    ! and extrapolate the resulting field over the rest of the domain
+
+    implicit none
+
+    ! In/output variables
+    type(type_mesh),               intent(inout)    :: mesh
+    type(type_grid),               intent(in)    :: grid
+    type(type_ice_model),          intent(inout) :: ice
+    type(type_reference_geometry), intent(in)    :: refgeo
+    real(dp),                      intent(in)    :: time
+    real(dp),                      intent(in)    :: dt
+    logical,                       intent(in)    :: do_adjustment
+
+    ! Local variables
+    character(len=256), parameter                :: routine_name = 'basal_sliding_inversion_TijnJorjohybrid'
+    integer                                      :: vi
+    real(dp)                                     :: t_scale, evo_start, evo_end
+    real(dp)                                     :: dt_slid_inv, phi_min
+    real(dp), dimension(2)                       :: amp_slid_inv
+
+    ! Initialisation
+    ! ==============
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Inversion temporal window
+    if (time < C%slid_inv_t_start .or. &
+        time > C%slid_inv_t_end) then
+      ! Model time is outside of inversion window; just finalise
+      call finalise_routine( routine_name)
+      ! And exit
+      return
+    end if
+
+    ! Safety
+    if (C%slid_inv_t_start > C%slid_inv_t_end) then
+      !WTF
+      call crash('wtf?')
+    end if
+
+    ! Determine time step
+    ! ===================
+
+    ! Compute how much time has passed since start of equilibrium stage
+    t_scale = (time - C%slid_inv_t_change) / (C%slid_inv_t_end - C%slid_inv_t_change)
+    ! Limit t_scale to [0 1]
+    t_scale = max( 0._dp, min( t_scale, 1._dp))
+    ! Curve t_scale a bit
+    t_scale = t_scale ** C%slid_inv_t_scale_exp
+
+    dt_slid_inv = t_scale * C%dt_slid_inv_equil + (1._dp - t_scale) * C%dt_slid_inv_guess
+
+    ! Determine adjustment magnitude
+    ! ==============================
+
+    ! Start the modification at the end of the first-guess stage
+    evo_start = C%slid_inv_t_change
+    ! Finish the modification at 75% of the equilibrium-stage inversion time window
+    evo_end = C%slid_inv_t_change + .75_dp*(C%slid_inv_t_end - C%slid_inv_t_change)
+    ! Compute how much progress we have done
+    t_scale = (time - evo_start) / (evo_end - evo_start)
+    ! Limit t_scale to [0 1]
+    t_scale = max( 0._dp, min( t_scale, 1._dp))
+
+    ! Modify positive-misfit adjustment as time goes on: from scale_start to scale_end
+    amp_slid_inv(1) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start + t_scale * C%slid_inv_Bernales2017_scale_end
+    ! Modify negative-misfit adjustment as time goes on: from scale_start to zero
+    amp_slid_inv(2) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start ! - t_scale * C%slid_inv_Bernales2017_scale_start
+
+    ! Safety net
+    amp_slid_inv(1) = max( amp_slid_inv(1), 0._dp)
+    amp_slid_inv(2) = max( amp_slid_inv(2), 0._dp)
+
+    ! Update rate of change
+    ! =====================
+
+    if (do_adjustment) then
+      ! Compute a new rate of change of till friction angle
+      call determine_inverted_bed_roughness_rate_of_change_TijnJorjohybrid( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
+    end if
+
+    ! Determine minimum till friction angle
+    ! =====================================
+
+    ! Start the modification at the end of the first-guess stage
+    evo_start = C%slid_inv_t_change
+    ! Finish the modification at 20% of the equilibrium-stage inversion time window
+    evo_end = C%slid_inv_t_change + .2_dp*(C%slid_inv_t_end - C%slid_inv_t_change)
+    ! Compute how much progress we have done
+    t_scale = (time - evo_start) / (evo_end - evo_start)
+    ! Limit t_scale to [0 1]
+    t_scale = max( 0._dp, min( t_scale, 1._dp))
+    ! Compute time-variable bed roughness minimum value
+    phi_min = t_scale * C%slid_inv_phi_min + (1._dp-t_scale) * max(2._dp, C%slid_inv_phi_min)
+
+    ! Apply rate of change
+    ! ====================
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Check that we are not overshooting
+      if ( abs(ice%Hi_a( vi) - refgeo%Hi( vi)) > C%slid_inv_Bernales2017_tol_diff .and. &
+              (ice%Hi_a( vi) - refgeo%Hi( vi)) * ice%dphi_dt_a( vi) > 0._dp) then
+        ! Too thick and friction up, or too thin and friction down; skip
+        cycle
+      end if
+
+      ! Apply inverted rate of change
+      ice%phi_fric_a( vi) = ice%phi_fric_a( vi) + ice%dphi_dt_a( vi) * dt
+
+      ! Make sure the variable stays within the desired limits
+      if (ice%f_grnd_a( vi) > 0._dp) then
+        ! Fully/partially grounded vertices: apply the evolving limit
+        ice%phi_fric_a( vi) = max( phi_min, min( C%slid_inv_phi_max, ice%phi_fric_a( vi)))
+      else
+        ! Fully floating vertices: apply the prescribed limit immediately
+        ice%phi_fric_a( vi) = max( C%slid_inv_phi_min, min( C%slid_inv_phi_max, ice%phi_fric_a( vi)))
+      end if
+
+    end do
+    call sync
+
+    ! Finalisation
+    ! ============
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  END SUBROUTINE basal_sliding_inversion_TijnJorjohybrid
 
   SUBROUTINE basal_sliding_inversion_Bernales2017( mesh, grid, ice, refgeo, time, dt, do_adjustment)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
@@ -1810,7 +1945,7 @@ CONTAINS
 
   END SUBROUTINE basal_sliding_inversion_Bernales2017
 
-  SUBROUTINE determine_inverted_bed_roughness_rate_of_change( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
+  SUBROUTINE determine_inverted_bed_roughness_rate_of_change_TijnJorjohybrid( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
     ! and carefully extrapolate the resulting field over the rest of the domain
 
@@ -1830,7 +1965,7 @@ CONTAINS
     real(dp), dimension(2),        intent(in)    :: amp_slid_inv
 
     ! Local variables
-    character(len=256), parameter                :: routine_name = 'determine_inverted_bed_roughness_rate_of_change'
+    character(len=256), parameter                :: routine_name = 'determine_inverted_bed_roughness_rate_of_change_TijnJorjohybrid'
     integer                                      :: vi, vc, ci
     real(dp)                                     :: h_delta, h_estim, h_delta_perc
     real(dp)                                     :: fg_exp_mod, w_smooth, w_tot, dphi
@@ -2285,9 +2420,9 @@ CONTAINS
     ! Finalise routine path
     call finalise_routine( routine_name)
 
-  END SUBROUTINE determine_inverted_bed_roughness_rate_of_change
+  END SUBROUTINE determine_inverted_bed_roughness_rate_of_change_TijnJorjohybrid
 
-  SUBROUTINE determine_inverted_bed_roughness_rate_of_change_old( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
+  SUBROUTINE determine_inverted_bed_roughness_rate_of_change( mesh, grid, ice, refgeo, dt_slid_inv, amp_slid_inv)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
     ! and carefully extrapolate the resulting field over the rest of the domain
 
@@ -2663,7 +2798,7 @@ CONTAINS
     ! Finalise routine path
     call finalise_routine( routine_name)
 
-  END SUBROUTINE determine_inverted_bed_roughness_rate_of_change_old
+  END SUBROUTINE determine_inverted_bed_roughness_rate_of_change
 
   SUBROUTINE basal_sliding_inversion_Berends2022( mesh, grid, ice, refgeo, time, do_adjustment)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
@@ -3037,7 +3172,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (C%choice_slid_inv_method == 'Bernales2017') THEN
+    IF (C%choice_slid_inv_method == 'Bernales2017' .OR. &
+        C%choice_slid_inv_method == 'TijnJorjohybrid') THEN
 
       ! Allocate rate of change of till friction angle
       CALL allocate_shared_dp_1D( mesh%nV, ice%dphi_dt_a,    ice%wdphi_dt_a   )

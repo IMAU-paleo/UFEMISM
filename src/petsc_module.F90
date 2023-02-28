@@ -151,12 +151,12 @@ CONTAINS
 
       ELSE
         ! Give warnging
-        IF (par%master) THEN
-          print*, ''
-          write(*,"(A,I2,A)") '   PETSc solved Ax=b in ', its, ' iterations! WTF <=========================================='
-          write(*,"(A,F8.4,A,F8.4,A)") '   Trying again using rtol: ', rtol_eff*.8_dp, ' and abstol: ', abstol_eff*.8_dp, ' ...'
-          print*, ''
-        END IF
+!        IF (par%master) THEN
+!          print*, ''
+!          write(*,"(A,I2,A)") '   PETSc solved Ax=b in ', its, ' iterations! WTF <=========================================='
+!          write(*,"(A,F8.4,A,F8.4,A)") '   Trying again using rtol: ', rtol_eff*.8_dp, ' and abstol: ', abstol_eff*.8_dp, ' ...'
+!          print*, ''
+!        END IF
 
         ! Destroy the current solver
         CALL KSPDestroy( KSP_solver, perr)

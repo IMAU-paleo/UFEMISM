@@ -828,6 +828,25 @@ CONTAINS
       DO vi = mesh%vi1, mesh%vi2
 
         DO k = 1, C%nz
+
+          ! Domain margins
+          IF ( .NOT. mesh%edge_index( vi) == 0) THEN
+            IF (C%choice_ice_margin == 'BC') THEN
+              ice%A_flow_3D_a( vi,k) = 0._dp
+            ELSEIF (C%choice_ice_margin == 'infinite_slab') THEN
+              ! In the "infinite slab" case, calculate effective viscosity everywhere
+              ! (even over domain boundaries)
+              ice%A_flow_3D_a( vi,k) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * 263.15_dp))
+            ELSE
+              CALL crash('unknown choice_ice_margin "' // TRIM( C%choice_ice_margin) // '"!')
+            END IF
+
+            ! Skip rest of loop. Go to next vertex
+            CYCLE
+
+          END IF
+
+          ! Domain interior
           IF (ice%mask_ice_a( vi) == 1) THEN
             IF (ice%Ti_a( vi,k) < 263.15_dp) THEN
               ice%A_flow_3D_a( vi,k) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * ice%Ti_a( vi,k)))
@@ -845,6 +864,7 @@ CONTAINS
               CALL crash('unknown choice_ice_margin "' // TRIM( C%choice_ice_margin) // '"!')
             END IF
           END IF
+
         END DO ! DO k = 1, C%nz
 
       END DO

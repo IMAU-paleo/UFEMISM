@@ -4,8 +4,8 @@
   ! ====================
 
   ! General
-  start_time_of_run_config                    = 2100.0                           ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 2300.0                           ! End   time (in years) of the simulations
+  start_time_of_run_config                    = 2014.0                           ! Start time (in years) of the simulations
+  end_time_of_run_config                      = 2100.0                           ! End   time (in years) of the simulations
   dt_mesh_min_config                          = 1e20                             ! Minimum amount of time (in years) between mesh updates
   dt_coupling_config                          = 1e20                             ! Interval of coupling (in years) between the four ice-sheets
 
@@ -45,7 +45,7 @@
   ! ======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_ANT_16km_ismip_v4_ctrl_2100-2300'    ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'results_ANT_16km_ismip_v4_NorESM1-M_RCP85-repeat_2014-2100'    ! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
@@ -74,7 +74,7 @@
   filename_external_NAM_config                = 'filename_external_mesh_placeholder'
   filename_external_EAS_config                = 'filename_external_mesh_placeholder'
   filename_external_GRL_config                = 'filename_external_mesh_placeholder'
-  filename_external_ANT_config                = 'results_ANT_16km_ismip_v4_ctrl_2014-2100/restart_ANT_00001.nc'
+  filename_external_ANT_config                = 'results_ANT_16km_ismip_v4_historical/restart_ANT_00001.nc'
 
   ! Parameters
   nconmax_config                              = 16                               ! Maximum number of vertex connections
@@ -83,7 +83,7 @@
   res_max_config                              = 200.0                            ! Maximum allowed resolution                            [km]
   res_max_ice_config                          = 100.0                            ! Maximum allowed resolution over ice                   [km]
   res_max_margin_config                       = 30.0                             ! Maximum allowed resolution over land-based ice margin [km]
-  res_max_gl_config                           = 16.0                             !                                 grounding line        [km]
+  res_max_gl_config                           = 30.0                             !                                 grounding line        [km]
   res_max_cf_config                           = 30.0                             !                                 calving front         [km]
   res_max_mountain_config                     = 200.0                            !                                 mountains             [km]
   res_max_coast_config                        = 200.0                            !                                 coastline             [km]
@@ -121,8 +121,8 @@
 
   do_write_ISMIP_output_config                = .TRUE.                           ! Whether or not to create a set of ISMIP output files
   ISMIP_output_group_code_config              = 'IMAU'                           ! Code for the group      name in the ISMIP output file names
-  ISMIP_output_model_code_config              = 'UFEMISM4'                       ! Code for the model      name in the ISMIP output file names
-  ISMIP_output_experiment_code_config         = 'ctrlAE'                         ! Code for the experiment name in the ISMIP output file names
+  ISMIP_output_model_code_config              = 'UFEMISM1'                       ! Code for the model      name in the ISMIP output file names
+  ISMIP_output_experiment_code_config         = 'expAE07'                        ! Code for the experiment name in the ISMIP output file names
   ISMIP_output_basetime_config                = '0000-01-01'                     ! Basetime for the ISMIP output files (e.g. '1900-01-01')
 
   ! Reference geometries (initial, present-day, and GIA equilibrium)
@@ -142,7 +142,7 @@
   filename_refgeo_init_NAM_config             = '/home/berends/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
   filename_refgeo_init_EAS_config             = '/home/berends/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
   filename_refgeo_init_GRL_config             = '/home/berends/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
-  filename_refgeo_init_ANT_config             = 'results_ANT_16km_ismip_v4_ctrl_2014-2100/restart_ANT_00001.nc'
+  filename_refgeo_init_ANT_config             = 'results_ANT_16km_ismip_v4_historical/restart_ANT_00001.nc'
 
   ! Present-day geometry
   choice_refgeo_PD_NAM_config                 = 'realistic'                      ! Choice of present-day geometry for North America; can be "idealised", "realistic", or "restart"
@@ -173,13 +173,13 @@
   time_to_restart_from_NAM_config             = 0.0                              ! Can be different from C%start_time_of_run, though this will issue a warning
   time_to_restart_from_EAS_config             = 0.0
   time_to_restart_from_GRL_config             = 0.0
-  time_to_restart_from_ANT_config             = 2100.0
+  time_to_restart_from_ANT_config             = 2014.0
 
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
   filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
-  filename_restart_ANT_config                 = 'results_ANT_16km_ismip_v4_ctrl_2014-2100/restart_ANT_00001.nc'
+  filename_restart_ANT_config                 = 'results_ANT_16km_ismip_v4_historical/restart_ANT_00001.nc'
 
   ! == Global forcing (insolation, CO2, d18O, geothermal heat flux)
   ! ===============================================================
@@ -389,12 +389,12 @@
   ! Climate
   ! =======
 
-  choice_climate_model_config                 = 'ISMIP_style_init'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
+  choice_climate_model_config                 = 'ISMIP_style_future'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
 
   ! Ocean
   ! =====
 
-  choice_ocean_model_config                   = 'ISMIP_style_init'               ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
+  choice_ocean_model_config                   = 'ISMIP_style_future'               ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
 
   choice_ocean_vertical_grid_config           = 'regular'                        ! Choice of vertical grid to be used for ocean data
   ocean_vertical_grid_max_depth_config        = 1770.0                           ! Maximum depth           to be used for ocean data
@@ -403,14 +403,19 @@
   ! Surface mass balance
   ! ====================
 
-  choice_SMB_model_config                     = 'ISMIP_style_forcing_init'       ! Choice of SMB model: "uniform", "idealised", "IMAU-ITM", "direct_global", "direct_regional"
+  choice_SMB_model_config                     = 'ISMIP_style_forcing_future'       ! Choice of SMB model: "uniform", "idealised", "IMAU-ITM", "direct_global", "direct_regional"
 
   ! ISMIP-style forcing
   ! ===================
 
-  ISMIP_forcing_filename_baseline_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Atmosphere_Forcing/ensemble_mean_1995_2014_climate.nc' ! NetCDF file containing the baseline climate
+  ISMIP_future_ocean_temperature_filename_config   = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP85-repeat/1995-2300/NorESM1-M_temperature_8km_x_60m.nc'
+  ISMIP_future_ocean_salinity_filename_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP85-repeat/1995-2300/NorESM1-M_salinity_8km_x_60m.nc'
 
-  ISMIP_ocean_filename_baseline_config        = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/GCM_ensemble_mean_1995-2014.nc' ! NetCDF file containing the baseline ocean
+  ISMIP_future_atmosphere_baseline_filename_config = '/home/berends/Datasets/ISMIP6/ISMIP6_clim_1950_1979_mean.nc'
+  ISMIP_future_atmosphere_anomaly_filename_config  = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Atmosphere_Forcing/NorESM1-M_RCP85-repeat/Regridded_16km/NorESM1-M_16km_anomaly_1995-2300_v2.nc'
+
+  do_use_ISMIP_future_shelf_collapse_forcing_config   = .FALSE.
+  ISMIP_future_shelf_collapse_forcing_filename_config = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/ShelfCollapse_forcing/CCSM4_RCP85/ice_shelf_collapse_mask_CCSM4_RCP85_1995-2300_16km.nc'
 
   ! Basal mass balance
   ! ==================

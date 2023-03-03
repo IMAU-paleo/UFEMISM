@@ -27,9 +27,12 @@ MODULE general_ice_model_data_module
                                              is_floating, thickness_above_floatation, surface_elevation, &
                                              oblique_sg_projection, is_in_polygon
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model, type_grid, type_reference_geometry
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model, type_grid, type_reference_geometry, type_sparse_matrix_CSR_dp
   USE mesh_help_functions_module,      ONLY: find_triangle_area
   USE mesh_operators_module,           ONLY: map_a_to_b_2D, d2dx2_a_to_a_2D, d2dxdy_a_to_a_2D, d2dy2_a_to_a_2D, ddx_a_to_a_2D, ddy_a_to_a_2D
+  USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
+  USE petsc_module,                    ONLY: mat_petsc2CSR
+  USE sparse_matrix_module,            ONLY: deallocate_matrix_CSR
 
   IMPLICIT NONE
 
@@ -813,17 +816,18 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),               INTENT(IN) :: mesh
-    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
-    TYPE(type_ice_model),          INTENT(IN) :: ice
+    TYPE(type_mesh),               INTENT(IN)    :: mesh
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+    TYPE(type_ice_model),          INTENT(IN)    :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'scan_subgrid_grounded_fractions'
-    INTEGER                                   :: vi, i, j
-    INTEGER                                   :: grid_count, ii0, ii1
-    REAL(dp)                                  :: radius, rmax_ref_vs_mem
-    REAL(dp)                                  :: isc, wii0, wii1
-    REAL(dp), DIMENSION(64)                   :: hb_list
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'scan_subgrid_grounded_fractions'
+    TYPE(type_sparse_matrix_CSR_dp)              :: M_map
+    INTEGER                                      :: vi, i, j, k, n
+    INTEGER                                      :: grid_count, ii0, ii1
+    REAL(dp)                                     :: radius, rmax_ref_vs_mem
+    REAL(dp)                                     :: isc, wii0, wii1
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE      :: hb_list
 
     ! === Initialisation ===
     ! ======================
@@ -832,6 +836,14 @@ CONTAINS
     CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) '  Initialising sub-grid grounded area fractions...'
+
+    ! Calculate grid-to-mesh remapping matrix
+    CALL calc_remapping_operator_grid2mesh( refgeo%grid, mesh)
+    CALL mat_petsc2CSR( refgeo%grid%M_map_grid2mesh, M_map)
+    CALL deallocate_remapping_operators_grid2mesh( refgeo%grid)
+
+    ! Allocate memory for list of bedrock elevations
+    ALLOCATE( hb_list( refgeo%grid%nx * refgeo%grid%ny), source = 0._dp)
 
     ! Initialise cumulative density function (CDF)
     ice%bedrock_cdf = 0._dp
@@ -849,30 +861,17 @@ CONTAINS
       ! Initialise list of subgrid bedrock elevations
       hb_list = 0._dp
 
-      ! Determine maximum search radius based on allocated memory (64 elements per vertex)
-      rmax_ref_vs_mem = ( refgeo%grid%x(2) - refgeo%grid%x(1) ) * sqrt(REAL(64,dp)) / 2._dp
-
-      ! Determine search radius as the min betweeen the vertex radius and the max radius
-      radius = MIN( mesh%R( vi), rmax_ref_vs_mem)
-
       ! Initialise counter for subgrid cells
       grid_count = 0
 
-      DO j = 1, refgeo%grid%ny
-      DO i = 1, refgeo%grid%nx
-
-        ! If grid cell is within the search radius
-        IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
-
-          ! Increase counter
-          grid_count = grid_count + 1
-
-          ! Add bedrock elevation to list of found subgrid cells
-          hb_list( grid_count) = refgeo%Hb_grid(i,j)
-
-        END IF
-
-      END DO
+      ! Add bedrock elevations from all grid cells overlapping with this vertex's Voronoi cell
+      ! (as already determined by the remapping operator)
+      DO k = M_map%ptr( vi), M_map%ptr( vi+1)-1
+        n = M_map%index( k)
+        i = refgeo%grid%n2ij( n,1)
+        j = refgeo%grid%n2ij( n,2)
+        grid_count = grid_count + 1
+        hb_list( grid_count) = refgeo%Hb_grid( i,j)
       END DO
 
       ! === Cumulative density function ===
@@ -910,6 +909,10 @@ CONTAINS
 
     ! === Finalisation ===
     ! ====================
+
+    ! Clean up after yourself
+    DEALLOCATE( hb_list)
+    CALL deallocate_matrix_CSR( M_map)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

@@ -33,10 +33,29 @@ contains
     END IF
 
     ! Determine the domain of this process' submesh.
-    ymin = MINVAL(region%refgeo_init%grid%y)
-    ymax = MAXVAL(region%refgeo_init%grid%y)
-    xmin = MINVAL(region%refgeo_init%grid%x)
-    xmax = MAXVAL(region%refgeo_init%grid%x)
+    IF     (region%name == 'NAM') THEN
+      xmin = C%xmin_NAM
+      xmax = C%xmax_NAM
+      ymin = C%ymin_NAM
+      ymax = C%ymax_NAM
+    ELSEIF (region%name == 'EAS') THEN
+      xmin = C%xmin_EAS
+      xmax = C%xmax_EAS
+      ymin = C%ymin_EAS
+      ymax = C%ymax_EAS
+    ELSEIF (region%name == 'GRL') THEN
+      xmin = C%xmin_GRL
+      xmax = C%xmax_GRL
+      ymin = C%ymin_GRL
+      ymax = C%ymax_GRL
+    ELSEIF (region%name == 'ANT') THEN
+      xmin = C%xmin_ANT
+      xmax = C%xmax_ANT
+      ymin = C%ymin_ANT
+      ymax = C%ymax_ANT
+    ELSE
+      CALL crash('unknown model region "' // TRIM( region%name) // '"!')
+    END IF
 
     ! Allocate memory and initialise a dummy mesh
     CALL allocate_submesh_primary( submesh, region%name, 10, 20, C%nconmax)

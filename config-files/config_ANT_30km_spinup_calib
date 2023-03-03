@@ -331,7 +331,7 @@
 
   ! Bed roughness inversion
   do_slid_inv_config                          = .TRUE.                           ! Whether or not to perform an iterative inversion of bed roughness
-  choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
+  choice_slid_inv_method_config               = 'TijnJorjoHybrid'                ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
   slid_inv_t_start_config                     = 0.0                              ! Minimum model time when the inversion is allowed
   slid_inv_t_end_config                       = 80000.0                          ! Maximum model time when the inversion is allowed
   slid_inv_t_change_config                    = 00000.0                          ! Model time at which the inversion changes from the first-guess to the equilibrium stage
@@ -406,14 +406,6 @@
 
   ! Glacial index
   switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
-
-  ! Iterative adjustment of precipitation and temperature
-  do_clim_inv_config                          = .FALSE.                          ! Whether or not to adjust climate fields in tricky areas
-  clim_inv_t_start_config                     = 0.0                              ! Minimum model time when the inversion is allowed
-  clim_inv_t_end_config                       = 50000.0                          ! Maximum model time when the inversion is allowed
-  clim_inv_Hb_min_config                      = 1000.0                           ! Minimum bedrock elevation where the inversion operates
-  clim_inv_Hi_max_config                      = 1000.0                           ! Maximum ice thickness where the inversion operates
-  clim_inv_window_size_config                 = 500                              ! Number of previous time steps used to compute a running average of inverted values
 
   ! Ocean
   ! =====

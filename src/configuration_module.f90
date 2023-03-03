@@ -576,14 +576,6 @@ MODULE configuration_module
     ! Glacial index
     LOGICAL             :: switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used, warm/cold weights will depend only on CO2
 
-    ! Iterative adjustment of precipitation and temperature
-    LOGICAL             :: do_clim_inv_config                          = .FALSE.                          ! Whether or not to adjust climate fields in tricky areas
-    REAL(dp)            :: clim_inv_t_start_config                     = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
-    REAL(dp)            :: clim_inv_t_end_config                       = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
-    REAL(dp)            :: clim_inv_Hb_min_config                      = 1500._dp                         ! Minimum bedrock elevation where the inversion operates
-    REAL(dp)            :: clim_inv_Hi_max_config                      = 100._dp                          ! Maximum ice thickness where the inversion operates
-    INTEGER             :: clim_inv_window_size_config                 = 500                              ! Number of previous time steps used to compute a running average of inverted values
-
   ! == Ocean
   ! ========
 
@@ -1370,14 +1362,6 @@ MODULE configuration_module
 
     ! Glacial index
     LOGICAL                             :: switch_glacial_index
-
-    ! Iterative adjustment of precipitation and temperature
-    LOGICAL                             :: do_clim_inv
-    REAL(dp)                            :: clim_inv_t_start
-    REAL(dp)                            :: clim_inv_t_end
-    REAL(dp)                            :: clim_inv_Hb_min
-    REAL(dp)                            :: clim_inv_Hi_max
-    INTEGER                             :: clim_inv_window_size
 
     ! Ocean
     ! =====
@@ -2286,12 +2270,6 @@ CONTAINS
                      climate_matrix_biascorrect_warm_config,          &
                      climate_matrix_biascorrect_cold_config,          &
                      switch_glacial_index_config,                     &
-                     do_clim_inv_config,                              &
-                     clim_inv_t_start_config,                         &
-                     clim_inv_t_end_config,                           &
-                     clim_inv_Hb_min_config,                          &
-                     clim_inv_Hi_max_config,                          &
-                     clim_inv_window_size_config,                     &
                      choice_ocean_model_config,                       &
                      choice_idealised_ocean_config,                   &
                      filename_PD_obs_ocean_config,                    &
@@ -3173,14 +3151,6 @@ CONTAINS
 
     ! Glacial index
     C%switch_glacial_index                     = switch_glacial_index_config
-
-    ! Iterative adjustment of precipitation and temperature
-    C%do_clim_inv                              = do_clim_inv_config
-    C%clim_inv_t_start                         = clim_inv_t_start_config
-    C%clim_inv_t_end                           = clim_inv_t_end_config
-    C%clim_inv_Hb_min                          = clim_inv_Hb_min_config
-    C%clim_inv_Hi_max                          = clim_inv_Hi_max_config
-    C%clim_inv_window_size                     = clim_inv_window_size_config
 
     ! Ocean
     ! =====

@@ -9,6 +9,7 @@ MODULE general_sea_level_module
   USE parallel_module,                 ONLY: par, sync, ierr
   USE data_types_module,               ONLY: type_model_region, type_global_scalar_data
   USE forcing_module,                  ONLY: forcing, update_sealevel_record_at_model_time
+  USE utilities_module,                ONLY: thickness_above_floatation
 
   IMPLICIT NONE
 
@@ -87,7 +88,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER          :: routine_name = 'calculate_icesheet_volume_and_area'
     INTEGER                                :: vi
-    REAL(dp)                               :: ice_area, ice_volume, thickness_above_flotation, ice_volume_above_flotation
+    REAL(dp)                               :: ice_area, ice_volume, ice_volume_above_flotation
     REAL(dp)                               :: ice_area_prev, ice_volume_prev, ice_volume_above_flotation_prev
 
 
@@ -109,13 +110,9 @@ CONTAINS
     DO vi = region%mesh%vi1, region%mesh%vi2
 
       IF (region%ice%mask_ice_a( vi) == 1) THEN
-        ice_volume = ice_volume + (region%ice%Hi_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area))
-        ice_area   = ice_area   + region%mesh%A( vi) * 1.0E-06_dp ! [km^2]
-
-        ! Thickness above flotation
-        thickness_above_flotation = MAX(0._dp, region%ice%Hi_a( vi) - MAX(0._dp, (region%ice%SL_a( vi) - region%ice%Hb_a( vi)) * (seawater_density / ice_density)))
-
-        ice_volume_above_flotation = ice_volume_above_flotation + thickness_above_flotation * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area)
+        ice_volume                 = ice_volume                 + (region%ice%Hi_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area))
+        ice_area                   = ice_area                   + region%mesh%A( vi) * 1.0E-06_dp ! [km^2]
+        ice_volume_above_flotation = ice_volume_above_flotation + region%ice%TAF_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area)
       END IF
 
     END DO

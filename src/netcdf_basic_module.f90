@@ -39,7 +39,7 @@ MODULE netcdf_basic_module
   USE netcdf,                          ONLY: NF90_NOERR, NF90_OPEN, NF90_CLOSE, NF90_NOWRITE, NF90_INQ_DIMID, NF90_INQUIRE_DIMENSION, &
                                              NF90_INQ_VARID, NF90_INQUIRE_VARIABLE, NF90_MAX_VAR_DIMS, NF90_GET_VAR, &
                                              NF90_CREATE, NF90_NOCLOBBER, NF90_NETCDF4, NF90_ENDDEF, NF90_REDEF, NF90_DEF_DIM, NF90_DEF_VAR, &
-                                             NF90_PUT_ATT, NF90_WRITE, NF90_INT, NF90_FLOAT, NF90_DOUBLE, NF90_PUT_VAR, NF90_UNLIMITED, &
+                                             NF90_PUT_ATT, NF90_WRITE, NF90_INT, NF90_INT64, NF90_FLOAT, NF90_DOUBLE, NF90_PUT_VAR, NF90_UNLIMITED, &
                                              NF90_INQUIRE_ATTRIBUTE
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary
   USE mesh_help_functions_module,      ONLY: calc_triangle_geometric_centres, find_Voronoi_cell_areas, calc_lat_lon_coordinates, &
@@ -386,10 +386,13 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_timeframe'
     INTEGER                                            :: nt, id_dim_time, id_var_time
+    INTEGER                                            :: var_type
     REAL(dp), DIMENSION(:    ), POINTER                ::  time_from_file
     INTEGER                                            :: wtime_from_file
     INTEGER                                            :: tii
     REAL(dp)                                           :: dt_min
+    INTEGER,  DIMENSION(:    ), POINTER                ::  time_from_file_int
+    INTEGER                                            :: wtime_from_file_int
 
     ! Add routine to path
     CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
@@ -401,13 +404,24 @@ CONTAINS
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = nt)
 
     ! Inquire time variable ID
-    CALL inquire_var_multiple_options( filename, field_name_options_time, id_var_time)
+    CALL inquire_var_multiple_options( filename, field_name_options_time, id_var_time, var_type = var_type)
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( nt, time_from_file, wtime_from_file)
 
     ! Read time from file
-    CALL read_var_dp_1D( filename, id_var_time, time_from_file)
+    IF (var_type == NF90_FLOAT .OR. var_type == NF90_DOUBLE) THEN
+      CALL read_var_dp_1D( filename, id_var_time, time_from_file)
+    ELSEIF (var_type == NF90_INT .OR. var_type == NF90_INT64) THEN
+      CALL allocate_shared_int_1D( nt, time_from_file_int, wtime_from_file_int)
+      CALL read_var_int_1D( filename, id_var_time, time_from_file_int)
+      DO tii = 1, nt
+        time_from_file( tii) = REAL( time_from_file_int( tii),dp)
+      END DO
+      CALL deallocate_shared( wtime_from_file_int)
+    ELSE
+      CALL crash('whaa!')
+    END IF
 
     ! Find timeframe closest to desired time
     IF (time_from_file( 1) > time) THEN
@@ -1041,6 +1055,9 @@ CONTAINS
     INTEGER,  DIMENSION( NF90_MAX_VAR_DIMS)            :: dims_of_var
     REAL(dp), DIMENSION(:    ), POINTER                :: time
     INTEGER                                            :: wtime
+    INTEGER,  DIMENSION(:    ), POINTER                :: time_int
+    INTEGER                                            :: wtime_int
+    INTEGER                                            :: ti
 
     ! Add routine to path
     CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
@@ -1055,7 +1072,8 @@ CONTAINS
     ! Inquire variable
     CALL inquire_var_multiple_options( filename, field_name_options_time, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
     IF (id_var == -1) CALL crash('no valid time variable could be found in file "' // TRIM( filename) // '"!')
-    IF (.NOT. (var_type == NF90_FLOAT .OR. var_type == NF90_DOUBLE)) CALL crash('time variable in file "' // TRIM( filename) // '" is not of type NF90_FLOAT or NF90_DOUBLE!')
+    IF (.NOT. (var_type == NF90_FLOAT .OR. var_type == NF90_DOUBLE .OR. var_type == NF90_INT .OR. var_type == NF90_INT64)) &
+      CALL crash('time variable in file "' // TRIM( filename) // '" is not of type NF90_FLOAT, NF90_DOUBLE, or NF90_INT!')
     IF (ndims_of_var /= 1) CALL crash('time variable in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
     IF (dims_of_var( 1) /= id_dim) CALL crash('time variable in file "' // TRIM( filename) // '" does not have time as a dimension!')
 
@@ -1066,7 +1084,18 @@ CONTAINS
       CALL allocate_shared_dp_1D( n, time, wtime)
 
       ! Read variable
-      CALL read_var_dp_1D( filename, id_var, time)
+      IF (var_type == NF90_FLOAT .OR. var_type == NF90_DOUBLE) THEN
+        CALL read_var_dp_1D( filename, id_var, time)
+      ELSEIF (var_type == NF90_INT .OR. var_type == NF90_INT64) THEN
+        CALL allocate_shared_int_1D( n, time_int, wtime_int)
+        CALL read_var_int_1D( filename, id_var, time_int)
+        DO ti = 1, n
+          time( ti) = REAL( time_int( ti),dp)
+        END DO
+        CALL deallocate_shared( wtime_int)
+      ELSE
+        CALL crash('whaa!')
+      END IF
 
       ! Check validity
       CALL check_for_NaN_dp_1D( time, 'time')
@@ -3056,7 +3085,7 @@ CONTAINS
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
 
     ! Check variable type
-    IF (.NOT. (var_type == NF90_INT)) &
+    IF (.NOT. (var_type == NF90_INT .OR. var_type == NF90_INT64)) &
       CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" is not of type NF90_INT!')
 
     ! Check number of dimensions

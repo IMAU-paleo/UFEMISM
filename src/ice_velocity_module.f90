@@ -229,6 +229,8 @@ CONTAINS
                                                      / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass))
           fg_exp_mod = MAX( fg_exp_mod_slop, fg_exp_mod_peak)
 
+          fg_exp_mod = 0._dp
+
           ! Reduce friction based on grounded fractions
           ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** (2._dp-fg_exp_mod)
 
@@ -241,6 +243,8 @@ CONTAINS
           fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi) - C%DIVA_beta_surf_curvature_pass) &
                                                      / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass))
           fg_exp_mod = MAX( fg_exp_mod_slop, fg_exp_mod_peak)
+
+          fg_exp_mod = 0._dp
 
           ! Reduce friction based on grounded fractions
           ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** (2._dp-fg_exp_mod)
@@ -1178,12 +1182,12 @@ CONTAINS
     ! Limit beta to improve stability
     DO vi = mesh%vi1, mesh%vi2
 
-      ! Prevent small values over steep slopes (e.g. mountain walls and cliffs)
-      beta_mod = MAX( (ice%surf_slop( vi) - C%DIVA_beta_surf_slope_pass) / (C%DIVA_beta_surf_slope_threshold - C%DIVA_beta_surf_slope_pass), &
-                      (ice%surf_peak( vi) - C%DIVA_beta_surf_curvature_pass) / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass) )
+      ! ! Prevent small values over steep slopes (e.g. mountain walls and cliffs)
+      ! beta_mod = MAX( (ice%surf_slop( vi) - C%DIVA_beta_surf_slope_pass) / (C%DIVA_beta_surf_slope_threshold - C%DIVA_beta_surf_slope_pass), &
+      !                 (ice%surf_peak( vi) - C%DIVA_beta_surf_curvature_pass) / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass) )
 
-      ! Limit beta based on slopeness
-      ice%beta_a( vi) = MAX( ice%beta_a( vi), 1000._dp * MIN( 1._dp, MAX( 0._dp, beta_mod)) )
+      ! ! Limit beta based on slopeness
+      ! ice%beta_a( vi) = MAX( ice%beta_a( vi), 1000._dp * MIN( 1._dp, MAX( 0._dp, beta_mod)) )
 
       ! Apply maximum value limit
       ice%beta_a( vi) = MIN( C%DIVA_beta_max, ice%beta_a( vi))

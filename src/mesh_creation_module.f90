@@ -60,6 +60,8 @@ CONTAINS
     !   - its 2nd order surface deviation (=max(curvature)*typical_length) is too large
     !   - its area exceeds the limits based on ice velocity, grounding line or calving front
 
+    USE utilities_module, ONLY: inverse_oblique_sg_projection ! delete after testing
+
     IMPLICIT NONE
 
     ! Input variables
@@ -82,6 +84,8 @@ CONTAINS
     INTEGER                                       :: min_mask_int, max_mask_int
     REAL(dp)                                      :: mean_mask_dp
     LOGICAL                                       :: contains_ice, contains_nonice, contains_margin, contains_gl, contains_cf, contains_coast
+
+    REAL(dp) :: lat, lon ! delete after testing
 
     is_good = .TRUE.
 
@@ -128,6 +132,27 @@ CONTAINS
         RETURN
       END IF
     END DO
+
+    ! TMP: Delete after testing
+    ! -------------------------
+
+    ! CALL inverse_oblique_sg_projection(mesh%V(vp,1), mesh%V(vp,2), mesh%lambda_M, mesh%phi_M, mesh%beta_stereo, lon, lat)
+
+    ! contains_gl = .FALSE.
+    ! CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_gl, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)
+    ! IF (trinel>0) THEN
+    !   IF (max_mask_int==1) contains_gl = .TRUE.
+    ! ELSE
+    !   CALL cart_bilinear_int( refgeo_init%mask_gl, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
+    !   IF (mean_mask_dp>0.1_dp) contains_gl = .TRUE.
+    ! END IF
+
+    ! IF (lat > -80._dp .AND. lat < -74 .AND. lon > 245._dp .AND. lon < 265._dp) THEN
+    !   IF (contains_gl .AND. dmax > 12._dp * 1.5_dp * 1000._dp) THEN
+    !     is_good = .FALSE.
+    !     RETURN
+    !   END IF
+    ! END IF
 
     ! Finest allowed resolution
     ! =========================

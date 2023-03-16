@@ -125,7 +125,10 @@ CONTAINS
     ! Calculate pore water pressure using the chosen basal hydrology model
     ! ====================================================================
 
-    IF     (C%choice_basal_hydrology == 'saturated') THEN
+    IF     (C%choice_basal_hydrology == 'dry') THEN
+      ! Assume zero subglacial water pressure, i.e. effective pressure is equal to overburden pressure everywhere
+      ice%pore_water_pressure_a( mesh%vi1:mesh%vi2) = 0._dp
+    ELSEIF (C%choice_basal_hydrology == 'saturated') THEN
       ! Assume all marine till is saturated (i.e. pore water pressure is equal to water pressure at depth everywhere)
       CALL calc_pore_water_pressure_saturated( mesh, ice)
     ELSEIF (C%choice_basal_hydrology == 'Martin2011') THEN
@@ -165,7 +168,11 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
-    IF     (C%choice_basal_hydrology == 'saturated') THEN
+    IF     (C%choice_basal_hydrology == 'dry') THEN
+      CALL allocate_shared_dp_1D( mesh%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
+      CALL allocate_shared_dp_1D( mesh%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
+      CALL allocate_shared_dp_1D( mesh%nV, ice%Neff_a               , ice%wNeff_a               )
+    ELSEIF (C%choice_basal_hydrology == 'saturated') THEN
       CALL allocate_shared_dp_1D( mesh%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%Neff_a               , ice%wNeff_a               )
@@ -318,6 +325,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness'
+    INTEGER :: vi
 
     ! === Initialisation ===
     ! ======================
@@ -1485,7 +1493,11 @@ CONTAINS
     int_dummy = map%int_dummy
 
     ! Allocate shared memory
-    IF     (C%choice_basal_hydrology == 'saturated') THEN
+    IF     (C%choice_basal_hydrology == 'dry') THEN
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%Neff_a               , ice%wNeff_a               )
+    ELSEIF (C%choice_basal_hydrology == 'saturated') THEN
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%Neff_a               , ice%wNeff_a               )

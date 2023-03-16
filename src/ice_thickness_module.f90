@@ -39,7 +39,7 @@ CONTAINS
 ! =============================================
 
   ! The main routine that is called from "run_ice_model" in the ice_dynamics_module
-  SUBROUTINE calc_dHi_dt( mesh, ice, SMB, BMB, dt, mask_noice, refgeo_PD, do_dt_lim)
+  SUBROUTINE calc_dHi_dt( mesh, ice, SMB, BMB, dt, mask_noice, refgeo_PD, time, do_dt_lim)
     ! Use the total ice velocities to update the ice thickness
 
     IMPLICIT NONE
@@ -52,6 +52,7 @@ CONTAINS
     REAL(dp),                      INTENT(INOUT) :: dt
     INTEGER,  DIMENSION(:    ),    INTENT(IN)    :: mask_noice
     TYPE(type_reference_geometry), INTENT(IN)    :: refgeo_PD
+    REAL(dp),                      INTENT(IN)    :: time
     LOGICAL,                       INTENT(IN)    :: do_dt_lim
 
     ! Local variables:
@@ -67,7 +68,7 @@ CONTAINS
     ELSEIF (C%choice_ice_integration_method == 'explicit') THEN
       CALL calc_dHi_dt_explicit( mesh, ice, SMB, BMB, dt)
     ELSEIF (C%choice_ice_integration_method == 'dynamic') THEN
-      CALL calc_dHi_dt_dynamic(  mesh, ice, SMB, BMB, dt, do_dt_lim)
+      CALL calc_dHi_dt_dynamic(  mesh, ice, SMB, BMB, dt, do_dt_lim, time)
     ELSEIF (C%choice_ice_integration_method == 'semi-implicit') THEN
       CALL crash('calc_dHi_dt_semiimplicit: FIXME!')
       !CALL calc_dHi_dt_semiimplicit( mesh, ice, SMB, BMB, dt)
@@ -323,7 +324,7 @@ CONTAINS
 
   END SUBROUTINE calc_dHi_dt_explicit
 
-  SUBROUTINE calc_dHi_dt_dynamic( mesh, ice, SMB, BMB, dt, do_dt_lim)
+  SUBROUTINE calc_dHi_dt_dynamic( mesh, ice, SMB, BMB, dt, do_dt_lim, time)
     ! The explicit solver for the ice thickness equation
 
     IMPLICIT NONE
@@ -335,6 +336,7 @@ CONTAINS
     TYPE(type_BMB_model), INTENT(IN)    :: BMB
     REAL(dp),             INTENT(INOUT) :: dt
     LOGICAL,              INTENT(IN)    :: do_dt_lim
+    REAL(dp),             INTENT(IN)    :: time
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER       :: routine_name = 'calc_dHi_dt_dynamic'
@@ -567,7 +569,11 @@ CONTAINS
       ! Influx of mass through vertex (in m^3/yr)
       dVi  = SUM( ice%dVi_in( vi,:))
       ! Change in ice thickness (in m/yr)
-      ice%dHi_dt_a(     vi) = (dVi + Vi_MB( vi)) / mesh%A( vi)
+      IF (C%do_dHdt_target .AND. time < C%dHdt_target_turnoff) THEN
+        ice%dHi_dt_a( vi) = (dVi + Vi_MB( vi)) / mesh%A( vi) - ice%dHi_dt_target_a( vi)
+      ELSE
+        ice%dHi_dt_a( vi) = (dVi + Vi_MB( vi)) / mesh%A( vi)
+      END IF
       ! Predicted new ice thickness (in m)
       ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_a( vi) + ice%dHi_dt_a( vi) * dt)
       ! Diagnostic ice thickness change (in m/yr)

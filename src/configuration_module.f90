@@ -455,6 +455,11 @@ MODULE configuration_module
     ! Memory of first dHi_dt of simulation
     INTEGER             :: dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
 
+    ! Target dH_dt during calibration
+    LOGICAL             :: do_dHdt_target_config                       = .FALSE.                          ! Whether or not to use a target field of dHdt during a calibration of the model
+    CHARACTER(LEN=256)  :: dHdt_target_filename_config                 = 'data/dHdt_Antarctica/dHdt_antarctica_8km.nc' ! NetCDF file from where the target dHdt are read for use during the calibration of the model
+    REAL(dp)            :: dHdt_target_turnoff_config                  = 100000._dp                       ! Time at which dHdt is not applied anymore
+
   ! == Ice dynamics - basal conditions and sliding
   ! ==============================================
 
@@ -1241,6 +1246,11 @@ MODULE configuration_module
 
     ! Memory of previous run during a restart
     INTEGER                             :: dHi_dt_window_size
+
+    ! Target dH_dt during calibration
+    LOGICAL                             :: do_dHdt_target
+    CHARACTER(LEN=256)                  :: dHdt_target_filename
+    REAL(dp)                            :: dHdt_target_turnoff
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
@@ -2148,6 +2158,9 @@ CONTAINS
                      fixed_mask_t_start_config,                       &
                      fixed_mask_t_end_config,                         &
                      dHi_dt_window_size_config,                       &
+                     do_dHdt_target_config,                           &
+                     dHdt_target_filename_config,                     &
+                     dHdt_target_turnoff_config,                      &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
                      slid_delta_v_config,                             &
@@ -3032,6 +3045,11 @@ CONTAINS
 
     ! Memory of previous run during a restart
     C%dHi_dt_window_size                       = dHi_dt_window_size_config
+
+    ! Target dH_dt during calibration
+    C%do_dHdt_target                           = do_dHdt_target_config
+    C%dHdt_target_filename                     = dHdt_target_filename_config
+    C%dHdt_target_turnoff                      = dHdt_target_turnoff_config
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================

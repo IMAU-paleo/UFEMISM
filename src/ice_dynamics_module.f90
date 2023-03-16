@@ -259,7 +259,7 @@ CONTAINS
     ELSE
 
       ! Compute new dHi_dt and corresponding Hi_tplusdt_a
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD, do_dt_lim = .FALSE.)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD, region%time, do_dt_lim = .FALSE.)
 
       ! Calculate ice thickness at the end of this model loop
       region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
@@ -406,7 +406,7 @@ CONTAINS
       ! Calculate new ice geometry
       region%ice%pc_f2(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
 
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD, do_dt_lim = .TRUE.)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD, region%time, do_dt_lim = .TRUE.)
       region%ice%pc_f1(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
 
       ! Re-calculate zeta after possible adaptation of dt_crit_ice inside calc_dHi_dt
@@ -480,7 +480,7 @@ CONTAINS
       ! ==============
 
       ! Calculate dHi_dt for the predicted ice thickness and updated velocity
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD, do_dt_lim = .FALSE.)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD, region%time, do_dt_lim = .FALSE.)
 
       region%ice%pc_f3(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
       region%ice%pc_f4(   vi1:vi2) = region%ice%pc_f1(    vi1:vi2)
@@ -1369,6 +1369,13 @@ CONTAINS
     ! Allocate and initialise basal conditions
     CALL initialise_basal_conditions( mesh, ice, restart)
 
+    ! Get the target dHdt for calibrations
+    IF (C%do_dHdt_target) THEN
+      CALL map_dHdt_to_mesh( mesh, ice)
+    ELSE
+      ice%dHi_dt_target_a( mesh%vi1:mesh%vi2) = 0._dp
+    END IF
+
     ! Geothermal heat flux
     IF     (C%choice_geothermal_heat_flux == 'constant') THEN
       ice%GHF_a( mesh%vi1:mesh%vi2) = C%constant_geothermal_heat_flux
@@ -1504,6 +1511,31 @@ CONTAINS
 
   END SUBROUTINE map_geothermal_heat_flux_to_mesh
 
+  SUBROUTINE map_dHdt_to_mesh( mesh, ice)
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_mesh),      INTENT(INOUT) :: mesh
+    TYPE(type_ice_model), INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER       :: routine_name = 'map_dHdt_to_mesh'
+    CHARACTER(LEN=256)                  :: filename
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Read geothermal heat flux from external file
+    filename = C%dHdt_target_filename
+    IF (par%master) WRITE(0,*) '  Initialising dHdt from file "', TRIM( filename), '"...'
+    CALL read_field_from_file_2D( filename, 'dHdt', mesh, ice%dHi_dt_target_a, 'ANT')
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_dHdt_to_mesh
+
   SUBROUTINE allocate_ice_model( mesh, ice)
     ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
     ! Return a pointer associated with that memory space. Makes it so that all processes
@@ -1605,6 +1637,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%Hi_projected_a  , ice%wHi_projected_a    )
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_ave_a    , ice%wdHi_dt_ave_a      )
     CALL allocate_shared_dp_2D(   mesh%nV  , C%dHi_dt_window_size, ice%dHi_dt_window_a , ice%wdHi_dt_window_a   )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_target_a , ice%wdHi_dt_target_a   )
 
     ! Ice dynamics - calving
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%float_margin_frac_a   , ice%wfloat_margin_frac_a  )
@@ -1712,6 +1745,14 @@ CONTAINS
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a, ice%wdHb_a, 'cons_2nd_order')
     CALL reallocate_shared_dp_1D( mesh_new%nV,  ice%Hb_a, ice%wHb_a)
     ice%Hb_a( mesh_new%vi1:mesh_new%vi2) = refgeo_PD%Hb( mesh_new%vi1:mesh_new%vi2) + ice%dHb_a( mesh_new%vi1:mesh_new%vi2)
+
+    ! Target dHdt
+    CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dHi_dt_target_a, ice%wdHi_dt_target_a)
+    IF (C%do_dHdt_target) THEN
+      CALL map_dHdt_to_mesh( mesh_new, ice)
+    ELSE
+      ice%dHi_dt_target_a( mesh_new%vi1:mesh_new%vi2) = 0._dp
+    END IF
 
     ! Geothermal heat flux
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%GHF_a, ice%wGHF_a)

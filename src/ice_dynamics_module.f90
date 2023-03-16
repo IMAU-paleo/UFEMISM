@@ -11,7 +11,7 @@ MODULE ice_dynamics_module
 ! ====================
 
   USE mpi
-  USE parameters_module,                     ONLY: ice_density, seawater_density
+  USE parameters_module,                     ONLY: ice_density, seawater_density, sec_per_year
   USE configuration_module,                  ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE petsc_module,                          ONLY: perr
   USE parallel_module,                       ONLY: par, sync, ierr, cerr, partition_list, &
@@ -1505,6 +1505,9 @@ CONTAINS
     filename = C%filename_geothermal_heat_flux
     IF (par%master) WRITE(0,*) '  Initialising geothermal heat flux from file "', TRIM( filename), '"...'
     CALL read_field_from_file_2D( filename, 'hflux', mesh, ice%GHF_a, 'ANT')
+
+    ice%GHF_a( mesh%vi1:mesh%vi2) = ice%GHF_a( mesh%vi1:mesh%vi2) * sec_per_year
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

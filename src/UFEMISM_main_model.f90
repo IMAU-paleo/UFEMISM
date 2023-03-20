@@ -235,7 +235,7 @@ CONTAINS
 
       ! Run the BMB model
       ! IF (region%do_BMB) THEN
-        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
+        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD, region%climate_matrix%ISMIP_style%shelf_collapse_mask)
       ! END IF
 
       t2 = MPI_WTIME()
@@ -258,7 +258,7 @@ CONTAINS
       ! ======================
       ! (move it to after the output for debugging imposed ice removal)
 
-      CALL update_ice_thickness( region%mesh, region%ice, region%BMB, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time, region%climate_matrix%ISMIP_style%shelf_collapse_mask)
+      CALL update_ice_thickness( region%mesh, region%ice, region%BMB, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
       CALL sync
 
       ! == Ice sheet scalars
@@ -479,7 +479,7 @@ CONTAINS
     CALL run_climate_model( region, climate_matrix_global, region%time)
     CALL run_ocean_model( region%mesh, region%grid_smooth, region%ice, region%ocean_matrix, region%climate_matrix, region%name, region%time)
     CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, region%time, region%SMB, region%mask_noice)
-    CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
+    CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD, region%climate_matrix%ISMIP_style%shelf_collapse_mask)
 
     ! Remap key restart data
     IF (C%is_restart) THEN
@@ -741,7 +741,7 @@ CONTAINS
     CALL run_climate_model( region, climate_matrix_global, C%start_time_of_run)
     CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, C%start_time_of_run, region%SMB, region%mask_noice)
     CALL run_ocean_model( region%mesh, region%grid_smooth, region%ice, region%ocean_matrix, region%climate_matrix, region%name, region%time)
-    CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
+    CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD, region%climate_matrix%ISMIP_style%shelf_collapse_mask)
 
     ! Initialise the ice temperature profile
     CALL initialise_ice_temperature( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%name, region%restart)

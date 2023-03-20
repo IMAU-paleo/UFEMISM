@@ -16,7 +16,7 @@
   dt_cooldown_phase_config                    = 1.0                              ! Length of time window (in years) before end_time when dt = dt_min, to ensure smooth restarts
 
   ! Sub-models
-  dt_thermo_config                            = 0.5                              ! Time step (in years) for updating thermodynamics
+  dt_thermo_config                            = 0.2                              ! Time step (in years) for updating thermodynamics
   dt_climate_config                           = 1.0                              ! Time step (in years) for updating the climate
   dt_ocean_config                             = 1.0                              ! Time step (in years) for updating the ocean
   dt_SMB_config                               = 1.0                              ! Time step (in years) for updating the SMB [not used; computed every time step now]

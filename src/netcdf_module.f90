@@ -5801,6 +5801,7 @@ CONTAINS
     INTEGER                                              :: vi
     CHARACTER(LEN=256)                                   :: icesheet_code, foldername
     REAL(dp), PARAMETER                                  :: missing_value = 1.E20
+
     REAL(dp), DIMENSION( :    ), POINTER                 :: Ti_base_gr
     REAL(dp), DIMENSION( :    ), POINTER                 :: Ti_base_fl
     REAL(dp), DIMENSION( :    ), POINTER                 :: basal_drag
@@ -5809,8 +5810,24 @@ CONTAINS
     REAL(dp), DIMENSION( :    ), POINTER                 :: land_ice_area_fraction
     REAL(dp), DIMENSION( :    ), POINTER                 :: grounded_ice_sheet_area_fraction
     REAL(dp), DIMENSION( :    ), POINTER                 :: floating_ice_shelf_area_fraction
+    REAL(dp), DIMENSION( :    ), POINTER                 :: xvelbase, xvelsurf, xvelmean
+    REAL(dp), DIMENSION( :    ), POINTER                 :: yvelbase, yvelsurf, yvelmean
+    REAL(dp), DIMENSION( :    ), POINTER                 :: zvelbase, zvelsurf
+    REAL(dp), DIMENSION( :    ), POINTER                 :: acabf
+    REAL(dp), DIMENSION( :    ), POINTER                 :: libmassbfgr
+    REAL(dp), DIMENSION( :    ), POINTER                 :: libmassbffl
+    REAL(dp), DIMENSION( :    ), POINTER                 :: dlithkdt
+
     INTEGER :: wTi_base_gr, wTi_base_fl, wbasal_drag, wcalving_flux, wcalving_and_front_melt_flux
     INTEGER :: wland_ice_area_fraction, wgrounded_ice_sheet_area_fraction, wfloating_ice_shelf_area_fraction
+    INTEGER :: wxvelbase, wxvelsurf, wxvelmean
+    INTEGER :: wyvelbase, wyvelsurf, wyvelmean
+    INTEGER :: wzvelbase, wzvelsurf
+    INTEGER :: wacabf
+    INTEGER :: wlibmassbfgr
+    INTEGER :: wlibmassbffl
+    INTEGER :: wdlithkdt
+
     REAL(dp)                                             :: land_ice_mass
     REAL(dp)                                             :: mass_above_floatation
     REAL(dp)                                             :: grounded_ice_sheet_area
@@ -5857,20 +5874,23 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, land_ice_area_fraction          , wland_ice_area_fraction          )
     CALL allocate_shared_dp_1D( region%mesh%nV, grounded_ice_sheet_area_fraction, wgrounded_ice_sheet_area_fraction)
     CALL allocate_shared_dp_1D( region%mesh%nV, floating_ice_shelf_area_fraction, wfloating_ice_shelf_area_fraction)
-
-    ! 2-D fields
-    Ti_base_gr(                       region%mesh%vi1:region%mesh%vi2) = missing_value
-    Ti_base_fl(                       region%mesh%vi1:region%mesh%vi2) = missing_value
-    basal_drag(                       region%mesh%vi1:region%mesh%vi2) = missing_value
-    calving_flux(                     region%mesh%vi1:region%mesh%vi2) = missing_value
-    calving_and_front_melt_flux(      region%mesh%vi1:region%mesh%vi2) = missing_value
-    land_ice_area_fraction(           region%mesh%vi1:region%mesh%vi2) = missing_value
-    grounded_ice_sheet_area_fraction( region%mesh%vi1:region%mesh%vi2) = missing_value
-    floating_ice_shelf_area_fraction( region%mesh%vi1:region%mesh%vi2) = missing_value
+    CALL allocate_shared_dp_1D( region%mesh%nV, xvelbase                        , wxvelbase                        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, yvelbase                        , wyvelbase                        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, zvelbase                        , wzvelbase                        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, xvelsurf                        , wxvelsurf                        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, yvelsurf                        , wyvelsurf                        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, zvelsurf                        , wzvelsurf                        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, xvelmean                        , wxvelmean                        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, yvelmean                        , wyvelmean                        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, acabf                           , wacabf                           )
+    CALL allocate_shared_dp_1D( region%mesh%nV, libmassbfgr                     , wlibmassbfgr                     )
+    CALL allocate_shared_dp_1D( region%mesh%nV, libmassbffl                     , wlibmassbffl                     )
+    CALL allocate_shared_dp_1D( region%mesh%nV, dlithkdt                        , wdlithkdt                        )
 
     ! Scalars (integrated values)
     IF (par%master) THEN
 
+      ! Initialise
       land_ice_mass                     = 0._dp
       mass_above_floatation             = 0._dp
       grounded_ice_sheet_area           = 0._dp
@@ -5881,18 +5901,40 @@ CONTAINS
       total_calving_flux                = 0._dp
       total_calving_and_front_melt_flux = 0._dp
 
+      Ti_base_gr                        = 0._dp
+      Ti_base_fl                        = 0._dp
+      basal_drag                        = 0._dp
+      calving_flux                      = 0._dp
+      calving_and_front_melt_flux       = 0._dp
+      land_ice_area_fraction            = 0._dp
+      grounded_ice_sheet_area_fraction  = 0._dp
+      floating_ice_shelf_area_fraction  = 0._dp
+      xvelbase                          = 0._dp
+      yvelbase                          = 0._dp
+      zvelbase                          = 0._dp
+      xvelsurf                          = 0._dp
+      yvelsurf                          = 0._dp
+      zvelsurf                          = 0._dp
+      xvelmean                          = 0._dp
+      yvelmean                          = 0._dp
+      acabf                             = 0._dp
+      libmassbfgr                       = 0._dp
+      libmassbffl                       = 0._dp
+      dlithkdt                          = 0._dp
+
       DO vi = 1, region%mesh%nV
 
         ! Ice base temperature separate for sheet and shelf
         ! =================================================
 
-        IF (region%ice%mask_sheet_a( vi) == 1) THEN
+        ! NOTE: masking results in poor remapping, dont do this!
+!        IF (region%ice%mask_sheet_a( vi) == 1) THEN
           Ti_base_gr( vi) = region%ice%Ti_a( vi,C%nz)
-        END IF
+!        END IF
 
-        IF (region%ice%mask_shelf_a( vi) == 1) THEN
+!        IF (region%ice%mask_shelf_a( vi) == 1) THEN
           Ti_base_fl( vi) = region%ice%Ti_a( vi,C%nz)
-        END IF
+!        END IF
 
         ! Basal drag
         ! ==========
@@ -5924,6 +5966,32 @@ CONTAINS
 
         floating_ice_shelf_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp) * MAX( (1._dp - region%ice%f_grnd_a( vi)), region%ice%float_margin_frac_a( vi))
 
+        ! Velocities (in m s^-1)
+        ! ======================
+
+        xvelbase( vi) = region%ice%u_base_a( vi) / sec_per_year
+        yvelbase( vi) = region%ice%v_base_a( vi) / sec_per_year
+        zvelbase( vi) = region%ice%w_base_a( vi) / sec_per_year
+
+        xvelsurf( vi) = region%ice%u_surf_a( vi) / sec_per_year
+        yvelsurf( vi) = region%ice%v_surf_a( vi) / sec_per_year
+        zvelsurf( vi) = region%ice%w_surf_a( vi) / sec_per_year
+
+        xvelmean( vi) = region%ice%u_vav_a(  vi) / sec_per_year
+        yvelmean( vi) = region%ice%v_vav_a(  vi) / sec_per_year
+
+        ! Mass balance components (in kg m^-2 s^-1)
+        ! =========================================
+
+        acabf(       vi) = region%SMB%SMB_year(  vi) * ice_density / sec_per_year
+        libmassbfgr( vi) = region%BMB%BMB_sheet( vi) * ice_density / sec_per_year
+        libmassbffl( vi) = region%BMB%BMB_shelf( vi) * ice_density / sec_per_year
+
+        ! Thinning rates (in m s^-1)
+        ! ==========================
+
+        dlithkdt( vi) = region%ice%dHs_dt_a( vi) / sec_per_year
+
         ! Integrated values
         ! =================
 
@@ -5947,18 +6015,18 @@ CONTAINS
     CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Hs_a                    , 'orog'                     )
     CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Hb_a                    , 'topg'                     )
     CALL write_to_ISMIP_output_file_field_notime(  region%mesh, region%grid_output, foldername, icesheet_code,                       region%ice%GHF_a                   , 'hfgeoubed'                )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%SMB%SMB_year                , 'acabf'                    )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%BMB%BMB_sheet               , 'libmassbfgr'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%BMB%BMB_shelf               , 'libmassbffl'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%dHs_dt_a                , 'dlithkdt'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_surf_a                , 'xvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_surf_a                , 'yvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%w_surf_a                , 'zvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_base_a                , 'xvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_base_a                , 'yvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%w_base_a                , 'zvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_vav_a                 , 'xvelmean'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_vav_a                 , 'yvelmean'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, acabf                              , 'acabf'                    )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, libmassbfgr                        , 'libmassbfgr'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, libmassbffl                        , 'libmassbffl'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, dlithkdt                           , 'dlithkdt'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, xvelsurf                           , 'xvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, yvelsurf                           , 'yvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, zvelsurf                           , 'zvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, xvelbase                           , 'xvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, yvelbase                           , 'yvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, zvelbase                           , 'zvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, xvelmean                           , 'xvelmean'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, yvelmean                           , 'yvelmean'                 )
     CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Ti_a( :,1)              , 'litemptop'                )
     CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, Ti_base_gr                         , 'litempbotgr'              )
     CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, Ti_base_fl                         , 'litempbotfl'              )
@@ -5987,6 +6055,18 @@ CONTAINS
     CALL deallocate_shared( wland_ice_area_fraction          )
     CALL deallocate_shared( wgrounded_ice_sheet_area_fraction)
     CALL deallocate_shared( wfloating_ice_shelf_area_fraction)
+    CALL deallocate_shared( wxvelbase                        )
+    CALL deallocate_shared( wyvelbase                        )
+    CALL deallocate_shared( wzvelbase                        )
+    CALL deallocate_shared( wxvelsurf                        )
+    CALL deallocate_shared( wyvelsurf                        )
+    CALL deallocate_shared( wzvelsurf                        )
+    CALL deallocate_shared( wxvelmean                        )
+    CALL deallocate_shared( wyvelmean                        )
+    CALL deallocate_shared( wacabf                           )
+    CALL deallocate_shared( wlibmassbfgr                     )
+    CALL deallocate_shared( wlibmassbffl                     )
+    CALL deallocate_shared( wdlithkdt                        )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

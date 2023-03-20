@@ -39,7 +39,7 @@ CONTAINS
 ! ===== The main routines that should be called from the main ice model/program =====
 ! ==========================================================================
 
-  SUBROUTINE run_BMB_model( mesh, ice, ocean, BMB, region_name, time, refgeo)
+  SUBROUTINE run_BMB_model( mesh, ice, ocean, BMB, region_name, time, refgeo, shelf_collapse_mask)
     ! Run the selected BMB model
 
     IMPLICIT NONE
@@ -52,6 +52,7 @@ CONTAINS
     CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
     REAL(dp),                             INTENT(IN)    :: time
     TYPE(type_reference_geometry),        INTENT(IN)    :: refgeo
+    REAL(dp), DIMENSION(:   ),                   INTENT(IN)    :: shelf_collapse_mask
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model'
@@ -106,6 +107,19 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
+
+
+
+    ! DENK DROM - implement ISMIP6 shelf collapse forcing as a very high melt rate, just as in ABUMIP
+    IF (C%do_use_ISMIP_future_shelf_collapse_forcing) THEN
+      DO vi = mesh%vi1, mesh%vi2
+        IF (shelf_collapse_mask( vi) > 0.01_dp) THEN
+          BMB%BMB_shelf( vi) = -400._dp
+        END IF
+      END DO
+    END IF
+
+
 
     ! Run the selected sheet BMB model
     IF     (C%choice_BMB_sheet_model == 'uniform') THEN
@@ -185,6 +199,9 @@ CONTAINS
 
     ! Limit basal melt
     DO vi = mesh%vi1, mesh%vi2
+      IF (C%do_use_ISMIP_future_shelf_collapse_forcing) THEN
+        IF (shelf_collapse_mask( vi) > 0.01_dp) CYCLE
+      END IF
       BMB%BMB( vi) = MAX( BMB%BMB( vi), C%BMB_min)
       BMB%BMB( vi) = MIN( BMB%BMB( vi), C%BMB_max)
     END DO

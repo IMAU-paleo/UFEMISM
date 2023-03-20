@@ -408,11 +408,11 @@
   ! ISMIP-style forcing
   ! ===================
 
-  ISMIP_future_ocean_temperature_filename_config   = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP85-repeat/1995-2300/NorESM1-M_temperature_8km_x_60m.nc'
-  ISMIP_future_ocean_salinity_filename_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP85-repeat/1995-2300/NorESM1-M_salinity_8km_x_60m.nc'
+  ISMIP_future_ocean_temperature_filename_config   = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP85-repeat/1995-2300/NorESM1-M_temperature_16km_x_60m.nc'
+  ISMIP_future_ocean_salinity_filename_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP85-repeat/1995-2300/NorESM1-M_salinity_16km_x_60m.nc'
 
   ISMIP_future_atmosphere_baseline_filename_config = '/home/berends/Datasets/ISMIP6/ISMIP6_clim_1950_1979_mean.nc'
-  ISMIP_future_atmosphere_anomaly_filename_config  = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Atmosphere_Forcing/NorESM1-M_RCP85-repeat/Regridded_16km/NorESM1-M_16km_anomaly_1995-2300_v2.nc'
+  ISMIP_future_atmosphere_anomaly_filename_config  = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Atmosphere_Forcing/NorESM1-M_RCP85-repeat/Regridded_16km/NorESM1-M_16km_anomaly_1995-2300_v2_smoothed.nc'
 
   do_use_ISMIP_future_shelf_collapse_forcing_config   = .FALSE.
   ISMIP_future_shelf_collapse_forcing_filename_config = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/ShelfCollapse_forcing/CCSM4_RCP85/ice_shelf_collapse_mask_CCSM4_RCP85_1995-2300_16km.nc'

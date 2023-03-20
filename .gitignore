@@ -13,6 +13,7 @@ UFEMISM_program
 /data
 
 # Ignore output files
+AIS_IMAU_*
 result*/
 /benchmarks/MISMIP_mod/MISMIP_mod*
 /benchmarks/ISMIP-HOM/ISMIP_HOM_*

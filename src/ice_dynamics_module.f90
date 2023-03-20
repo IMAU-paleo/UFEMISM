@@ -352,15 +352,15 @@ CONTAINS
       END IF
     END IF
 
-    ! Cool-down
-    IF (C%dt_cooldown_phase > 0._dp) THEN
-      IF (region%time >= C%end_time_of_run - C%dt_cooldown_phase) THEN
-        ! Reduce time maximum time step
-        dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((C%end_time_of_run - region%time) / C%dt_cooldown_phase)**2
-        ! Enforce higher accuracy
-        r_solver_acc = 0.01_dp + 0.99_dp * (C%end_time_of_run - region%time) / C%dt_cooldown_phase
-      END IF
-    END IF
+!    ! Cool-down
+!    IF (C%dt_cooldown_phase > 0._dp) THEN
+!      IF (region%time >= C%end_time_of_run - C%dt_cooldown_phase) THEN
+!        ! Reduce time maximum time step
+!        dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((C%end_time_of_run - region%time) / C%dt_cooldown_phase)**2
+!        ! Enforce higher accuracy
+!        r_solver_acc = 0.01_dp + 0.99_dp * (C%end_time_of_run - region%time) / C%dt_cooldown_phase
+!      END IF
+!    END IF
 
     ! Accuracy for the SSA/DIVA solution
     region%ice%DIVA_SOR_nit              = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
@@ -538,7 +538,7 @@ CONTAINS
 ! ===== Ice thickness update =====
 ! ================================
 
-  SUBROUTINE update_ice_thickness( mesh, ice, BMB, mask_noice, refgeo_PD, refgeo_GIAeq, time, shelf_collapse_mask)
+  SUBROUTINE update_ice_thickness( mesh, ice, BMB, mask_noice, refgeo_PD, refgeo_GIAeq, time)
     ! Update the ice thickness at the end of a model time loop
 
     IMPLICIT NONE
@@ -551,7 +551,6 @@ CONTAINS
     TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_PD
     TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_GIAeq
     REAL(dp),                                    INTENT(IN)    :: time
-    REAL(dp), DIMENSION(:   ),                   INTENT(IN)    :: shelf_collapse_mask
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                              :: routine_name = 'update_ice_thickness'
@@ -581,16 +580,6 @@ CONTAINS
 
     ! Remove ice following various criteria
     CALL additional_ice_removal( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
-
-    ! ISMIP6 shelf collapse forcing
-    IF (C%do_use_ISMIP_future_shelf_collapse_forcing) THEN
-      DO vi = mesh%vi1, mesh%vi2
-        IF (shelf_collapse_mask( vi) > 0.01_dp .AND. &
-          thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi)) < 0._dp) THEN
-          ice%Hi_a( vi) = 0._dp
-        END IF
-      END DO
-    END IF
 
     ! Update masks, surface elevation, and thickness above floatation
     CALL update_general_ice_model_data( mesh, ice)

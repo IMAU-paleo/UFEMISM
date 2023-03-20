@@ -139,9 +139,9 @@
   choice_refgeo_init_EAS_config               = 'realistic'                      ! Choice of initial geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
   choice_refgeo_init_GRL_config               = 'realistic'                      ! Choice of initial geometry for Greenland    ; can be "idealised", "realistic", or "restart"
   choice_refgeo_init_ANT_config               = 'restart'                        ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
-  filename_refgeo_init_NAM_config             = '/home/berends/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  filename_refgeo_init_EAS_config             = '/home/berends/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  filename_refgeo_init_GRL_config             = '/home/berends/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
+  filename_refgeo_init_NAM_config             = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  filename_refgeo_init_EAS_config             = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  filename_refgeo_init_GRL_config             = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
   filename_refgeo_init_ANT_config             = 'results_ANT_30km_ismip_v2_historical/restart_ANT_00001.nc'
 
   ! Present-day geometry
@@ -149,20 +149,20 @@
   choice_refgeo_PD_EAS_config                 = 'realistic'                      ! Choice of present-day geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
   choice_refgeo_PD_GRL_config                 = 'realistic'                      ! Choice of present-day geometry for Greenland    ; can be "idealised", "realistic", or "restart"
   choice_refgeo_PD_ANT_config                 = 'realistic'                      ! Choice of present-day geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
-  filename_refgeo_PD_NAM_config               = '/home/berends/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  filename_refgeo_PD_EAS_config               = '/home/berends/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  filename_refgeo_PD_GRL_config               = '/home/berends/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
-  filename_refgeo_PD_ANT_config               = '/home/berends/Datasets/BedMachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  filename_refgeo_PD_NAM_config               = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  filename_refgeo_PD_EAS_config               = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  filename_refgeo_PD_GRL_config               = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
+  filename_refgeo_PD_ANT_config               = '/Users/berends/Documents/Datasets/BedMachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
 
   ! GIA equilibrium geometry
   choice_refgeo_GIAeq_NAM_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for North America; can be "idealised", "realistic", or "restart"
   choice_refgeo_GIAeq_EAS_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
   choice_refgeo_GIAeq_GRL_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Greenland    ; can be "idealised", "realistic", or "restart"
   choice_refgeo_GIAeq_ANT_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
-  filename_refgeo_GIAeq_NAM_config            = '/home/berends/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  filename_refgeo_GIAeq_EAS_config            = '/home/berends/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  filename_refgeo_GIAeq_GRL_config            = '/home/berends/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
-  filename_refgeo_GIAeq_ANT_config            = '/home/berends/Datasets/BedMachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  filename_refgeo_GIAeq_NAM_config            = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  filename_refgeo_GIAeq_EAS_config            = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  filename_refgeo_GIAeq_GRL_config            = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
+  filename_refgeo_GIAeq_ANT_config            = '/Users/berends/Documents/Datasets/BedMachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
 
   ! Whether or not the simulation is a restart of a previous simulation
   ! ===================================================================
@@ -194,7 +194,7 @@
   ! Insolation forcing (NetCDF)
   choice_insolation_forcing_config            = 'none'                           ! Choice of insolation forcing: "none", "static", "realistic"
   static_insolation_time_config               = 0.0                              ! Keep insolation values fixed to this time when choice_insolation_forcing = 'static'
-  filename_insolation_config                  = '/home/berends/Datasets/Insolation/Insolation_Laskar_etal_2004.nc'
+  filename_insolation_config                  = '/Users/berends/Documents/Datasets/Insolation/Insolation_Laskar_etal_2004.nc'
 
 
   ! CO2 record (ASCII text file, so the number of rows needs to be specified)
@@ -208,7 +208,7 @@
   ! Geothermal heat flux
   choice_geothermal_heat_flux_config          = 'spatial'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
   constant_geothermal_heat_flux_config        = 1.72E06                          ! Geothermal Heat flux [J m^-2 yr^-1] Sclater et al. (1980)
-  filename_geothermal_heat_flux_config        = '/home/berends/Datasets/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
+  filename_geothermal_heat_flux_config        = '/Users/berends/Documents/Datasets/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
 
   ! Parameters for calculating modelled benthic d18O
   do_calculate_benthic_d18O_config            = .FALSE.                          ! Whether or not to calculate modelled benthic d18O (set to .FALSE. for e.g. idealised, future projections, ISMIP6)
@@ -408,14 +408,14 @@
   ! ISMIP-style forcing
   ! ===================
 
-  ISMIP_future_ocean_temperature_filename_config   = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/ukesm1-0-ll_ssp585/1995-2300/UKESM1-0-LL_SSP585_temperature_16km_x_60m.nc'
-  ISMIP_future_ocean_salinity_filename_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/ukesm1-0-ll_ssp585/1995-2300/UKESM1-0-LL_SSP585_salinity_16km_x_60m.nc'
+  ISMIP_future_ocean_temperature_filename_config   = '/Users/berends/Documents/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/ukesm1-0-ll_ssp585/1995-2300/UKESM1-0-LL_SSP585_temperature_16km_x_60m.nc'
+  ISMIP_future_ocean_salinity_filename_config      = '/Users/berends/Documents/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/ukesm1-0-ll_ssp585/1995-2300/UKESM1-0-LL_SSP585_salinity_16km_x_60m.nc'
 
-  ISMIP_future_atmosphere_baseline_filename_config = '/home/berends/Datasets/ISMIP6/ISMIP6_clim_1950_1979_mean.nc'
-  ISMIP_future_atmosphere_anomaly_filename_config  = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Atmosphere_Forcing/UKESM1-0-LL_ssp585/Regridded_16km/UKESM1-0-LL_16km_anomaly_ssp585_1995-2100.nc'
+  ISMIP_future_atmosphere_baseline_filename_config = '/Users/berends/Documents/Datasets/ISMIP6/ISMIP6_clim_1950_1979_mean.nc'
+  ISMIP_future_atmosphere_anomaly_filename_config  = '/Users/berends/Documents/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Atmosphere_Forcing/UKESM1-0-LL_ssp585/Regridded_16km/UKESM1-0-LL_16km_anomaly_ssp585_1995-2100.nc'
 
   do_use_ISMIP_future_shelf_collapse_forcing_config   = .TRUE.
-  ISMIP_future_shelf_collapse_forcing_filename_config = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/ShelfCollapse_forcing/UKESM1-0-LL_ssp585/ice_shelf_collapse_mask_UKESM1-0-LL_ssp585_1995-2300_16km.nc'
+  ISMIP_future_shelf_collapse_forcing_filename_config = '/Users/berends/Documents/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/ShelfCollapse_forcing/UKESM1-0-LL_ssp585/ice_shelf_collapse_mask_UKESM1-0-LL_ssp585_1995-2300_16km.nc'
 
   ! Basal mass balance
   ! ==================
@@ -449,8 +449,8 @@
   choice_basin_scheme_ANT_config              = 'file'
   filename_basins_NAM_config                  = ''                               ! Path to a text file containing polygons of drainage basins
   filename_basins_EAS_config                  = ''
-  filename_basins_GRL_config                  = '/home/berends/Datasets/basins_Greenland/grndrainagesystems_ekholm.txt'
-  filename_basins_ANT_config                  = '/home/berends/Datasets/basins_Antarctica/ant_full_drainagesystem_polygons.txt'
+  filename_basins_GRL_config                  = '/Users/berends/Documents/Datasets/basins_Greenland/grndrainagesystems_ekholm.txt'
+  filename_basins_ANT_config                  = '/Users/berends/Documents/Datasets/basins_Antarctica/ant_full_drainagesystem_polygons.txt'
   do_merge_basins_ANT_config                  = .FALSE.                          ! Whether or not to merge some of the Antarctic basins
   do_merge_basins_GRL_config                  = .FALSE.                          ! Whether or not to merge some of the Greenland basins
 
@@ -464,7 +464,7 @@
   do_ocean_floodfill_config                   = .FALSE.                          ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
   choice_sealevel_model_config                = 'fixed'                          ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
   fixed_sealevel_config                       = 0.0
-  filename_sealevel_record_config             = '/home/berends/Datasets/Sealevel/bintanja2008_rsl_PD00.dat'
+  filename_sealevel_record_config             = '/Users/berends/Documents/Datasets/Sealevel/bintanja2008_rsl_PD00.dat'
   sealevel_record_length_config               = 30001
 
   choice_GIA_model_config                     = 'none'                           ! Can be "none", "ELRA", or "SELEN"

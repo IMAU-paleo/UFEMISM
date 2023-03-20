@@ -10,13 +10,13 @@
   dt_coupling_config                          = 1e20                             ! Interval of coupling (in years) between the four ice-sheets
 
   ! Ice dynamics
-  dt_max_config                               = 1.0                              ! Maximum time step (in years) of the ice model
+  dt_max_config                               = 0.2                              ! Maximum time step (in years) of the ice model
   dt_min_config                               = 0.01                             ! Smallest allowed time step [yr]
   dt_startup_phase_config                     = 1.0                              ! Length of time window (in years) after start_time when dt = dt_min, to ensure smooth restarts
   dt_cooldown_phase_config                    = 1.0                              ! Length of time window (in years) before end_time when dt = dt_min, to ensure smooth restarts
 
   ! Sub-models
-  dt_thermo_config                            = 1.0                              ! Time step (in years) for updating thermodynamics
+  dt_thermo_config                            = 0.05                              ! Time step (in years) for updating thermodynamics
   dt_climate_config                           = 1.0                              ! Time step (in years) for updating the climate
   dt_ocean_config                             = 1.0                              ! Time step (in years) for updating the ocean
   dt_SMB_config                               = 1.0                              ! Time step (in years) for updating the SMB [not used; computed every time step now]
@@ -251,8 +251,8 @@
   DIVA_SOR_nit_config                         = 10000                            ! DIVA SOR   solver - maximum number of iterations
   DIVA_SOR_tol_config                         = 2.5                              ! DIVA SOR   solver - stop criterion, absolute difference
   DIVA_SOR_omega_config                       = 1.3                              ! DIVA SOR   solver - over-relaxation parameter
-  DIVA_PETSc_rtol_config                      = 2E-3                             ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-  DIVA_PETSc_abstol_config                    = 2.0                              ! DIVA PETSc solver - stop criterion, absolute difference
+  DIVA_PETSc_rtol_config                      = 5E-4                             ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+  DIVA_PETSc_abstol_config                    = 0.5                              ! DIVA PETSc solver - stop criterion, absolute difference
 
   ! Velocity wind-up at start
   windup_total_years_config                   = 0.0                              ! Go back in time and run the velocity solver for this amount of years before actual run starts
@@ -408,11 +408,11 @@
   ! ISMIP-style forcing
   ! ===================
 
-  ISMIP_future_ocean_temperature_filename_config   = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP26-repeat/1995-2300/NorESM1-M_RCP26_temperature_8km_x_60m.nc'
-  ISMIP_future_ocean_salinity_filename_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP26-repeat/1995-2300/NorESM1-M_RCP26_salinity_8km_x_60m.nc'
+  ISMIP_future_ocean_temperature_filename_config   = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP26-repeat/1995-2300/NorESM1-M_RCP26_temperature_16km_x_60m.nc'
+  ISMIP_future_ocean_salinity_filename_config      = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Ocean_Forcing/noresm1-m_RCP26-repeat/1995-2300/NorESM1-M_RCP26_salinity_16km_x_60m.nc'
 
   ISMIP_future_atmosphere_baseline_filename_config = '/home/berends/Datasets/ISMIP6/ISMIP6_clim_1950_1979_mean.nc'
-  ISMIP_future_atmosphere_anomaly_filename_config  = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Atmosphere_Forcing/NorESM1-M_RCP26-repeat/Regridded_16km/NorESM1-M_16km_anomaly_rcp26_1995-2300_v2.nc'
+  ISMIP_future_atmosphere_anomaly_filename_config  = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/Atmosphere_Forcing/NorESM1-M_RCP26-repeat/Regridded_16km/NorESM1-M_16km_anomaly_rcp26_1995-2300_v2_smoothed.nc'
 
   do_use_ISMIP_future_shelf_collapse_forcing_config   = .FALSE.
   ISMIP_future_shelf_collapse_forcing_filename_config = '/home/berends/Datasets/ISMIP6/Antarctica_2300_forcing/AIS/ShelfCollapse_forcing/CCSM4_RCP85/ice_shelf_collapse_mask_CCSM4_RCP85_1995-2300_16km.nc'

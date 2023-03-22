@@ -148,7 +148,7 @@ CONTAINS
     ! END IF
 
     ! IF (lat > -80._dp .AND. lat < -74 .AND. lon > 245._dp .AND. lon < 265._dp) THEN
-    !   IF (contains_gl .AND. dmax > 12._dp * 1.5_dp * 1000._dp) THEN
+    !   IF (contains_gl .AND. dmax > 8._dp * 1.5_dp * 1000._dp) THEN
     !     is_good = .FALSE.
     !     RETURN
     !   END IF

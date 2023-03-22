@@ -325,7 +325,7 @@ CONTAINS
   END SUBROUTINE calc_dHi_dt_explicit
 
   SUBROUTINE calc_dHi_dt_dynamic( mesh, ice, SMB, BMB, dt, do_dt_lim, time)
-    ! The explicit solver for the ice thickness equation
+    ! Another explicit solver for the ice thickness equation
 
     IMPLICIT NONE
 
@@ -380,7 +380,6 @@ CONTAINS
 
       ELSEIF (ice%mask_cf_a( vi) == 1 .AND. ice%mask_sheet_a( vi) == 1) THEN
         ! Grounded calving front
-
 
         ! Basal melt propotional to ... nothing special for now
         Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi)) * mesh%A( vi)

@@ -2347,8 +2347,8 @@ CONTAINS
 
     ! Modify positive-misfit adjustment as time goes on: from scale_start to scale_end
     amp_slid_inv(1) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start + t_scale * C%slid_inv_Bernales2017_scale_end
-    ! Modify negative-misfit adjustment as time goes on: from scale_start to zero
-    amp_slid_inv(2) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start
+    ! Modify negative-misfit adjustment as time goes on: from scale_start to scale_end
+    amp_slid_inv(2) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start + t_scale * C%slid_inv_Bernales2017_scale_end
 
     ! Safety net
     amp_slid_inv(1) = max( amp_slid_inv(1), 0._dp)
@@ -2574,7 +2574,7 @@ CONTAINS
           dphi = -amp_slid_inv(1) * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
         else
           ! Thinning, so increase friction a bit
-          dphi = +amp_slid_inv(2)/2._dp * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+          dphi = +amp_slid_inv(2) * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
         end if
 
       else
@@ -2592,11 +2592,11 @@ CONTAINS
         ! Underestimation of ice
         elseif ( h_delta < .0_dp .and. (h_estim < 0._dp .or. h_estim > 1000._dp) ) then
           ! Not improving, or not improving fast enough
-          dphi = +amp_slid_inv(2)/2._dp * (1._dp - exp( -abs( h_delta / 100._dp)))
+          dphi = +amp_slid_inv(2) * (1._dp - exp( -abs( h_delta / 100._dp)))
 
         elseif ( h_delta < .0_dp .and. (h_estim > 0._dp .and. h_estim < dt_slid_inv)) then
           ! Improving too fast, prevent overshooting
-          dphi = -amp_slid_inv(2)/4._dp * exp( -h_estim / (2._dp * dt_slid_inv))
+          dphi = -amp_slid_inv(2)/2._dp * exp( -h_estim / (2._dp * dt_slid_inv))
 
         end if
 

@@ -1166,14 +1166,14 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Apply minimum value limit
-      IF (mesh%lat( vi) > -80._dp .AND. mesh%lat( vi) < -70 .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
-        ! Do nothing
-      ELSE
+      ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lat( vi) < -70 .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
+      !   ! Do nothing
+      ! ELSE
         ! Prevent small values over very thin ice (due to a small overburden pressure)
         beta_mod = MIN( 1._dp, MAX( 0._dp, 1._dp - ice%Hi_a( vi) / 200._dp))
         ! Apply minimum value limit
         ice%beta_a( vi) = MAX( ice%beta_a( vi), 1000._dp * beta_mod)
-      END IF
+      ! END IF
 
       ! Apply maximum value limit
       ice%beta_a( vi) = MIN( C%DIVA_beta_max, ice%beta_a( vi))

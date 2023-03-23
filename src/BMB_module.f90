@@ -3441,7 +3441,7 @@ CONTAINS
           dT_base = +amp_ocean_inv(1) * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
         else
           ! Thinning, so reduce temperature a bit
-          dT_base = -amp_ocean_inv(2)/2._dp * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+          dT_base = -amp_ocean_inv(2) * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
         end if
 
       else
@@ -3459,11 +3459,11 @@ CONTAINS
         ! Underestimation of ice
         elseif ( h_delta < .0_dp .and. (h_estim < 0._dp .or. h_estim > 1000._dp) ) then
           ! Not improving, or not improving fast enough
-          dT_base = -amp_ocean_inv(2)/2._dp * (1._dp - exp( -abs( h_delta / 100._dp)))
+          dT_base = -amp_ocean_inv(2) * (1._dp - exp( -abs( h_delta / 100._dp)))
 
         elseif ( h_delta < .0_dp .and. (h_estim > 0._dp .and. h_estim < dt_ocean_inv)) then
           ! Improving too fast, prevent overshooting
-          dT_base = +amp_ocean_inv(2)/4._dp * exp( -h_estim / (2._dp * dt_ocean_inv))
+          dT_base = +amp_ocean_inv(2)/2._dp * exp( -h_estim / (2._dp * dt_ocean_inv))
 
         end if
 

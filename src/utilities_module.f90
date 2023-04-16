@@ -194,7 +194,7 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: Hi, Hb, SL
     REAL(dp)                                           :: TAF
 
-    TAF = Hi - MAX(0._dp, (SL - Hb) * (seawater_density / ice_density))
+    TAF = MAX( 0._dp, Hi - MAX(0._dp, (SL - Hb) * (seawater_density / ice_density)))
 
   END FUNCTION thickness_above_floatation
 

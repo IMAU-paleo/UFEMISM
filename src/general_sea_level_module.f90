@@ -110,9 +110,9 @@ CONTAINS
     DO vi = region%mesh%vi1, region%mesh%vi2
 
       IF (region%ice%mask_ice_a( vi) == 1) THEN
-        ice_volume                 = ice_volume                 + (region%ice%Hi_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area))
+        ice_volume                 = ice_volume                 + MAX( 0._dp, (region%ice%Hi_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area)))
         ice_area                   = ice_area                   + region%mesh%A( vi) * 1.0E-06_dp ! [km^2]
-        ice_volume_above_flotation = ice_volume_above_flotation + region%ice%TAF_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area)
+        ice_volume_above_flotation = ice_volume_above_flotation + MAX( 0._dp, region%ice%TAF_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area))
       END IF
 
     END DO

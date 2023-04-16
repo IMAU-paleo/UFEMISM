@@ -147,8 +147,25 @@ CONTAINS
     !   IF (mean_mask_dp>0.1_dp) contains_gl = .TRUE.
     ! END IF
 
+    ! contains_ice    = .FALSE.
+    ! contains_nonice = .FALSE.
+    ! CALL min_cart_over_triangle_int( p, q, r, refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, min_mask_int, trinel)
+    ! CALL max_cart_over_triangle_int( p, q, r, refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)
+    ! IF (trinel>0) THEN
+    !   IF (max_mask_int==1) contains_ice    = .TRUE.
+    !   IF (min_mask_int==0) contains_nonice = .TRUE.
+    ! ELSE
+    !   CALL cart_bilinear_int( refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
+    !   IF (mean_mask_dp>0.1_dp) contains_ice    = .TRUE.
+    !   IF (mean_mask_dp<0.9_dp) contains_nonice = .TRUE.
+    ! END IF
+
     ! IF (lat > -80._dp .AND. lat < -74 .AND. lon > 245._dp .AND. lon < 265._dp) THEN
-    !   IF (contains_gl .AND. dmax > 8._dp * 1.5_dp * 1000._dp) THEN
+    !   IF (contains_gl .AND. dmax > 20._dp * 1.5_dp * 1000._dp) THEN
+    !     is_good = .FALSE.
+    !     RETURN
+    !   END IF
+    !   IF (contains_ice .AND. dmax > 20._dp * 1.5_dp * 1000._dp) THEN
     !     is_good = .FALSE.
     !     RETURN
     !   END IF

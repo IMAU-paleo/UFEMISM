@@ -2732,8 +2732,13 @@ CONTAINS
 
     ! Limit basal melt
     DO vi = mesh%vi1, mesh%vi2
+
+      ! Limit melting
       BMB%BMB_shelf( vi) = MAX( BMB%BMB_shelf( vi), C%BMB_min)
+
+      ! Limit refreezing
       BMB%BMB_shelf( vi) = MIN( BMB%BMB_shelf( vi), C%BMB_max)
+
     END DO
     CALL sync
 
@@ -3226,7 +3231,14 @@ CONTAINS
 
       ! Make sure the variable stays within the prescribed limits
       BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt - 5._dp)
-      BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi), 10._dp)
+
+      IF (mesh%lat( vi) > -90._dp .AND. mesh%lat( vi) < -82 .AND. mesh%lon( vi) > 180._dp .AND. mesh%lon( vi) < 240._dp) THEN
+        ! Prevent melting over this tricky tricky area
+        BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi), t_melt)
+        ! Else, let melt go
+      ELSE
+        BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi), 10._dp)
+      END IF
 
     end do
     call sync

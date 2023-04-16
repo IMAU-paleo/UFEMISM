@@ -1077,8 +1077,18 @@ CONTAINS
         ! Initialise PD_obs ocean forcing with restart data
         region%ocean_matrix%PD_obs%T_ocean(          vi,k)  = region%restart%T_ocean_base( vi)
         region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k)  = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)  = region%restart%T_ocean_base( vi)
         region%ocean_matrix%PD_obs%S_ocean(          vi,k)  = region%restart%S_ocean_base( vi)
         region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)  = region%restart%S_ocean_base( vi)
+        region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)  = region%restart%S_ocean_base( vi)
+
+        ! Initialise applied ocean forcing with restart data
+        region%ocean_matrix%applied%T_ocean(          vi,k) = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%applied%T_ocean_ext(      vi,k) = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%applied%T_ocean_corr_ext( vi,k) = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%applied%S_ocean(          vi,k) = region%restart%S_ocean_base( vi)
+        region%ocean_matrix%applied%S_ocean_ext(      vi,k) = region%restart%S_ocean_base( vi)
+        region%ocean_matrix%applied%S_ocean_corr_ext( vi,k) = region%restart%S_ocean_base( vi)
 
       END DO
       END DO

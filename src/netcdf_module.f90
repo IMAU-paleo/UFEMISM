@@ -3003,7 +3003,7 @@ CONTAINS
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,       (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti)
 
     ! SMB
-    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+    IF (C%choice_SMB_model == 'IMAU-ITM' .AND. C%choice_SMB_model == 'restart') THEN
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear)
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth)
     END IF
@@ -3187,7 +3187,7 @@ CONTAINS
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHb, restart%dHb, start = (/ 1, ti /) ))
 
     ! SMB
-    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+    IF (C%choice_SMB_model == 'IMAU-ITM' .AND. C%choice_SMB_model == 'restart') THEN
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1,    ti /) ))
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, ti /) ))
     END IF

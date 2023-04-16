@@ -2348,7 +2348,7 @@ CONTAINS
     ! Modify positive-misfit adjustment as time goes on: from scale_start to scale_end
     amp_slid_inv(1) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start + t_scale * C%slid_inv_Bernales2017_scale_end
     ! Modify negative-misfit adjustment as time goes on: from scale_start to scale_end
-    amp_slid_inv(2) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start + t_scale * C%slid_inv_Bernales2017_scale_end
+    amp_slid_inv(2) = (1._dp - t_scale) * C%slid_inv_Bernales2017_scale_start! + t_scale * C%slid_inv_Bernales2017_scale_end
 
     ! Safety net
     amp_slid_inv(1) = max( amp_slid_inv(1), 0._dp)

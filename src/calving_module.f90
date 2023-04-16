@@ -182,8 +182,7 @@ CONTAINS
       CASE ('beyond_PD')
         ! If so specified, remove all floating ice beyond the present-day calving front
 
-        IF (is_floating( refgeo_PD%Hi( vi), refgeo_PD%Hb( vi), 0._dp) .AND. &
-            refgeo_PD%Hi( vi) == 0._dp) THEN
+        IF (is_floating( refgeo_PD%Hi( vi), refgeo_PD%Hb( vi), 0._dp) .AND. refgeo_PD%Hi( vi) == 0._dp) THEN
           ice%Hi_a( vi) = 0._dp
           ice%dHi_dt_a( vi) = 0._dp
         END IF

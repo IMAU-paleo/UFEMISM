@@ -156,7 +156,6 @@ CONTAINS
     INTEGER                                            :: viscosity_iteration_i
     REAL(dp)                                           :: resid_UV
     REAL(dp)                                           :: umax_analytical, tauc_analytical
-    REAL(dp)                                           :: fg_exp_mod, fg_exp_mod_slop, fg_exp_mod_peak
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -216,43 +215,31 @@ CONTAINS
       ice%beta_eff_a( mesh%vi1:mesh%vi2) = ice%beta_a( mesh%vi1:mesh%vi2)
       CALL sync
 
-      ! Apply the sub-grid grounded fraction
+      ! Sub-grid grounded fraction
       DO vi = mesh%vi1, mesh%vi2
 
-        ! Ice shelves: strong grounded fraction influence
+        ! Ice shelves: apply grounded fraction
         IF (ice%mask_shelf_a( vi) == 1) THEN
 
-          ! Weaken the effect of grounded fractions for steep slopes
-          fg_exp_mod_slop = MIN( 2.0_dp, MAX( 0._dp, ice%surf_slop(vi) - C%DIVA_beta_surf_slope_pass) &
-                                                     / (C%DIVA_beta_surf_slope_threshold - C%DIVA_beta_surf_slope_pass))
-          fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi) - C%DIVA_beta_surf_curvature_pass) &
-                                                     / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass))
-          fg_exp_mod = MAX( fg_exp_mod_slop, fg_exp_mod_peak)
-
           ! Reduce friction based on grounded fractions
-          ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** (2._dp-fg_exp_mod)
+          ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** 3._dp
 
-        ! Grounded boundaries: strong grounded fraction influence
+        ! Grounded boundaries: apply grounded fraction
         ELSEIF (ice%mask_sheet_a( vi) == 1 .AND. (ice%mask_gl_a( vi) == 1 .OR. ice%mask_cf_a( vi) == 1 .OR. ice%mask_margin_a( vi) == 1)) THEN
 
-          ! Weaken the effect of grounded fractions for steep slopes
-          fg_exp_mod_slop = MIN( 2.0_dp, MAX( 0._dp, ice%surf_slop(vi) - C%DIVA_beta_surf_slope_pass) &
-                                                     / (C%DIVA_beta_surf_slope_threshold - C%DIVA_beta_surf_slope_pass))
-          fg_exp_mod_peak = MIN( 2.0_dp, MAX( 0._dp, ice%surf_peak(vi) - C%DIVA_beta_surf_curvature_pass) &
-                                                     / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass))
-          fg_exp_mod = MAX( fg_exp_mod_slop, fg_exp_mod_peak)
-
           ! Reduce friction based on grounded fractions
-          ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** (2._dp-fg_exp_mod)
+          ice%beta_eff_a( vi) = ice%beta_eff_a( vi) * ice%f_grnd_a( vi) ** 2._dp
 
-        ! Ice sheet interior: softer grounded fraction influence
-        ELSEIF (ice%mask_sheet_a( vi) == 1) THEN
+        ! Ice-free ocean: assume fully floating
+        ELSEIF (ice%mask_ocean_a( vi) == 1) THEN
 
-          ! ! Weaken the effect of grounded fractions for steep slopes
-          ! fg_exp_mod = MIN( 1.0_dp, MAX( 0._dp, ice%surf_slop(vi)-.01_dp) / (.03_dp-.01_dp))
+          ! No basal friction
+          ice%beta_eff_a( vi) = 0._dp
 
-          ! Reduce friction based on grounded fractions
-          ice%beta_eff_a( vi) = ice%beta_eff_a( vi)! * ice%f_grnd_a( vi) ** (1._dp-fg_exp_mod)
+        ! Ice sheet interior and ice-free land: no grounded fraction influence
+        ELSE
+
+          ! Do nothing
 
         END IF
 
@@ -1178,12 +1165,15 @@ CONTAINS
     ! Limit beta to improve stability
     DO vi = mesh%vi1, mesh%vi2
 
-      ! Prevent small values over steep slopes (e.g. mountain walls and cliffs)
-      beta_mod = MAX( (ice%surf_slop( vi) - C%DIVA_beta_surf_slope_pass) / (C%DIVA_beta_surf_slope_threshold - C%DIVA_beta_surf_slope_pass), &
-                      (ice%surf_peak( vi) - C%DIVA_beta_surf_curvature_pass) / (C%DIVA_beta_surf_curvature_threshold - C%DIVA_beta_surf_curvature_pass) )
-
-      ! Limit beta based on slopeness
-      ice%beta_a( vi) = MAX( ice%beta_a( vi), 1000._dp * MIN( 1._dp, MAX( 0._dp, beta_mod)) )
+      ! Apply minimum value limit
+      ! IF (mesh%lat( vi) > -80._dp .AND. mesh%lat( vi) < -70 .AND. mesh%lon( vi) > 240._dp .AND. mesh%lon( vi) < 270._dp) THEN
+      !   ! Do nothing
+      ! ELSE
+        ! Prevent small values over very thin ice (due to a small overburden pressure)
+        beta_mod = MIN( 1._dp, MAX( 0._dp, 1._dp - ice%Hi_a( vi) / 200._dp))
+        ! Apply minimum value limit
+        ice%beta_a( vi) = MAX( ice%beta_a( vi), 1000._dp * beta_mod)
+      ! END IF
 
       ! Apply maximum value limit
       ice%beta_a( vi) = MIN( C%DIVA_beta_max, ice%beta_a( vi))
